@@ -20,6 +20,8 @@
     const $ = id => document.getElementById(id);
     const canvas = $('board');
     Customize.load();
+    Collection.load();
+    Collection.setSaving(!params.has('spec'));   // URL で台を決めたとき (確認用) は図鑑も保存しない
     Lcd.init();
 
     const game = {
@@ -36,7 +38,8 @@
         view: null,
         lastAim: 'left',
         spinsBase: 0,          // 回転数の表示をここから数える (突破チャレンジ・RASH が終わったら数え直す)
-        rushStartBalls: 0
+        rushStartBalls: 0,
+        counter: null          // データカウンター (DataCounter。台ごと)
     };
     if (params.has('strength')) game.strength = Number(params.get('strength'));
 
@@ -80,6 +83,9 @@
             game.balls = saved.balls;
             game.rushStartBalls = saved.rushStartBalls || 0;
         }
+        // データカウンター: 前回の続きならそのまま (データカウンターより前の保存データは、いまの持ち玉から数える)
+        game.counter = saved && saved.counter ? saved.counter : DataCounter.create(CONFIG, saved ? saved.balls : CONFIG.balls.start);
+        Collection.see('stage', game.machine.stage.id);
         $('spec-display').textContent = `${spec.label}${settingKnown ? ` / 設定${setting}` : ''}`;
         $('debug-board').textContent = `設定${setting} (命釘 ${board.hesoWidth} / ワープ ${board.warpMinVx})`;
     }
@@ -104,6 +110,7 @@
         Board.setOpen(game.board, 'denchu', m.parts.denchu);
         Board.setOpen(game.board, 'attacker', m.parts.attacker);
         m.events.splice(0).forEach(handleMachineEvent);
+        DataCounter.tick(game.counter, dt, counterContext(), CONFIG);
         if (aim !== game.lastAim) {
             game.lastAim = aim;
             Lcd.aim(aim, time);
@@ -147,7 +154,38 @@
         // RASH 突入の大当たり中に、こおりRASH / おにおにRASH を選ぶ
         if (e.type === 'bonusStart' && e.entry) openRashChoice();
         if (e.type === 'bonusEnd') closeRashChoice();
+        if (e.type === 'spinStart') settingLine(e);
+        record(e);
         Lcd.event(e, time);
+        // 設定示唆: 突破チャレンジ・RASH が終わったら、ときどきトロフィーが落ちてくる
+        if (e.type === 'rushEnd') {
+            const level = SettingHint.trophy(CONFIG, game.setting);
+            if (level) {
+                const trophy = { type: 'trophy', level };
+                record(trophy);
+                Lcd.event(trophy, time);
+            }
+        }
+    }
+
+    // 設定示唆のセリフ: 通常時のふるカワが黙っている外れの変動で、ときどき台の設定をほのめかす
+    function settingLine(e) {
+        const p = e.plan;
+        if (e.fig !== 1 || p.type !== 'plain' || p.talk || game.machine.rush.active) return;
+        if (Customize.get('furukawa') === 'off' || Math.random() >= CONFIG.show.settingHint.linesRate) return;
+        const line = SettingHint.line(CONFIG, game.setting);
+        p.talk = { text: line.text, color: 0 };
+        record({ type: 'settingLine', short: line.short });
+    }
+
+    // 図鑑・実績とデータカウンターに記録する (実績を解除したらお知らせ)
+    function counterContext() {
+        return { balls: game.balls, launched: game.stats.launched, spins1: game.machine.stats.spins1 };
+    }
+    function record(e) {
+        DataCounter.note(game.counter, e, counterContext(), CONFIG);
+        const unlocked = Collection.note(e, CONFIG);
+        if (unlocked.length) Panels.toast(unlocked);
     }
 
     // ----- 表示 -----
@@ -207,6 +245,7 @@
             specId: game.specId, setting: game.setting, settingKnown: game.settingKnown,
             balls: game.balls + game.world.balls.length,   // 飛んでいる途中の玉は持ち玉に戻す
             stats: game.stats, spinsBase: game.spinsBase, rushStartBalls: game.rushStartBalls,
+            counter: game.counter,
             machine: Machine.snapshot(game.machine)
         });
     }
@@ -280,7 +319,21 @@
 
     $('left-button').addEventListener('click', () => setStrength(CONFIG.launch.presets.left));
     $('right-button').addEventListener('click', () => setStrength(CONFIG.launch.presets.right));
-    $('lend-button').addEventListener('click', () => { game.balls += CONFIG.balls.lend; });
+    $('lend-button').addEventListener('click', () => {
+        game.balls += CONFIG.balls.lend;
+        DataCounter.lend(game.counter, CONFIG.balls.lend);
+    });
+
+    // ----- データカウンター・図鑑 (js/panels.js) -----
+    // 窓を閉じたとき、ほかの窓 (台選びなど) が開いていれば止めたまま
+    function pauseFor(on) {
+        game.firing = false;
+        game.paused = on || [...document.querySelectorAll('.picker')].some(p => !p.hidden);
+    }
+    Panels.init({
+        context: () => ({ counter: game.counter, machine: game.machine, balls: game.balls, launched: game.stats.launched }),
+        pause: pauseFor
+    });
 
     // 台のボタン: バトルの PUSH。RASH の2回目からの大当たり中は、こおりRASH ⇔ おにおにRASH の切り替え (ユーザー指定)
     function pressButton() {
@@ -361,7 +414,7 @@
         game.paused = true;
         game.firing = false;
     });
-    $('customize-close').addEventListener('click', () => { customizePanel.hidden = true; game.paused = false; });
+    $('customize-close').addEventListener('click', () => { customizePanel.hidden = true; pauseFor(false); });
     // 盤面の色・玉の色が変わったら、盤面を描き直す
     Customize.onChange((key, value) => {
         if ((key === 'theme' || key === 'ball') && game.view) BoardView.redraw(game.view);
@@ -484,9 +537,14 @@
     // URL で台を決めたとき (確認用) は保存しない・続きも聞かない
     game.noSave = params.has('spec');
     const saved = game.noSave ? null : SaveData.load();
+    // はじめて遊ぶ (前回の続きも、選んだ台の記録もない) ときは、アップデート情報を出さない
+    let pickedBefore = null;
+    try { pickedBefore = localStorage.getItem('koori-pachinko-spec'); } catch (e) { /* 保存できない環境 */ }
+    const updates = UpdateNotes.takePending(!saved && !pickedBefore);
     if (saved) openContinue(saved);
     else if (!params.has('spec')) openPicker(false);
-    if (params.has('balls')) game.balls = Number(params.get('balls'));
+    if (!game.noSave) Panels.showUpdates(updates);   // 台選び・前回の続きの上に出す
+    if (params.has('balls')) game.balls = game.counter.invested = Number(params.get('balls'));
     const force = params.get('force');
     const forceEnemy = params.get('enemy') || undefined;
     if (force === 'hit' || force === 'rush') Machine.debugHold(game.machine, 1, 'hit', force === 'rush' ? 'jitan' : null, { enemy: forceEnemy });
@@ -499,4 +557,9 @@
     updateHandle();
     for (let i = 0; i < Number(params.get('skip') || 0) * 60; i++) tick(1 / 60);
     requestAnimationFrame(frame);
+
+    // ホーム画面に追加したとき、ネットにつながっていなくても遊べるように (https で公開しているときだけ)
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        navigator.serviceWorker.register('sw.js').catch(err => console.warn('サービスワーカーを登録できません:', err));
+    }
 })();

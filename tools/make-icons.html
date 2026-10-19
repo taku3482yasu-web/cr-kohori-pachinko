@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>アイコン作成 - Pこおりくん</title>
+    <style>
+        body { background: #222; color: #ddd; font-family: sans-serif; padding: 16px; }
+        figure { display: inline-block; margin: 0 16px 16px 0; vertical-align: top; }
+        canvas { display: block; max-width: 256px; height: auto; image-rendering: pixelated; border: 1px solid #555; }
+        a { color: #9fe6ff; }
+    </style>
+</head>
+<body>
+    <!--
+    =====================================================================
+    ホーム画面に追加したときのアイコン (icons/*.png) を作る (スロット版の tools/make-icons.html と同じ作り)
+    ---------------------------------------------------------------------
+    こおりくんのドット絵 (sprites.js の SPRITES.koori) を夜の盤面の色の背景に大きく描き、まわりに銀の玉を散らす。
+    丸や角丸に切り抜かれても欠けないよう、こおりくんは真ん中の 6 割に収める (maskable)。
+    使い方: このページをブラウザで開き、各アイコンの「保存」で icons/ に上書きする
+    =====================================================================
+    -->
+    <h1>アイコン作成</h1>
+    <div id="icons"></div>
+    <script src="../js/sprites.js?v=9fb9b0ca"></script>
+    <script>
+        const ICONS = [
+            { file: 'icon-512.png', size: 512 },
+            { file: 'icon-192.png', size: 192 },
+            { file: 'apple-touch-icon.png', size: 180 }
+        ];
+        // 銀の玉 (真ん中からの位置と大きさ。アイコンの大きさに対する割合)
+        const BALLS = [[-0.3, -0.27, 0.05], [0.31, -0.22, 0.04], [-0.33, 0.2, 0.035], [0.29, 0.27, 0.05], [0.02, -0.36, 0.03]];
+
+        function drawIcon(canvas, size) {
+            canvas.width = canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            // 背景: 盤面と同じ夜空の紺に、氷色の光
+            const bg = ctx.createRadialGradient(size / 2, size * 0.3, 0, size / 2, size * 0.3, size * 0.8);
+            bg.addColorStop(0, '#1f3a5c');
+            bg.addColorStop(1, '#05070d');
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, size, size);
+            const glow = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size * 0.36);
+            glow.addColorStop(0, 'rgba(127, 211, 247, 0.45)');
+            glow.addColorStop(1, 'rgba(127, 211, 247, 0)');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 0, size, size);
+            // 銀の玉
+            BALLS.forEach(([dx, dy, r]) => {
+                const x = size / 2 + dx * size;
+                const y = size / 2 + dy * size;
+                const g = ctx.createRadialGradient(x - r * size * 0.35, y - r * size * 0.35, 0, x, y, r * size);
+                g.addColorStop(0, '#ffffff');
+                g.addColorStop(0.5, '#c8d0dc');
+                g.addColorStop(1, '#5a6478');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(x, y, r * size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            // こおりくん (16x16 ドット)
+            const scale = size * 0.5 / 16;
+            const x = (size - 16 * scale) / 2;
+            const y = (size - 16 * scale) / 2 + scale * 0.5;
+            drawSprite(ctx, SPRITES.koori, 'walk1', x, y, scale);
+        }
+
+        ICONS.forEach(({ file, size }) => {
+            const fig = document.createElement('figure');
+            const canvas = document.createElement('canvas');
+            canvas.dataset.file = file;
+            drawIcon(canvas, size);
+            const link = document.createElement('a');
+            link.textContent = `保存 (${file})`;
+            link.download = file;
+            link.href = canvas.toDataURL('image/png');
+            const caption = document.createElement('figcaption');
+            caption.appendChild(link);
+            fig.append(canvas, caption);
+            document.getElementById('icons').appendChild(fig);
+        });
+    </script>
+</body>
+</html>

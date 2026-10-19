@@ -4,12 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#05070d">
+    <!-- ホーム画面に追加 (PWA。manifest.webmanifest / sw.js) -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Pこおりくん ～内定ツラヌキ物語～</title>
     <!-- 液晶用のドットフォント (オフライン時は MS ゴシックなどで代替) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
-    <link rel="stylesheet" href="css/style.css?v=bed8e670">
+    <link rel="stylesheet" href="css/style.css?v=e7908ac6">
 </head>
 <body>
     <main class="machine">
@@ -58,7 +64,12 @@
                 <button id="right-button" class="small-button aim-button"><span class="aim-word">右打ち</span> →</button>
             </div>
             <p class="hint">ハンドルを押している間発射（Space でも）。押したまま回す・← → キー・ホイールで強さを変える。こおりくんのボタンは B キーでも押せる</p>
-            <button id="lend-button" class="lend-button">玉貸し（+125発）</button>
+            <div class="menu-row">
+                <button id="lend-button" class="lend-button">玉貸し（+125発）</button>
+                <button id="data-button" class="small-button">データ</button>
+                <button id="collection-button" class="small-button">図鑑</button>
+                <a href="howto.html" class="small-button link-button">遊び方</a>
+            </div>
         </section>
 
         <section id="debug-panel" class="debug-panel" hidden>
@@ -114,6 +125,71 @@
         </div>
     </div>
 
+    <!-- データカウンター (この台の記録。js/panels.js) -->
+    <div id="data-panel" class="picker" hidden>
+        <div class="picker-box wide-box" role="dialog" aria-labelledby="data-title">
+            <h2 id="data-title">データカウンター</h2>
+            <div id="dc-stats" class="dc-stats"></div>
+            <h3>大当たりまでの回転数</h3>
+            <div id="dc-bars" class="dc-bars" role="img" aria-label="大当たりまでの回転数 (左が古い)"></div>
+            <div class="dc-legend">
+                <span><i class="dc-key dc-key-normal"></i>通常の当たり</span>
+                <span><i class="dc-key dc-key-rash"></i>RASH</span>
+                <span><i class="dc-key dc-key-active"></i>当たりの途中</span>
+            </div>
+            <h3>出玉の推移</h3>
+            <div class="dc-graph-wrap">
+                <canvas id="dc-graph" class="dc-graph" role="img" aria-label="出玉の推移"></canvas>
+                <div id="dc-tip" class="dc-tip" hidden></div>
+            </div>
+            <p class="picker-note">横: 打った玉 / 縦: 差玉（持ち玉 − はじめの玉と玉貸しの合計）</p>
+            <h3>大当たり履歴</h3>
+            <div class="dc-table-wrap">
+                <table class="dc-table">
+                    <thead><tr><th>回</th><th>回転数</th><th>出玉</th><th>結果</th><th>獲得</th><th>示唆</th></tr></thead>
+                    <tbody id="dc-history"></tbody>
+                </table>
+            </div>
+            <p id="dc-empty" class="picker-note">まだ大当たりがありません</p>
+            <h3>この台の設定示唆</h3>
+            <div id="dc-hints" class="dc-hints"></div>
+            <div class="picker-actions">
+                <button id="data-close" class="start-button">とじる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 図鑑: 記録・見た演出・実績 (台を選び直しても残る。js/panels.js) -->
+    <div id="collection-panel" class="picker" hidden>
+        <div class="picker-box wide-box" role="dialog" aria-labelledby="collection-title">
+            <h2 id="collection-title">図鑑</h2>
+            <div class="col-tabs" role="tablist">
+                <button data-tab="records" role="tab">記録</button>
+                <button data-tab="shows" role="tab">演出</button>
+                <button data-tab="achievements" role="tab">実績</button>
+            </div>
+            <div id="col-body" class="col-body"></div>
+            <div class="picker-actions">
+                <button id="collection-close" class="start-button">とじる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- アップデート情報 (更新したあと、開いたときに一度だけ。js/updates.js) -->
+    <div id="updates-panel" class="picker updates-picker" hidden>
+        <div class="picker-box" role="dialog" aria-labelledby="updates-title">
+            <h2 id="updates-title">アップデート情報</h2>
+            <div id="updates-list" class="updates-list"></div>
+            <label class="updates-off"><input type="checkbox" id="updates-off"> 次から表示しない</label>
+            <div class="picker-actions">
+                <button id="updates-close" class="start-button">とじる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 実績を解除したときのお知らせ -->
+    <div id="toast" class="toast" role="status" hidden></div>
+
     <!-- 台選び: ゲームを始める前にスペックと設定を選ぶ -->
     <div id="machine-picker" class="picker" hidden>
         <div class="picker-box" role="dialog" aria-labelledby="picker-title">
@@ -130,10 +206,10 @@
         </div>
     </div>
 
-    <script src="js/config.js?v=f6b49fa6"></script>
+    <script src="js/config.js?v=d8238ba5"></script>
     <script src="js/sprites.js?v=9fb9b0ca"></script>
-    <script src="js/characters.js?v=12694960"></script>
-    <script src="js/backgrounds.js?v=760ebbba"></script>
+    <script src="js/characters.js?v=25680d99"></script>
+    <script src="js/backgrounds.js?v=4050fde0"></script>
     <script src="js/board.js?v=4d82112d"></script>
     <script src="js/physics.js?v=a1301719"></script>
     <script src="js/sound-heso.js?v=ea2eb22a"></script>
@@ -145,9 +221,12 @@
     <script src="js/button.js?v=3d1b1ed5"></script>
     <script src="js/lcd-rash.js?v=f7f77a06"></script>
     <script src="js/lcd-story.js?v=e954a3ad"></script>
-    <script src="js/lcd.js?v=265dbeac"></script>
+    <script src="js/lcd.js?v=c32db716"></script>
     <script src="js/save.js?v=8ec28e8e"></script>
     <script src="js/customize.js?v=09272d70"></script>
-    <script src="js/main.js?v=7a3250b4"></script>
+    <script src="js/records.js?v=bedf43cf"></script>
+    <script src="js/updates.js?v=cfa3d154"></script>
+    <script src="js/panels.js?v=2a9bd9db"></script>
+    <script src="js/main.js?v=f6f01123"></script>
 </body>
 </html>

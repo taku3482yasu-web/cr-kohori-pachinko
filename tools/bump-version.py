@@ -13,13 +13,14 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PAGES = ['index.html', os.path.join('tools', 'fast.html')]
+PAGES = ['index.html', 'howto.html', os.path.join('tools', 'fast.html')]
 PATTERN = re.compile(r'((?:src|href)=")((?:\.\./)?)((?:js|css)/[\w\-./]+?\.(?:js|css))(\?v=\w+)?(")')
 
 
 def version(path):
+    # 改行を LF にそろえてから作る (Windows で CRLF で取り出しても、ほかの PC と同じ番号になる)
     with open(os.path.join(ROOT, path), 'rb') as f:
-        return hashlib.md5(f.read()).hexdigest()[:8]
+        return hashlib.md5(f.read().replace(b'\r\n', b'\n')).hexdigest()[:8]
 
 
 def main():

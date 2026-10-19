@@ -143,6 +143,15 @@ button:hover { border-color: var(--accent); }
 
 .small-button { font-size: 13px; }
 .lend-button { font-size: 15px; padding: 10px; }
+/* 玉貸し・データ・図鑑・遊び方の段 */
+.menu-row { display: flex; gap: 6px; }
+.menu-row .lend-button { flex: 1 1 auto; }
+.link-button {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 6px 10px; font-family: var(--font); color: var(--text); text-decoration: none;
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 6px;
+}
+.link-button:hover { border-color: var(--accent); }
 
 .hint {
     margin: 0;
@@ -335,8 +344,82 @@ button:hover { border-color: var(--accent); }
     .status-item .label { font-size: 10px; }
     .status-item .value { font-size: 15px; }
     .hint { display: none; }
-    .lend-button { order: 6; padding: 8px; font-size: 13px; }
+    .menu-row { order: 6; gap: 4px; }
+    .lend-button { padding: 8px; font-size: 13px; }
+    .menu-row .small-button { padding: 6px 8px; font-size: 12px; }
     .debug-panel { order: 7; }
     .picker { padding: 8px; }
     .picker-box { padding: 12px; }
 }
+
+/* ----- データカウンター・図鑑・アップデート情報 (js/panels.js) ----- */
+.wide-box { width: min(100%, 560px); }
+.dc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.dc-item { background: var(--bg); border: 1px solid var(--panel-line); border-radius: 6px; padding: 6px 8px; display: flex; flex-direction: column; }
+.dc-label { font-size: 11px; color: var(--muted); }
+.dc-value { font-size: 18px; color: var(--accent); font-variant-numeric: tabular-nums; }
+/* 大当たりまでの回転数 (左が古い)。棒は細く、根元は四角・先は丸く、間は 2px あける */
+.dc-bars { display: flex; align-items: flex-end; gap: 2px; height: 110px; padding: 14px 0 0; border-bottom: 1px solid var(--muted); }
+.dc-bars:empty::before { content: 'まだ大当たりがありません'; margin: auto; font-size: 12px; color: var(--muted); }
+.dc-bar { position: relative; flex: 1 1 0; max-width: 24px; height: 100%; display: flex; align-items: flex-end; }
+.dc-bar i { display: block; width: 100%; border-radius: 4px 4px 0 0; }
+.dc-bar span { position: absolute; left: 50%; transform: translateX(-50%); top: -14px; font-size: 9px; color: var(--muted); white-space: nowrap; }
+.dc-bar:hover i { filter: brightness(1.25); }
+.dc-key-normal { background: #3f8cff; }
+.dc-key-rash { background: #f04070; }
+.dc-key-active { background: #c08a10; }
+.dc-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+.dc-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.dc-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.dc-graph-wrap { position: relative; }
+.dc-graph { display: block; width: 100%; height: 150px; background: var(--bg); border: 1px solid var(--panel-line); border-radius: 6px; touch-action: none; }
+.dc-tip { position: absolute; top: 4px; padding: 3px 6px; font-size: 11px; white-space: nowrap; background: var(--panel); border: 1px solid var(--accent); border-radius: 4px; pointer-events: none; }
+.dc-tip[hidden] { display: none; }
+.dc-table-wrap { max-height: 220px; overflow-y: auto; }
+.dc-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.dc-table th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: normal; }
+.dc-table th, .dc-table td { padding: 4px 6px; border-bottom: 1px solid var(--panel-line); text-align: right; }
+.dc-table th:nth-child(4), .dc-table td:nth-child(4), .dc-table th:nth-child(6), .dc-table td:nth-child(6) { text-align: left; }
+.dc-plus { color: #ffe066; }
+.dc-rash { color: #ff6a8a; }
+.dc-live { color: #ffe066; }
+.dc-hints { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; }
+.dc-hint { display: inline-flex; align-items: center; gap: 4px; }
+.trophy-chip { display: inline-block; width: 10px; height: 12px; margin-right: 3px; border-radius: 2px 2px 4px 4px; vertical-align: -1px; }
+.trophy-rainbow { background: linear-gradient(135deg, #ff3a3a, #ffe066, #3fcf5f, #3f8cff, #a860ff); }
+
+.col-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.col-tabs button { flex: 1; padding: 6px; }
+.col-tabs button.selected { border-color: #ffe066; color: #ffe066; background: #1f3350; }
+.col-body { min-height: 200px; }
+.col-records { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; font-size: 14px; }
+.col-records dt { color: var(--muted); }
+.col-records dd { margin: 0; text-align: right; color: var(--accent); font-variant-numeric: tabular-nums; }
+.col-reset { margin-top: 12px; color: var(--muted); }
+.col-progress { float: right; color: var(--accent); }
+.col-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 13px; }
+.col-list li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 6px; background: var(--bg); border-radius: 4px; }
+.col-count { color: var(--muted); white-space: nowrap; }
+.col-unseen { color: #4a5a70; }
+.col-achievements { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.col-achievements li { display: flex; gap: 8px; padding: 6px 8px; background: var(--bg); border-radius: 4px; color: #4a5a70; }
+.col-achievements li.col-done { color: var(--text); }
+.col-achievements .col-mark { font-size: 16px; }
+.col-achievements .col-done .col-mark { color: #ffe066; }
+.col-desc { font-size: 11px; color: var(--muted); }
+
+.updates-picker { z-index: 20; }
+.updates-list { max-height: 50vh; overflow-y: auto; }
+.update h3 { margin: 8px 0 4px; font-size: 15px; color: #ffe066; }
+.update-date { font-size: 11px; color: var(--muted); }
+.update ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+.updates-off { display: block; margin-top: 12px; font-size: 12px; color: var(--muted); }
+
+.toast {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 30;
+    padding: 8px 14px; background: var(--panel); border: 2px solid #ffe066; border-radius: 8px;
+    font-size: 14px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); animation: toast-in 0.3s ease-out;
+}
+.toast[hidden] { display: none; }
+.toast-head { color: #ffe066; margin-right: 8px; }
+@keyframes toast-in { from { transform: translate(-50%, -20px); opacity: 0; } }

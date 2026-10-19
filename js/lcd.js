@@ -24,6 +24,7 @@ const Lcd = (() => {
     let shown = [7, 1, 3];  // 止まっている図柄
     let aimNotice = null;   // { aim, until }
     let summary = null;     // RASH が終わったときの結果 { hits, balls, until }
+    let trophy = null;      // 設定示唆トロフィー { level, start, until } (次の変動から minShow 秒で消える)
     let bubble = null;      // ふるカワの吹き出し { text, color, until }
     let spinView = null;    // いまの変動の見た目の情報 { plan, gaugeStop, pushedAt }
     let lastPhase = null;   // 効果音を鳴らすための、前のフレームの場面
@@ -139,7 +140,7 @@ const Lcd = (() => {
     }
 
     function reset() {
-        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = holdFx = promoteFx = null;
+        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = holdFx = promoteFx = trophy = null;
     }
 
     function show(text, color, now, seconds = 1.2) {
@@ -175,7 +176,11 @@ const Lcd = (() => {
             // 保留変化: ピキーン！
             holdFx = { result: e.result, current: e.current, start: now };
             Sound.play('success');
+        } else if (e.type === 'trophy') {
+            trophy = { level: e.level, start: now, until: Infinity };
+            Sound.play(e.level === 6 ? 'win' : 'success');
         } else if (e.type === 'spinStart') {
+            if (trophy) trophy.until = Math.max(now, trophy.start + summaryTime) + CONFIG.show.settingHint.trophy.minShow;
             spinView = { plan: e.plan, gaugeStop: 0.55 + Math.random() * 0.35, pushedAt: null };
             if (e.plan.talk) say(e.plan.talk.text, e.plan.talk.color, now);
             else if (Customize.get('furukawa') === 'often' && e.fig === 1 && e.plan.type === 'plain') {
@@ -231,8 +236,55 @@ const Lcd = (() => {
             rashCount = { count: e.rushHits - 1, start: now };
             bonusTalk('endRash', now);
         } else if (e.type === 'rushEnd') {
-            summary = { hits: e.hits - 1, balls: e.balls, failed: e.challengeFailed, until: now + 5 };
+            summary = { hits: e.hits - 1, balls: e.balls, failed: e.challengeFailed, until: now + summaryTime };
         }
+    }
+
+    const summaryTime = 5;   // RASH が終わったときの結果を出しておく秒
+
+    // ----- 設定示唆トロフィー (スロット版と同じ絵。左下に落ちてきて少し弾む) -----
+    // k: 縁 / h: ハイライト / #: 本体 / d: 影 / b: 台座
+    const TROPHY_ART = [
+        '..kkkkkkkkkk..',
+        'kkkhh#####dkkk',
+        'k.kh######dk.k',
+        'k.kh######dk.k',
+        '.kkh######dkk.',
+        '...kh####dk...',
+        '....kh##dk....',
+        '.....k##k.....',
+        '.....k##k.....',
+        '....kh##dk....',
+        '..kkkkkkkkkk..',
+        '..kbbbbbbbbk..',
+        '..kbbbbbbbbk..',
+        '..kkkkkkkkkk..'
+    ];
+    function drawTrophy(now) {
+        if (!trophy) return;
+        if (now > trophy.until) { trophy = null; return; }
+        const color = CONFIG.show.settingHint.trophy.colors[trophy.level];
+        const px = 2;
+        const size = TROPHY_ART.length * px;
+        const t = now - trophy.start;
+        const drop = t < 0.3 ? (1 - t / 0.3) * -24 : t < 0.45 ? -Math.sin((t - 0.3) / 0.15 * Math.PI) * 4 : 0;
+        const x = 4;
+        const y = Math.round(H - size - 4 + drop);
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, Math.max(0, (trophy.until - now) / 0.4));
+        const glint = ((t % 1.6) / 1.6) * (size * 2.5) - size / 2;
+        TROPHY_ART.forEach((row, r) => [...row].forEach((c, col) => {
+            if (c === '.') return;
+            let fill;
+            if (c === 'k') fill = '#1a1208';
+            else if (c === 'b') fill = '#5a3a1a';
+            else if (color.rainbow) fill = `hsl(${(now * 200 + r * 25 + col * 12) % 360}, 100%, ${c === 'h' ? 85 : c === 'd' ? 38 : 60}%)`;
+            else fill = c === 'h' ? color.light : c === 'd' ? color.dark : color.main;
+            if (c !== 'k' && c !== 'b' && Math.abs((col + r) * px - glint) < 3) fill = '#ffffff';
+            ctx.fillStyle = fill;
+            ctx.fillRect(x + col * px, y + r * px, px, px);
+        }));
+        ctx.restore();
     }
 
     function aim(direction, now) {
@@ -811,6 +863,7 @@ const Lcd = (() => {
                 text(`${summary.hits}連  ${summary.balls >= 0 ? '+' : ''}${summary.balls}玉`, W / 2, 76, 18, '#ffe066');
             }
         }
+        drawTrophy(now);
         if (flash && now < flash.until) {
             const t = 1 - (flash.until - now) / flash.length;
             band(44, 44, 0.45);

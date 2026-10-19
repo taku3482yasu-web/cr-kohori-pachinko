@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#05070d">
+    <title>遊び方 - Pこおりくん ～内定ツラヌキ物語～</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+    <link rel="stylesheet" href="css/style.css?v=e7908ac6">
+    <!--
+    =====================================================================
+    遊び方ページ (2026-10-19 ユーザー指定)
+    ---------------------------------------------------------------------
+    確率・出玉・演出の数値は js/config.js から読んで表示する (config.js を変えればここも変わる)。
+    アップデート情報は js/updates.js の一覧をすべて出す。
+    =====================================================================
+    -->
+    <style>
+        body { user-select: text; -webkit-user-select: text; }
+        .howto { max-width: 760px; margin: 0 auto; padding: 16px 16px 48px; line-height: 1.7; }
+        .howto-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .howto h1 { font-size: 22px; color: var(--accent); margin: 8px 0; }
+        .howto h2 { font-size: 18px; color: #ffe066; margin: 28px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--panel-line); }
+        .howto h3 { font-size: 15px; color: var(--accent); margin: 16px 0 4px; }
+        .howto p, .howto li { font-size: 14px; }
+        .howto ul { padding-left: 20px; margin: 4px 0; }
+        .howto table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+        .howto th, .howto td { border: 1px solid var(--panel-line); padding: 4px 8px; text-align: left; vertical-align: top; }
+        .howto th { background: var(--panel); color: var(--muted); font-weight: normal; }
+        .howto .num { text-align: right; white-space: nowrap; }
+        .table-wrap { overflow-x: auto; }
+        .note { font-size: 12px; color: var(--muted); }
+        .red { color: #ff6a8a; }
+        .gold { color: #ffe066; }
+        .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; font-size: 13px; }
+        .flow span { padding: 4px 8px; border: 1px solid var(--panel-line); border-radius: 6px; background: var(--panel); }
+        .flow b { color: var(--muted); font-weight: normal; }
+        .chip { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; border: 1px solid #0006; }
+        .chip-rainbow { background: linear-gradient(135deg, #ff3a3a, #ffe066, #3fcf5f, #3f8cff, #a860ff); }
+        .stars { color: #ffe066; letter-spacing: 1px; }
+        .toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+        .toc a { color: var(--accent); font-size: 13px; }
+    </style>
+</head>
+<body>
+    <main class="howto">
+        <div class="howto-top">
+            <h1>遊び方</h1>
+            <a href="index.html" class="small-button link-button">← 台にもどる</a>
+        </div>
+        <p>Pこおりくん ～内定ツラヌキ物語～ は、玉を打ってヘソに入れ、大当たりを目指すパチンコゲームです。こおりくんは内定を得るために旅に出ます。</p>
+        <ul class="toc">
+            <li><a href="#controls">操作</a></li>
+            <li><a href="#flow">ゲームの流れ</a></li>
+            <li><a href="#spec">スペック</a></li>
+            <li><a href="#setting">設定</a></li>
+            <li><a href="#normal">通常時の演出</a></li>
+            <li><a href="#challenge">突破チャレンジ</a></li>
+            <li><a href="#rash">RASH</a></li>
+            <li><a href="#hint">設定示唆</a></li>
+            <li><a href="#menu">データ・図鑑・カスタマイズ</a></li>
+            <li><a href="#updates">アップデート情報</a></li>
+        </ul>
+
+        <h2 id="controls">操作</h2>
+        <ul>
+            <li><b>ハンドル</b>を押している間、玉を発射します（パソコンは <b>Space</b> でも）。押したまま回す・<b>← →</b> キー・ホイールで強さを変えます（Shift+← → で 10 ずつ）</li>
+            <li>「← 左打ち」「右打ち →」のボタンで、それぞれに向いた強さ（<span id="preset-left"></span> / <span id="preset-right"></span>）に合わせます</li>
+            <li>通常時は<b>左打ち</b>でヘソを狙います。大当たり・時短・小当たりのあいだは画面に「右打ち →」が出るので<b>右打ち</b>にします</li>
+            <li><b>こおりくんのボタン</b>（B キーでも）: バトルの「PUSH!」で押します。RASH の2回目からの大当たり中は、押すたびに こおりRASH ⇔ おにおにRASH が切り替わります</li>
+            <li>持ち玉がなくなったら「玉貸し」（+<span id="lend"></span>発）</li>
+            <li>遊んでいる途中はこのブラウザに自動で保存され、次に開いたときに「前回から続ける」を選べます</li>
+        </ul>
+
+        <h2 id="flow">ゲームの流れ</h2>
+        <div class="flow">
+            <span>通常時（左打ち）</span><b>→ ヘソで大当たり →</b><span>突破チャレンジ</span><b>→ 突破 →</b><span class="red">RASH</span><b>→ 大当たりで継続</b>
+        </div>
+        <ul>
+            <li><b>通常時</b>: ヘソ（特図1）に入った玉で大当たりを抽選します。当たると、初当たりの一部は <b>突破チャレンジ</b> へ、残りは出玉だけで通常時に戻ります</li>
+            <li><b>突破チャレンジ</b>: 右打ちで電チューに玉を入れ、保留を最大 <span id="hold-max"></span> 個ためます。たまるとおにおにとのバトルが始まり、保留のどれかで当たれば <b>突破</b>（RASH 突入）。突破率は約 <span id="challenge-rate"></span></li>
+            <li><b>RASH</b>（1種2種混合）: 時短 <span id="jitan-spins"></span> 回の間、電チューがよく開きます。電チューに入った玉（特図2）で小当たりを引くとアタッカーが開き、<b>V</b> に入ると大当たり。大当たりのたびに時短がまた始まります。継続率は約 <span id="continue-rate"></span></li>
+            <li>時短が終わっても、残っている保留で小当たりを引けば続きます。保留もなくなったら RASH 終了です</li>
+            <li>小当たりのアタッカーは V に入るまで開いているので、右打ちを続けていれば V に入ります</li>
+        </ul>
+
+        <h2 id="spec">スペック</h2>
+        <p>はじめに「台選び」でスペックを選びます。右上の「台選び」でいつでも選び直せます（持ち玉ははじめに戻ります）。</p>
+        <div class="table-wrap"><table id="spec-table"></table></div>
+        <p class="note">アタッカーの賞球は <span id="attacker-pay"></span> 個。1ラウンドに 10 個入ると閉じます（200個・1300個 はラウンドの入賞数を調整した近い値です）。</p>
+
+        <h2 id="setting">設定</h2>
+        <p>台には設定 1〜6 があり、設定が高いほどヘソの命釘が開いていてよく回ります。「おまかせ」を選ぶと設定はわかりません（<a href="#hint">設定示唆</a>で推測します）。突破率・継続率は設定に関係ありません。</p>
+        <div class="table-wrap"><table id="setting-table"></table></div>
+
+        <h2 id="normal">通常時の演出</h2>
+        <h3>保留の色</h3>
+        <p id="hold-colors"></p>
+        <p class="note">最初は白で出て、変動が始まるときや保留が進むときに色が変わることがあります（保留変化）。保留変化したら、外れでも必ずチャレンジ演出に入ります。</p>
+        <h3>台のボタン・入賞時の音</h3>
+        <ul>
+            <li>ヘソに入ったとき、ボタンが <b>赤く光る / 震える / 高い音</b> が起きたら、その保留は当たり約 <span id="button-rel"></span>。<b>虹色</b>は当たり確定</li>
+            <li>入賞時に<b>こおりくんの声</b>が鳴ってボタンが赤く光ることがあります（チャンス）</li>
+            <li>「カスタマイズ」の先読みの量で、これらの出やすさが変わります（当たりやすさは変わりません）</li>
+        </ul>
+        <h3>変動の流れ</h3>
+        <p>図柄が回る → <b>チャレンジ</b> → 成功すると <b>リーチ</b> → <b>バトル</b>。バトルに勝つと図柄がそろって大当たりです。</p>
+        <div class="table-wrap"><table id="challenge-table"></table></div>
+        <div class="table-wrap"><table id="battle-table"></table></div>
+        <h3>ステージ</h3>
+        <ul>
+            <li>通常時は <span id="stage-cycle"></span> の順に、<span id="stage-interval"></span> 回転ごとにステージが変わります</li>
+            <li><b>SE城前・満月</b>（高確率ステージ）に移ったらチャンス</li>
+            <li>ステージが変わってすぐ（<span id="quick-window"></span> 回転以内）にまた変わったら、当たり濃厚</li>
+        </ul>
+        <h3>図柄と昇格</h3>
+        <p>図柄は 1〜7。奇数（赤）でそろうと突破チャレンジ・大きい出玉、偶数（青）は出玉だけ。偶数でそろっても、ラウンド中に奇数へ<b>昇格</b>することがあります。</p>
+
+        <h2 id="challenge">突破チャレンジ</h2>
+        <p>おにおにとのバトル。たまった保留1つが1ラウンドで、保留ごとにこおりくんの武器が変わります。武器が強いほど突破のチャンス。</p>
+        <div class="table-wrap"><table id="weapon-table"></table></div>
+
+        <h2 id="rash">RASH</h2>
+        <p>RASH 突入の大当たり中に、<b>こおりRASH</b> か <b>おにおにRASH</b> を選びます（選ばなければこおりRASH。当たりやすさは同じです）。</p>
+        <h3>こおりRASH</h3>
+        <p>バトルで勝てば当たり。相手によって勝ちやすさが違います。</p>
+        <div class="table-wrap"><table id="koori-table"></table></div>
+        <h3>おにおにRASH</h3>
+        <p>おにおにが椅子で眠っています。<b>開眼すれば当たり</b>。当たるときだけ<b>違和感</b>が起きます（外れでは何も起きないので、違和感があれば当たり）。</p>
+        <ul id="anomaly-list"></ul>
+        <h3>RASH 中の当たりの合図</h3>
+        <ul>
+            <li><b>黒い保留</b>（目が赤い）・<b>回る保留</b>が出たら当たり確定</li>
+            <li>台のボタンが反応したら（震える・赤くなる・虹色）当たり確定</li>
+            <li><b>ブラックアウト</b>: 前ぶれなく暗転したら当たり（突発当たり）</li>
+            <li><b>〇G連確定</b>: 大当たりの1ラウンド目に、残りの保留に当たりがあると教えてくれます</li>
+            <li>RASH を <span id="ending-at"></span> 回続けると…<span class="gold">エンディング</span>！</li>
+        </ul>
+
+        <h2 id="hint">設定示唆</h2>
+        <p>突破チャレンジ・RASH が終わったとき、<span id="trophy-rate"></span> の確率で液晶の左下に<b>トロフィー</b>が落ちてきます。色は「設定○以上」を表します。</p>
+        <div class="table-wrap"><table id="trophy-table"></table></div>
+        <p>通常時、ふるカワが<b>台の設定をほのめかす</b>ことがあります（「この台、あったかい気がする♪」など）。見た設定示唆は「データ」にまとまります。</p>
+
+        <h2 id="menu">データ・図鑑・カスタマイズ</h2>
+        <ul>
+            <li><b>データ</b>: この台の総回転数・大当たり履歴・大当たりまでの回転数のグラフ・出玉の推移・見た設定示唆</li>
+            <li><b>図鑑</b>: これまでの記録・見た演出・実績（<span id="achievement-count"></span> 個）。台を選び直しても、新しく始めても残ります</li>
+            <li><b>カスタマイズ</b>: 先読みの量・先告知・ふるカワのおしゃべり・盤面や玉やこおりくんの色。当たりやすさ・出玉は変わりません</li>
+            <li><b>ホーム画面に追加</b>: スマホのブラウザのメニューから「ホーム画面に追加」すると、アプリのように開けます（https で公開しているとき）</li>
+        </ul>
+
+        <h2 id="updates">アップデート情報</h2>
+        <div id="updates-all"></div>
+
+        <p style="margin-top: 32px;"><a href="index.html" class="small-button link-button">← 台にもどる</a></p>
+    </main>
+
+    <script src="js/config.js?v=d8238ba5"></script>
+    <script src="js/updates.js?v=cfa3d154"></script>
+    <script>
+        (() => {
+            const $ = id => document.getElementById(id);
+            const c = CONFIG;
+            const s = c.show;
+            const pct = p => `${Math.round(p * 100)}%`;
+            const odds = p => `1/${(1 / p).toFixed(1).replace(/\.0$/, '')}`;
+            const table = (id, head, rows) => {
+                $(id).innerHTML = `<thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead>`
+                    + `<tbody>${rows.map(r => `<tr>${r.map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody>`;
+            };
+            // 当たり・外れの重みから、出たときの当たりやすさの順位 (★1〜5)
+            const stars = (list) => {
+                const ratio = list.map(x => x.hit / Math.max(0.001, x.miss));
+                const sorted = [...ratio].sort((a, b) => a - b);
+                return ratio.map(r => '★'.repeat(1 + Math.round(sorted.indexOf(r) / Math.max(1, sorted.length - 1) * 4)));
+            };
+
+            $('preset-left').textContent = c.launch.presets.left;
+            $('preset-right').textContent = c.launch.presets.right;
+            $('lend').textContent = c.balls.lend;
+            $('hold-max').textContent = c.machine.holdMax;
+            const specs = Object.values(c.specs);
+            $('challenge-rate').textContent = [...new Set(specs.map(sp => pct(sp.target.challenge)))].join(' / ');
+            $('continue-rate').textContent = specs.map(sp => `${pct(sp.target.continuation)}（${sp.label}）`).join(' / ');
+            $('jitan-spins').textContent = specs[0].jitan.spins;
+            $('attacker-pay').textContent = c.payout.attacker;
+
+            // スペック (振り分けは重みの割合で出す)
+            table('spec-table', ['', ...specs.map(sp => `<span class="gold">${sp.label}</span>`)], [
+                ['大当たり確率', ...specs.map(sp => odds(sp.hitRate))],
+                ['初当たり（ヘソ）', ...specs.map(sp => {
+                    const total = sp.firstHit.reduce((a, x) => a + x.weight, 0);
+                    return sp.firstHit.map(x => `${pct(x.weight / total)}: ${x.label}個${x.next === 'jitan' ? ' + 突破チャレンジ' : ''}`).join('<br>');
+                })],
+                ['突破チャレンジ', ...specs.map(sp => `突破率 約${pct(sp.target.challenge)}`)],
+                ['RASH 中の大当たり', ...specs.map(sp => {
+                    const total = sp.rushHit.reduce((a, x) => a + x.weight, 0);
+                    return sp.rushHit.map(x => `${pct(x.weight / total)}: ${x.label}個`).join('<br>');
+                })],
+                ['RASH 継続率', ...specs.map(sp => `約${pct(sp.target.continuation)}（大当たりのたびに時短 ${sp.jitan.spins} 回）`)],
+                ['小当たり（RASH 中）', ...specs.map(sp => odds(sp.smallRate))],
+                ['特徴', ...specs.map(sp => sp.note)]
+            ]);
+
+            // 設定
+            table('setting-table', ['設定', '1000円（250発）あたりの回転数の目安'],
+                c.settings.map((st, i) => [`設定${i + 1}`, `約 ${Math.round(st.rotation)} 回転`]));
+
+            // 保留の色
+            const names = { white: '白', blue: '青', green: '緑', purple: '紫', red: '赤', rainbow: '虹' };
+            $('hold-colors').innerHTML = '期待度は低い順に ' + s.holdColors.order.map(id => {
+                const chip = id === 'rainbow' ? '<i class="chip chip-rainbow"></i>' : `<i class="chip" style="background:${s.holdColors.colors[id]}"></i>`;
+                return `${chip}${names[id]}`;
+            }).join(' → ') + '。<b>虹は大当たり確定</b>';
+            $('button-rel').textContent = pct(s.button.reliability);
+
+            // チャレンジ・バトル
+            const ch = Object.values(s.challenges);
+            const chStars = stars(ch);
+            table('challenge-table', ['チャレンジ', '期待度'], ch.map((x, i) => [x.name, `<span class="stars">${chStars[i]}</span>`]));
+            table('battle-table', ['バトルの相手', '勝てる確率'], Object.values(s.battles).map(b => [b.name, b.win >= 1 ? '<span class="gold">確定</span>' : `約${pct(b.win)}`]));
+            $('stage-cycle').textContent = s.stages.cycle.map(id => s.stages.names[id]).join(' → ');
+            $('stage-interval').textContent = s.stages.interval;
+            $('quick-window').textContent = s.stages.quick.window;
+
+            // 突破チャレンジの武器 (重みの比から期待度の順)
+            const weapons = Object.values(s.challengeBattle.weapons);
+            const wStars = stars(weapons);
+            table('weapon-table', ['武器', '期待度'], weapons.map((w, i) => [w.name, w.miss === 0 ? '<span class="gold">突破確定</span>' : `<span class="stars">${wStars[i]}</span>`]));
+
+            // RASH
+            table('koori-table', ['相手', '勝てる確率'], Object.values(s.kooriRash.enemies).map(e => [e.name, e.win >= 1 ? '<span class="gold">確定</span>' : `約${pct(e.win)}`]));
+            $('anomaly-list').innerHTML = Object.values(s.onioniRash.patterns).map(p => `<li>${p.name}</li>`).join('');
+            $('ending-at').textContent = s.story.endingAt;
+
+            // 設定示唆
+            const t = s.settingHint.trophy;
+            $('trophy-rate').textContent = `約${pct(t.rate)}`;
+            table('trophy-table', ['トロフィーの色', '意味'], Object.entries(t.colors).map(([level, col]) => [
+                `${col.rainbow ? '<i class="chip chip-rainbow"></i>' : `<i class="chip" style="background:${col.main}"></i>`}${col.name}`,
+                Number(level) === 6 ? '<span class="gold">設定6 確定</span>' : Number(level) === 1 ? 'どの設定でも出る' : `設定${level} 以上`
+            ]));
+
+            $('achievement-count').textContent = c.collection.achievements.length;
+            $('updates-all').innerHTML = UPDATES.map(u => `<h3>${u.title} <span class="note">${u.date}</span></h3>`
+                + `<ul>${u.items.map(t => `<li>${t}</li>`).join('')}</ul>`).join('');
+        })();
+    </script>
+</body>
+</html>

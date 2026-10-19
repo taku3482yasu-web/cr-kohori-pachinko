@@ -497,6 +497,76 @@ const CONFIG = {
             },
             bonusRoundRate: 0.5,
             bonusColor: 5
+        },
+
+        // ----- 設定示唆 (2026-10-19 ユーザー指定。数値は Claude が決めた。スロット版と同じ考え方) -----
+        //   trophy: 突破チャレンジ・RASH が終わったとき rate の確率で、液晶の左下にトロフィーが落ちてくる (次の変動から minShow 秒で消える)。
+        //     色は「設定○以上」を示す (白は設定1以上 = どの設定でも出る、虹は設定6確定)。weights は台の設定ごとの、出たときの色の重み
+        //   lines: 通常時のふるカワが黙っている外れの変動で、linesRate の確率で言う設定示唆のセリフ。weights は台の設定ごとの重み
+        //     (0 の設定では言わない = それ以上確定)。short はデータカウンターに出す短い名前
+        settingHint: {
+            trophy: {
+                rate: 0.5,
+                minShow: 4,
+                weights: {
+                    1: { 1: 100 },
+                    2: { 1: 55, 2: 45 },
+                    3: { 1: 40, 2: 20, 3: 40 },
+                    4: { 1: 30, 2: 15, 3: 15, 4: 40 },
+                    5: { 1: 25, 2: 10, 3: 10, 4: 15, 5: 40 },
+                    6: { 1: 20, 2: 10, 3: 10, 4: 10, 5: 15, 6: 35 }
+                },
+                colors: {
+                    1: { name: '白', main: '#f2f2f2', light: '#ffffff', dark: '#a8a8b8' },
+                    2: { name: '青', main: '#3f8cff', light: '#a8ccff', dark: '#1d4ea8' },
+                    3: { name: '緑', main: '#3fcf5f', light: '#a8f0b8', dark: '#1d7a33' },
+                    4: { name: '紫', main: '#a860ff', light: '#d8b8ff', dark: '#5a2a9a' },
+                    5: { name: '赤', main: '#ff3a3a', light: '#ffb0b0', dark: '#9a1a1a' },
+                    6: { name: '虹', rainbow: true }
+                }
+            },
+            linesRate: 0.12,
+            lines: [
+                { text: 'この台、なんだか冷えてる気がする…', short: '冷えてる', weights: { 1: 40, 2: 30, 3: 25, 4: 15, 5: 10, 6: 5 } },
+                { text: 'ふつうの台…かな？', short: 'ふつう', weights: { 1: 40, 2: 40, 3: 35, 4: 25, 5: 20, 6: 15 } },
+                { text: 'この台、あったかい気がする♪', short: 'あったかい', weights: { 1: 10, 2: 15, 3: 20, 4: 30, 5: 30, 6: 30 } },
+                { text: '今日はいい日になりそう！', short: 'いい日', weights: { 1: 0, 2: 15, 3: 15, 4: 15, 5: 15, 6: 15 } },
+                { text: 'ここ、高設定のにおいがするよ！', short: '高設定のにおい', weights: { 1: 0, 2: 0, 3: 0, 4: 12, 5: 15, 6: 15 } },
+                { text: 'ろく…ろく…！ なんでもない！', short: 'ろく…', weights: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 8 } }
+            ]
         }
+    },
+
+    // ----- データカウンター (台ごと。2026-10-19 ユーザー指定。数値は Claude が決めた) -----
+    //   historyShown: 大当たり履歴に出す件数 / graphPoints: 出玉の推移のグラフに残す点の数 (古いものから間引く)
+    //   graphEvery: 出玉の推移を記録する間隔 (秒)
+    dataCounter: { historyShown: 20, graphPoints: 300, graphEvery: 5 },
+
+    // ----- 図鑑・実績 (2026-10-19 ユーザー指定。中身は Claude が決めた) -----
+    // 台を選び直しても、新しく始めても残る (このブラウザに保存する)。
+    // 実績は stat の値が value 以上になると解除 (value: 'all' はそのグループの全種類):
+    //   記録 (records のキー): spins (特図1 の回転数) / hits (大当たり) / entries (RASH 突入) / bestStreak (1回の RASH の最高連チャン)
+    //     / bestBalls (1回の RASH の最高出玉) / blackouts / renchan (〇G連確定) / promotes (昇格) / endings / holdChanges (保留変化)
+    //   'seen:グループ' (見た種類の数) / 'seen:グループ:id' (その演出を見た回数) / 'win:グループ:id' (そのバトルに勝った回数)
+    collection: {
+        achievements: [
+            { id: 'firstHit', name: 'はじめての大当たり', desc: '大当たりを引く', stat: 'hits', value: 1 },
+            { id: 'entry', name: '突破！', desc: '突破チャレンジを突破して RASH に入る', stat: 'entries', value: 1 },
+            { id: 'streak5', name: '5連チャン', desc: '1回の RASH で 5連する', stat: 'bestStreak', value: 5 },
+            { id: 'ending', name: '内定ツラヌキ', desc: 'RASH を 10回続けて、エンディングを見る', stat: 'endings', value: 1 },
+            { id: 'balls5000', name: '一撃5000発', desc: '1回の RASH で 5000発 出す', stat: 'bestBalls', value: 5000 },
+            { id: 'rainbowHold', name: '虹の保留', desc: '虹色の保留を見る', stat: 'seen:hold:rainbow', value: 1 },
+            { id: 'oniKiller', name: '絶対殺す剣', desc: '突破チャレンジで おにおに絶対殺す剣 を見る', stat: 'seen:weapon:oniKiller', value: 1 },
+            { id: 'naitei', name: '内定のチャンス', desc: 'シーシャ・ナイテイ・ナイナイとのバトルに勝つ', stat: 'win:battle:naitei', value: 1 },
+            { id: 'goldDog', name: '黄金のワンちゃん', desc: 'こおりRASH で ゴールド金面犬 に勝つ', stat: 'win:kooriRash:goldDog', value: 1 },
+            { id: 'blackout', name: 'ブラックアウト', desc: 'RASH 中にブラックアウトを見る', stat: 'blackouts', value: 1 },
+            { id: 'renchan', name: '連チャン確定', desc: '〇G連確定 を見る', stat: 'renchan', value: 1 },
+            { id: 'promote', name: '昇格', desc: '大当たりのラウンド中に図柄が昇格する', stat: 'promotes', value: 1 },
+            { id: 'allChallenges', name: 'チャレンジャー', desc: 'チャレンジを全種類見る', stat: 'seen:challenge', value: 'all' },
+            { id: 'allAnomalies', name: '違和感マスター', desc: 'おにおにRASH の違和感を全種類見る', stat: 'seen:anomaly', value: 'all' },
+            { id: 'allStages', name: '旅の記録', desc: 'ステージを全部めぐる (SE城前・満月も)', stat: 'seen:stage', value: 'all' },
+            { id: 'rainbowTrophy', name: '虹のトロフィー', desc: '虹のトロフィー (設定6確定) を見る', stat: 'seen:trophy:6', value: 1 },
+            { id: 'spins3000', name: '打ち込み3000回転', desc: '合計 3000回転 まわす', stat: 'spins', value: 3000 }
+        ]
     }
 };
