@@ -210,7 +210,7 @@ const CONFIG = {
         },
         // 小当たり: アタッカーが V に入るまで開いている (最大 open 秒)。入った玉で V 入賞 → 大当たり (rushHit)
         //   演出で「当たり」と見せたあとに V に入らないことがないように (2026-10-19。前は 1.8秒だけ開いて V入賞率 約93%)
-        small: { open: 8 },
+        small: { open: 20 },   // 最大 20秒 (2026-10-20 ユーザー指定。前は 8秒)
         // 大当たり: opening (秒) → ラウンド (count 個入るか maxTime 秒で閉じる) → interval → … → ending
         bonus: { opening: 3, count: 10, maxTime: 25, interval: 1.5, ending: 4 },
         // 普図 (ゲートで抽選 → 電チューが開く)。support = 時短中 (電サポ)
