@@ -173,7 +173,7 @@
                 }
                 if (e.type === 'spinStart' && e.fig === 2 && !m.rush.challenge && m.rush.active) {
                     showStats.rashSpins++;
-                    if (e.plan.kind === 'rashBattle') { showStats.rashBattles++; tally(showStats.rashEnemy, e.plan.enemy, e.plan.win); }
+                    if (e.plan.kind === 'rashBattle') { showStats.rashBattles++; tally(showStats.rashEnemy, e.plan.enemyKey, e.plan.win); }
                 }
                 if (e.type === 'hold' && e.fig === 1) tally(showStats.senyomi = showStats.senyomi || {}, 'any',
                     e.result.kind === 'hit' && (e.result.holdColor !== 'white' || e.result.button || e.result.hiStage));
@@ -250,7 +250,7 @@
             lines.push('      保留の色の当たり: ' + CONFIG.show.holdColors.order.map(c => `${c} ${rate(st.color[c] || [0, 0])}`).join(' / '));
             const wnames = CONFIG.show.challengeBattle.weapons;
             lines.push('      突破チャレンジの武器の当たり: ' + Object.keys(wnames).map(id => `${wnames[id].name} ${rate(st.weapon[id] || [0, 0])}`).join(' / '));
-            const enames = CONFIG.show.kooriRash.enemies;
+            const enames = Scenario.kooriEnemies(CONFIG);   // 怪の状態も別の相手として
             lines.push(`      こおりRASH (特図2 ${st.rashSpins} 回転、バトル ${pct(st.rashBattles / Math.max(1, st.rashSpins))}) のバトルの成功率: `
                 + Object.keys(enames).map(id => `${enames[id].name} ${rate(st.rashEnemy[id] || [0, 0])}`).join(' / '));
             const occ = (st.occ || {}).hit || [0, 0];

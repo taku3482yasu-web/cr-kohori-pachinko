@@ -393,6 +393,57 @@ const RashView = (() => {
         }
     }
 
+    // ----- 復活 (こおりRASH のバトルに負けたあと。ユーザー指定 2026-10-19) -----
+    // 暗転 →「内定がないと」→「こおり生きていけない…」→「それでも、まだ、あきらめたくない」
+    // → 大きい「それでも」がだんだん虹色に → 虹色のこおりくんと「こおり生きていける！」で虹色のフラッシュ (このあと rvkill で撃破)
+    function drawRevival(now, plan, phase) {
+        const { ctx, W, H, text } = kit;
+        const n = phase.name;
+        const local = phase.local;
+        const fadeIn = Math.min(1, local / 0.5);
+        ctx.fillStyle = n === 'rvdark' ? `rgba(0, 0, 0, ${Math.min(1, local / 0.4)})` : '#000000';
+        ctx.fillRect(0, 0, W, H);
+        const white = a => `rgba(255, 255, 255, ${a})`;
+        if (n === 'rvnaitei') text('内定がないと', W / 2, 70, 18, white(fadeIn));
+        if (n === 'rvcant') {
+            text('内定がないと', W / 2, 52, 14, white(0.45));
+            const dots = '.....'.slice(0, Math.min(5, Math.floor(local / 0.25)));
+            text(`こおり生きていけない${dots}`, W / 2, 84, 16, `rgba(255, 106, 106, ${fadeIn})`);
+        }
+        if (n === 'rvstill') {
+            // 文字が変わる: 前の文字が消えて、新しい文字が出る
+            const k = Math.min(1, local / 0.6);
+            if (k < 1) text('こおり生きていけない.....', W / 2, 84, 16, `rgba(255, 106, 106, ${1 - k})`);
+            text('それでも、まだ、', W / 2, 60, 16, white(k));
+            text('あきらめたくない', W / 2, 88, 20, white(Math.max(0, (local - 0.6) / 0.6)));
+        }
+        if (n === 'rvsoredemo') {
+            // 大きい「それでも」。だんだん虹色になる
+            const grow = Math.min(1, local / 0.4);
+            const size = Math.round(24 + grow * 14);
+            const rainbowness = Math.min(1, Math.max(0, (local - 0.5) / (phase.t - 0.8)));
+            ctx.save();
+            ctx.globalAlpha = 1 - rainbowness;
+            text('それでも', W / 2, 82, size, '#ffffff');
+            ctx.globalAlpha = rainbowness;
+            text('それでも', W / 2, 82, size, 'rainbow', 'center', now);
+            ctx.restore();
+        }
+        if (n === 'rvflash') {
+            // 虹色のこおりくん + 「こおり生きていける！」で虹色のフラッシュ
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.15 + 0.1 * Math.sin(now * 8)})`;
+            ctx.beginPath();
+            ctx.arc(W / 2, 70, 36, 0, Math.PI * 2);
+            ctx.fill();
+            rainbowKoori(W / 2, 96 + Math.sin(now * 3) * 2, 3, now);
+            const flash = Math.max(0, 0.85 - local * 0.8);
+            ctx.fillStyle = `hsla(${(now * 600) % 360}, 95%, 70%, ${flash})`;
+            ctx.fillRect(0, 0, W, H);
+            kit.band(112, 24, 0.6);
+            text('こおり生きていける！', W / 2, 124, 16, 'rainbow', 'center', now);
+        }
+    }
+
     // ----- 〇G連確定 (RASH 中の大当たりのラウンド中。残り保留に当たりがあるとき) -----
     // 暗転 → こおりRASH ならこおりくん、おにおにRASH ならおにおにが虹色に光る →「〇G連確定！」
     function drawRenchan(now, t, games, mode) {
@@ -427,5 +478,5 @@ const RashView = (() => {
         return null;
     }
 
-    return { init, drawChallenge, drawChallengeHolds, drawOnioniRash, drawBlackout, drawRenchan, postEffect, drawWeapon };
+    return { init, drawChallenge, drawChallengeHolds, drawOnioniRash, drawBlackout, drawRevival, drawRenchan, postEffect, drawWeapon };
 })();

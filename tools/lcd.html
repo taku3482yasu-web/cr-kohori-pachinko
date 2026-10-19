@@ -7,7 +7,7 @@
     液晶だけを大きく表示して、変動の流れを確認する (盤面・玉はなし)。
     ?force=hit|rush|reach|fail|small  はじめの保留 / &enemy=onioni バトルの相手 / &spec=s159
     ?force=challenge&win=2  突破チャレンジ (保留4つ、win 番目で当たり。-1 で負け)。&extra=hit (または miss) でおまけの保留を1つ足す
-    ?force=koori&enemy=goldDog&lose=1  こおりRASH のバトル (lose=1 でガセのバトル)
+    ?force=koori&enemy=goldDog&lose=1  こおりRASH のバトル (lose=1 でガセのバトル。&kai=1 で怪の保留、&revival=1 で復活。相手は aruaru・○○Kai も)
     ?force=onioni&pattern=zoom  おにおにRASH の当たり (open / rainbow / flip / upsideDown / mono / zoom / koori / tomoishi / naitei)
     &rashhold=black (または spin)  RASH 中の当たりの保留を黒い保留・回る保留に (残り保留に1つ足す)
     ?force=blackout  RASH 中のブラックアウト (突発当たり)
@@ -83,6 +83,14 @@
         Machine.debugHold(m, 2, params.get('lose') ? 'reach' : params.get('hit') ? 'hit' : 'small', null, { enemy: options.enemy, pattern: params.get('pattern') || undefined });
         if (params.get('hit')) m.rush.hits = Number(params.get('hit'));   // 何連目か
         if (params.get('rashhold')) m.holds[2].push({ kind: 'small', holdColor: 'white', rashHold: params.get('rashhold') });
+        // 復活: 当たりのバトルを一度負けに見せる (1/99 は 900個 の当たりにする)
+        if (params.get('revival')) {
+            const h = m.holds[2][0];
+            h.force = 'revival';
+            h.alloc = m.spec.rushHit.find(a => a.label === CONFIG.show.revival.labels[m.specId]) || m.spec.rushHit[0];
+        }
+        // 怪の保留 (先バレ): 怪の相手のバトルにする
+        if (params.get('kai')) m.holds[2][0].kai = true;
     } else if (force === 'small') Machine.debugHold(m, 2, 'small', null);
     else if (force === 'rush') Machine.debugHold(m, 1, 'hit', 'jitan', options);
     else Machine.debugHold(m, 1, force, null, options);

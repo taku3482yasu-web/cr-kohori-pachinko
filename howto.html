@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
-    <link rel="stylesheet" href="css/style.css?v=efa065dd">
+    <link rel="stylesheet" href="css/style.css?v=9b185907">
     <!--
     =====================================================================
     遊び方ページ (2026-10-19 ユーザー指定)
@@ -128,7 +128,8 @@
         <h2 id="rash">RASH</h2>
         <p>RASH 突入の大当たり中に、<b>こおりRASH</b> か <b>おにおにRASH</b> を選びます（選ばなければこおりRASH。当たりやすさは同じです）。</p>
         <h3>こおりRASH</h3>
-        <p>バトルで勝てば当たり。相手によって勝ちやすさが違います。</p>
+        <p>バトルで勝てば当たり。相手によって勝ちやすさが違います。目のまわりに靄がかかって<b>目が赤く光る「怪」</b>の状態で出てきたら、勝てる確率が上がります。怪が出る保留は、電チューに入ったときに<b>先バレ音が鳴ってボタンが紫に光ります</b>。</p>
+        <p>バトルに負けても、画面が暗転したら…<b>復活</b>のチャンス！「それでも」が虹色になれば、こおりくんが立ち上がって相手を撃破します（1/99 では 900個 の当たり）。</p>
         <div class="table-wrap"><table id="koori-table"></table></div>
         <h3>おにおにRASH</h3>
         <p>おにおにが椅子で眠っています。<b>開眼すれば当たり</b>。当たるときだけ<b>違和感</b>が起きます（外れでは何も起きないので、違和感があれば当たり）。</p>
@@ -136,7 +137,7 @@
         <h3>RASH 中の当たりの合図</h3>
         <ul>
             <li><b>黒い保留</b>（目が赤い）・<b>回る保留</b>が出たら当たり確定</li>
-            <li>台のボタンが反応したら（震える・赤くなる・虹色）当たり確定</li>
+            <li>台のボタンが反応したら（震える・赤くなる・虹色）当たり確定。<b>紫</b>は「怪」の先バレ（チャンス）</li>
             <li><b>ブラックアウト</b>: 前ぶれなく暗転したら当たり（突発当たり）</li>
             <li><b>〇G連確定</b>: 大当たりの1ラウンド目に、残りの保留に当たりがあると教えてくれます。〇 は残りの保留の当たりの数（このあと確定している連チャンの数）です</li>
             <li>RASH を <span id="ending-at"></span> 回続けると…<span class="gold">エンディング</span>！</li>
@@ -163,8 +164,8 @@
         <p style="margin-top: 32px;"><a href="index.html" class="small-button link-button">← 台にもどる</a></p>
     </main>
 
-    <script src="js/config.js?v=3556d662"></script>
-    <script src="js/updates.js?v=01cf45a7"></script>
+    <script src="js/config.js?v=85baf798"></script>
+    <script src="js/updates.js?v=f5873379"></script>
     <script>
         (() => {
             const $ = id => document.getElementById(id);
@@ -237,7 +238,13 @@
             table('weapon-table', ['武器', '期待度'], weapons.map((w, i) => [w.name, w.miss === 0 ? '<span class="gold">突破確定</span>' : `<span class="stars">${wStars[i]}</span>`]));
 
             // RASH
-            table('koori-table', ['相手', '勝てる確率'], Object.values(s.kooriRash.enemies).map(e => [e.name, e.win >= 1 ? '<span class="gold">確定</span>' : `約${pct(e.win)}`]));
+            // こおりRASH の相手 (怪の状態は同じ行に。アルアルは連チャンしてから)
+            table('koori-table', ['相手', '勝てる確率', '怪の状態'], Object.values(s.kooriRash.enemies).map(e => [
+                e.name + (e.minStreak ? `<br><span class="note">RASH ${e.minStreak}連目から登場</span>` : ''),
+                e.win >= 1 ? '<span class="gold">確定</span>' : `約${pct(e.win)}`,
+                e.kai ? `<span style="color:#c070ff">${e.kai.name}</span>: ${e.kai.win >= 1 ? '<span class="gold">確定</span>' : `約${pct(e.kai.win)}`}`
+                    + (e.kai.minStreak ? `<br><span class="note">RASH ${e.kai.minStreak}連目から登場</span>` : '') : '-'
+            ]));
             $('anomaly-list').innerHTML = Object.values(s.onioniRash.patterns).map(p => `<li>${p.name}</li>`).join('');
             $('ending-at').textContent = s.story.endingAt;
 

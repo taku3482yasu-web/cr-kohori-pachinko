@@ -285,6 +285,7 @@ const CONFIG = {
             time: 1.2                // 光る・震える・鳴る時間 (秒)
         },
         // RASH 中・突破チャレンジ中のボタン (ユーザー指定): 当たりの保留の hitRate (60%) で震える・赤くなる・虹色になる。外れでは起きない
+        // (こおりRASH の怪の保留は、当たり・外れどちらでも入賞時の音と紫のボタン。kooriRash の kai)
         rashButton: {
             hitRate: 0.6,
             kinds: { shake: 35, red: 35, rainbow: 30 }
@@ -320,16 +321,35 @@ const CONFIG = {
             }
         },
         // こおりRASH: 当たりの保留と、最後の保留 (このあと時短も保留もない) は必ずバトル。外れでもときどきバトル (成功率から自動で計算)
-        //   相手 (成功率の低い順。ゴールド金面犬は確定)。hit: 当たりのときの重み / win: 成功率 (Claude が決めた。金面犬の確定はユーザー指定)
+        //   相手 (成功率の低い順。ゴールド金面犬・アルアルは確定)。hit: 当たりのときの重み / win: 成功率 (Claude が決めた。金面犬の確定はユーザー指定)
+        //   おかがっぱ・ひびきまくり・シーシャ・ナイテイ・アルアル は 2026-10-19 ユーザー指定で追加 (おかがっぱ・ひびきまくりは勝ちにくい、アルアルは確定撃破)
+        //   minStreak: RASH が この連チャン数 (表示の「〇連」) 以上のときだけ出る。アルアルは RASH で1回以上連チャンしてから (ユーザー指定の「1G連以上」)
+        //   kai: 怪の状態 (ユーザー指定 2026-10-19。アルアル以外)。目のまわりに靄がかかり、目が赤く光る。名前は「〇〇・怪」(ひびきまくりは「ひびかない・怪」)。
+        //     成功率が上がる (期待度アップ)。hit は当たりのときの重み、win は成功率 (Claude が決めた)。minStreak は怪だけの登場の条件
+        //     怪になるかは玉が電チューに入ったときに決め、入賞時の音 (先バレ音) が鳴ってボタンが紫に光る (ユーザー指定)。
+        //     そのため怪の保留はブラックアウトにせず、必ずバトルにする (怪の保留になる割合は成功率から自動で計算する)
+        //   どの相手が出るかは演出だけで、当たりやすさ・継続率は変わらない (外れのバトルの重みは成功率から自動で計算する)
         kooriRash: {
             timing: { roll: 1, battle: 5, result: 2 },
             lastShare: 0.02,   // RASH の変動のうち「最後の保留」になる割合 (測った値。外れのバトルの割合の計算に使う)
             enemies: {
-                shibata: { name: 'シバター', hit: 15, win: 0.15, map: 'ebisucho' },
-                sasaki: { name: 'Mr.SASAKI', hit: 25, win: 0.35, map: 'tsugakuro' },
-                onioni: { name: 'おにおに', hit: 40, win: 0.7, map: 'castleHall' },
-                goldDog: { name: 'ゴールド金面犬', hit: 20, win: 1, map: 'goldHall' }
+                okagappa: { name: 'おかがっぱ', hit: 6, win: 0.06, map: 'ongagawa', kai: { name: 'おかがっぱ・怪', hit: 3, win: 0.3 } },
+                hibikimakuri: { name: 'ひびきまくり', hit: 8, win: 0.1, map: 'ebisucho', kai: { name: 'ひびかない・怪', hit: 3, win: 0.35 } },
+                shibata: { name: 'シバター', hit: 12, win: 0.15, map: 'ebisucho', kai: { name: 'シバター・怪', hit: 4, win: 0.45 } },
+                sasaki: { name: 'Mr.SASAKI', hit: 20, win: 0.35, map: 'tsugakuro', kai: { name: 'Mr.SASAKI・怪', hit: 6, win: 0.6 } },
+                onioni: { name: 'おにおに', hit: 30, win: 0.7, map: 'castleHall', kai: { name: 'おにおに・怪', hit: 8, win: 0.9 } },
+                goldDog: { name: 'ゴールド金面犬', hit: 14, win: 1, map: 'goldHall', kai: { name: 'ゴールド金面犬・怪', hit: 3, win: 1, minStreak: 2 } },   // 怪は連チャンしてから (ユーザー指定)
+                aruaru: { name: 'シーシャ・ナイテイ・アルアル', hit: 10, win: 1, map: 'goldHall', minStreak: 2 }
             }
+        },
+        // 復活 (こおりRASH のバトル。ユーザー指定 2026-10-19): 当たりのバトルを一度負けに見せて、暗転 →「内定がないと」→「こおり生きていけない…」
+        //   →「それでも、まだ、あきらめたくない」→ 大きい「それでも」がだんだん虹色に →こおりくんと「こおり生きていける！」で虹色のフラッシュ → 撃破
+        //   share: こおりRASH の当たりのうち復活になる割合 (占有率。先読みがない保留でも起きる) / labels: スペックごとに、復活する当たりの出玉 (1/99 は 900個 確定)
+        //   確定の相手 (ゴールド金面犬・アルアル) とブラックアウトでは起きない。timing は場面ごとの秒
+        revival: {
+            share: 0.2,
+            labels: { s99: 900 },
+            timing: { dark: 1.2, naitei: 1.8, cant: 2.2, still: 2.4, soredemo: 2.4, flash: 1.8, kill: 2.4 }
         },
         // ブラックアウト (RASH 中の突発当たり。こおりRASH・おにおにRASH 共通。ユーザー指定 2026-10-19)
         //   RASH 中の当たりの rate の割合で、前ぶれなく暗転 → 虹色のこおりくん → 「当たり」(虹色の文字) → 「こおりがいただいた！」で虹色にフラッシュ
@@ -441,7 +461,7 @@ const CONFIG = {
                 '豆知識：突破チャレンジで おにおに絶対殺す剣 が出たら突破確定！',
                 '豆知識：おにおにRASH は、違和感があったら当たりだよ',
                 '豆知識：こおりRASH でゴールド金面犬が出たら勝ち確定！',
-                '豆知識：RASH 中にボタンが反応したら当たり確定だよ！',
+                '豆知識：RASH 中にボタンが赤や虹に光ったら当たり確定。紫は「怪」のチャンスだよ！',
                 '豆知識：RASH を 10回続けると…いいことがあるかも？'
             ],
             chatLines: [
@@ -463,7 +483,10 @@ const CONFIG = {
                 naitei: ['こおりくん、内定のチャンスだよ！'],
                 shibata: ['ぶんぶん…？ おはしばたじゃないの？', 'ぶんぶんって、なに…？'],
                 sasaki: ['自分で言っちゃうんだ…', 'しご出来なのに、目の下にクマが…'],
-                goldDog: ['かわいい…けど、さわっちゃダメ！', 'すっごく自信ありげ…！']
+                goldDog: ['かわいい…けど、さわっちゃダメ！', 'すっごく自信ありげ…！'],
+                aruaru: ['アルアルさん！ 来てくれたんだ！', 'お兄さんが相手なら…勝ったも同然！'],
+                // 怪の状態の相手が出てきたとき (相手ごとの返事の代わり)
+                kai: ['目が赤く光ってる…！ チャンスかも！', 'なんだか様子がおかしい…？ いけるよ！']
             },
             defeatLines: {
                 okagappa: ['おかがっぱ、川にお帰り〜！', 'お皿、割れてないといいね♪'],
@@ -550,6 +573,7 @@ const CONFIG = {
     // 実績は stat の値が value 以上になると解除 (value: 'all' はそのグループの全種類):
     //   記録 (records のキー): spins (特図1 の回転数) / hits (大当たり) / entries (RASH 突入) / bestStreak (1回の RASH の最高連チャン)
     //     / bestBalls (1回の RASH の最高出玉) / blackouts / renchan (〇G連確定) / promotes (昇格) / endings / holdChanges (保留変化)
+    //     / kaiWins (こおりRASH で怪の相手に勝った) / revivals (こおりRASH の復活)
     //   'seen:グループ' (見た種類の数) / 'seen:グループ:id' (その演出を見た回数) / 'win:グループ:id' (そのバトルに勝った回数)
     collection: {
         achievements: [
@@ -562,6 +586,9 @@ const CONFIG = {
             { id: 'oniKiller', name: '絶対殺す剣', desc: '突破チャレンジで おにおに絶対殺す剣 を見る', stat: 'seen:weapon:oniKiller', value: 1 },
             { id: 'naitei', name: '内定のチャンス', desc: 'シーシャ・ナイテイ・ナイナイとのバトルに勝つ', stat: 'win:battle:naitei', value: 1 },
             { id: 'goldDog', name: '黄金のワンちゃん', desc: 'こおりRASH で ゴールド金面犬 に勝つ', stat: 'win:kooriRash:goldDog', value: 1 },
+            { id: 'kai', name: '怪退治', desc: 'こおりRASH で 怪 の相手に勝つ', stat: 'kaiWins', value: 1 },
+            { id: 'revival', name: 'こおり生きていける', desc: 'こおりRASH でバトルに負けたあと、復活して撃破する', stat: 'revivals', value: 1 },
+            { id: 'aruaruRash', name: 'お兄さん登場', desc: 'こおりRASH で シーシャ・ナイテイ・アルアル と戦う', stat: 'seen:kooriRash:aruaru', value: 1 },
             { id: 'blackout', name: 'ブラックアウト', desc: 'RASH 中にブラックアウトを見る', stat: 'blackouts', value: 1 },
             { id: 'renchan', name: '連チャン確定', desc: '〇G連確定 を見る', stat: 'renchan', value: 1 },
             { id: 'promote', name: '昇格', desc: '大当たりのラウンド中に図柄が昇格する', stat: 'promotes', value: 1 },

@@ -8,7 +8,9 @@
 //   Scenario.plan(config, spec, spin, rng)     変動が始まるとき: { kind, duration, phases, digits, enemy, win, talk, ... }
 // phases は [{ name, t }] の並び。液晶はこれを時間どおりに描く。kind (特図2):
 //   'challenge' 突破チャレンジのバトルの1ラウンド (cintro → cround / cfinal → cresult)。おまけのラウンドは cextra → cfinal → cresult
-//   'rashBattle' こおりRASH のバトル (roll → battle → result) / 'onioni' おにおにRASH (wait → anomaly → open、外れは roll だけ)
+//   'rashBattle' こおりRASH のバトル (roll → battle → result。enemyKey: 相手 (怪は ○○Kai) / enemy: 描くキャラクター / kai: 怪の状態)
+//     revival: 復活 (result で一度負けて見せ、rvdark → rvnaitei → rvcant → rvstill → rvsoredemo → rvflash → rvkill で撃破)
+//   'onioni' おにおにRASH (wait → anomaly → open、外れは roll だけ)
 // =====================================================================
 
 const Scenario = (() => {
@@ -139,7 +141,10 @@ const Scenario = (() => {
             const weapons = show.challengeBattle.weapons;
             weapon = weighted(Object.fromEntries(Object.entries(weapons).map(([id, w]) => [id, win ? w.hit : w.miss])), rng);
         }
-        return { holdColor: 'white', button, weapon, voice, rashHold };
+        // こおりRASH の怪 (ユーザー指定 2026-10-19): 怪の相手が出る保留は、入賞時の音 (先バレ音) が鳴ってボタンが紫に光る
+        const kai = Boolean(ctx.koori && ctx.rash && !ctx.challenge && rng() < kaiRate(config, ctx.spec, win, ctx.streak));
+        if (kai) return { holdColor: 'white', button: 'purple', weapon, voice: true, rashHold, kai };
+        return { holdColor: 'white', button, weapon, voice, rashHold, kai };
     }
 
     // ----- 突破チャレンジのバトル -----
@@ -161,6 +166,47 @@ const Scenario = (() => {
             mass[id] = b.win >= 1 ? 0 : hitRate * (b.hit / totalHit) * (1 - b.win) / b.win;
         });
         return mass;
+    }
+
+    // こおりRASH の相手の表: 怪の状態を別の相手として並べる ({ key: { name, base, kai, hit, win, map } })。
+    //   key は相手の id (怪は 'okagappaKai' のように Kai を付ける)。base は描くキャラクター。
+    //   streak: いまの RASH の連チャン数。minStreak に届かない相手 (アルアル) は入れない (null ならすべて)
+    function kooriEnemies(config, streak = null) {
+        const table = {};
+        Object.entries(config.show.kooriRash.enemies).forEach(([id, e]) => {
+            if (streak !== null && e.minStreak && streak < e.minStreak) return;
+            table[id] = { name: e.name, base: id, kai: false, hit: e.hit, win: e.win, map: e.map };
+            const kaiReady = e.kai && !(streak !== null && e.kai.minStreak && streak < e.kai.minStreak);
+            if (kaiReady) table[`${id}Kai`] = { name: e.kai.name, base: id, kai: true, hit: e.kai.hit, win: e.kai.win, map: e.map };
+        });
+        return table;
+    }
+
+    // こおりRASH の保留が怪になる割合 (玉が入ったときに決める)。相手ごとの成功率を守る値:
+    //   当たり: 当たりの重みのうち怪の分 / 外れ: 外れで怪の相手が出る量 (missBattleMass) の合計 ÷ 外れの確率
+    function kaiRate(config, spec, win, streak) {
+        const enemies = kooriEnemies(config, streak);
+        const list = Object.values(enemies);
+        if (win) return list.filter(e => e.kai).reduce((a, e) => a + e.hit, 0) / list.reduce((a, e) => a + e.hit, 0);
+        const h2 = spec.hitRate + spec.smallRate;
+        const mass = missBattleMass(config.show, spec, enemies, h2);
+        const kaiMass = Object.entries(mass).filter(([id]) => enemies[id].kai).reduce((a, [, x]) => a + x, 0);
+        return Math.min(1, kaiMass / (1 - h2));
+    }
+
+    // 復活になる割合: こおりRASH の当たりのうち share (20%) にするため、起きられる当たり
+    // (ブラックアウトでない・確定の相手でない・出玉が合う) の中での割合
+    function revivalRate(config, spec, specId, streak) {
+        const rv = config.show.revival;
+        const enemies = Object.values(kooriEnemies(config, streak));
+        const totalHit = enemies.reduce((a, e) => a + e.hit, 0);
+        const notSure = enemies.filter(e => e.win < 1).reduce((a, e) => a + e.hit, 0) / totalHit;
+        const notBlackout = 1 - config.show.blackout.rate * (1 - kaiRate(config, spec, true, streak));
+        const label = rv.labels[specId];
+        const allocs = spec.rushHit;
+        const labelShare = label
+            ? allocs.filter(a => a.label === label).reduce((a, x) => a + x.weight, 0) / allocs.reduce((a, x) => a + x.weight, 0) : 1;
+        return Math.min(1, rv.share / (notSure * notBlackout * labelShare));
     }
 
     // 外れのうちリーチ (チャレンジ成功 → バトル負け) になる割合
@@ -266,7 +312,8 @@ const Scenario = (() => {
 
         const bo = show.blackout;
         // RASH に入ってから (突破チャレンジ中は出さない)
-        if (spin.rush && !spin.inChallenge && win && (result.force === 'blackout' || rng() < bo.rate)) {
+        const kaiHold = Boolean(result.kai) && spin.rashMode === 'koori';   // 怪の保留 (先バレしたので必ず怪のバトル)
+        if (spin.rush && !spin.inChallenge && win && !kaiHold && result.force !== 'revival' && (result.force === 'blackout' || rng() < bo.rate)) {
             // ブラックアウト (突発当たり): モードに関係なく
             p.kind = 'blackout';
             p.phases = [{ name: 'dark', t: bo.timing.dark }, { name: 'bokoori', t: bo.timing.koori },
@@ -290,25 +337,48 @@ const Scenario = (() => {
             if (p.win) p.reveal = { phase: 'cresult', at: 0.4 };
         } else if (spin.rush && spin.rashMode === 'koori') {
             // こおりRASH: 当たり・最後の保留は必ずバトル。外れでもときどき (成功率を守る割合で) バトル
-            const enemies = show.kooriRash.enemies;
+            // 怪の保留は怪の相手から、それ以外はふつうの相手から選ぶ
+            const streak = spin.rushStreak == null ? null : spin.rushStreak;
+            const available = kooriEnemies(config, streak);
+            const enemies = Object.fromEntries(Object.entries(available).filter(([, e]) => e.kai === kaiHold));
             const h2 = spec.hitRate + spec.smallRate;
             const mass = missBattleMass(show, spec, enemies, h2);
-            // 当たりのうちブラックアウトになる分はバトルにならず、最後の保留 (lastShare) は外れでも必ずバトルになるので、
-            // そのぶんを差し引いて外れのバトルの割合を決める (相手の成功率を守るため)
-            const need = Object.values(mass).reduce((a, x) => a + x, 0) * (1 - show.blackout.rate) - show.kooriRash.lastShare;
-            const fakeRate = Math.min(1, Math.max(0, need) / (1 - h2));
-            if (win || spin.isLast || result.force === 'reach' || rng() < fakeRate) {
+            // ふつうの保留の外れ: 当たりのうちブラックアウトになる分はバトルにならず、最後の保留 (lastShare) は外れでも必ずバトルになるので、
+            // そのぶんを差し引いて外れのバトルの割合を決める (相手の成功率を守るため)。怪の保留の外れは必ずバトル
+            const fullMass = missBattleMass(show, spec, available, h2);
+            const plainMass = Object.entries(fullMass).filter(([id]) => !available[id].kai).reduce((a, [, x]) => a + x, 0);
+            const need = plainMass * (1 - show.blackout.rate) - show.kooriRash.lastShare;
+            const plainMissShare = (1 - h2) * (1 - kaiRate(config, spec, false, streak));
+            const fakeRate = Math.min(1, Math.max(0, need) / plainMissShare);
+            if (win || kaiHold || spin.isLast || result.force === 'reach' || rng() < fakeRate) {
                 const t = show.kooriRash.timing;
                 p.kind = 'rashBattle';
                 p.type = 'reach';
                 p.smallReels = true;
-                p.enemy = result.forceEnemy && enemies[result.forceEnemy] ? result.forceEnemy
+                // 強制の相手 (確認用) は、出られない相手 (アルアル) でも出す
+                const all = kooriEnemies(config);
+                p.enemyKey = result.forceEnemy && all[result.forceEnemy] ? result.forceEnemy
                     : weighted(win ? Object.fromEntries(Object.entries(enemies).map(([id, e]) => [id, e.hit])) : mass, rng);
-                p.enemyInfo = enemies[p.enemy];
+                p.enemyInfo = all[p.enemyKey];
+                p.enemy = p.enemyInfo.base;   // 描くキャラクター
+                p.kai = p.enemyInfo.kai;
                 p.phases = [{ name: 'roll', t: t.roll }, { name: 'battle', t: t.battle }, { name: 'result', t: t.result }];
                 const f = show.furukawa;
-                p.reply = f.replies[p.enemy] ? pickFrom(f.replies[p.enemy], rng) : null;
+                const replies = p.kai ? f.replies.kai : f.replies[p.enemy];
+                p.reply = replies ? pickFrom(replies, rng) : null;
                 if (win) p.reveal = { phase: 'result', at: 0.6 };
+                // 復活: 当たりのバトルを一度負けに見せる (確定の相手では起きない。1/99 は 900個 の当たりだけ)
+                const rv = show.revival;
+                const label = rv.labels[spin.specId];
+                const canRevive = win && p.enemyInfo.win < 1 && (!label || (result.alloc && result.alloc.label === label));
+                if (canRevive && (result.force === 'revival' || rng() < revivalRate(config, spec, spin.specId, streak))) {
+                    const rt = rv.timing;
+                    p.revival = true;
+                    p.phases.push({ name: 'rvdark', t: rt.dark }, { name: 'rvnaitei', t: rt.naitei }, { name: 'rvcant', t: rt.cant },
+                        { name: 'rvstill', t: rt.still }, { name: 'rvsoredemo', t: rt.soredemo }, { name: 'rvflash', t: rt.flash },
+                        { name: 'rvkill', t: rt.kill });
+                    p.reveal = { phase: 'rvflash', at: 0.3 };
+                }
             } else {
                 p.kind = 'plain';
                 p.phases = [{ name: 'roll', t: plain }];
@@ -372,5 +442,5 @@ const Scenario = (() => {
         return { text, color };
     }
 
-    return { hold, hold2, challengePlan, plan, buttonMissRate, reachMissRate, missBattleMass, newStage, stepStage, endStage, stageMap };
+    return { hold, hold2, challengePlan, plan, buttonMissRate, reachMissRate, missBattleMass, kooriEnemies, kaiRate, revivalRate, newStage, stepStage, endStage, stageMap };
 })();

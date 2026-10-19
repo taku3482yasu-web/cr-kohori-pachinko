@@ -468,9 +468,19 @@ const Characters = (() => {
         ctx.globalAlpha = 1;
     }
 
+    // 怪の状態 (こおりRASH。ユーザー指定 2026-10-19): 目のまわりの靄 (band: x, y, 幅, 高さ) と赤く光る目の真ん中 (eyes)。ドット単位
+    const KAI_EYES = {
+        okagappa: { band: [9, 9, 14, 5], eyes: [[12.5, 11.5], [19.5, 11.5]] },
+        hibikimakuri: { band: [14, 9, 12, 5], eyes: [[17.5, 11.5], [22.5, 11.5]] },
+        shibata: { band: [9, 10, 14, 5], eyes: [[12.5, 12], [18.5, 12]] },
+        sasaki: { band: [10, 9, 12, 5], eyes: [[13, 12], [19, 12]] },
+        onioni: { band: [12, 9, 16, 5], eyes: [[15.5, 12], [24.5, 12]] },
+        goldDog: { band: [7, 9, 12, 4], eyes: [[10, 11.5], [16, 11.5]] }
+    };
+
     // 敵を描く。(x, groundY) は足元の中央。hurt で白く光る、silhouette で黒い影、alpha で透明度
-    // flip: 左右反転 (右を向く。こおりくんの味方として出すとき)
-    function drawEnemy(ctx, id, x, groundY, { scale = 2, frame = 0, hurt = false, silhouette = false, alpha = 1, flip = false } = {}) {
+    // flip: 左右反転 (右を向く。こおりくんの味方として出すとき) / kai: 怪の状態 (目のまわりに靄、赤く光る目)
+    function drawEnemy(ctx, id, x, groundY, { scale = 2, frame = 0, hurt = false, silhouette = false, alpha = 1, flip = false, kai = false } = {}) {
         const enemy = ENEMIES[id];
         if (!enemy) return;
         const left = Math.round(x - (enemy.w * scale) / 2);
@@ -483,7 +493,38 @@ const Characters = (() => {
             ctx.fillStyle = silhouette ? '#101018' : hurt ? '#ffffff' : color;
             ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
         }, frame);
+        if (kai && KAI_EYES[id] && !silhouette) drawKai(ctx, KAI_EYES[id], enemy, left, top, scale, flip, alpha, hurt);
         ctx.globalAlpha = 1;
+    }
+
+    // 怪: 目のまわりに紫の靄 (ゆらぐ) をかけ、その上に赤く光る目 (光のにじみ + 明るい芯)
+    function drawKai(ctx, k, enemy, left, top, scale, flip, alpha, hurt) {
+        const px = (sx, sw = 0) => left + (flip ? enemy.w - sx - sw : sx) * scale;
+        const t = (typeof performance !== 'undefined' ? performance.now() : 0) / 1000;
+        const [bx, by, bw, bh] = k.band;
+        ctx.globalAlpha = alpha * (hurt ? 0.4 : 0.82);
+        ctx.fillStyle = '#2a0a3a';
+        ctx.fillRect(Math.round(px(bx, bw)), Math.round(top + by * scale), Math.round(bw * scale), Math.round(bh * scale));
+        // 靄のふち: 上下に薄く、少しゆらぐ
+        ctx.globalAlpha = alpha * 0.45;
+        const wobble = Math.sin(t * 3) * 0.5;
+        ctx.fillRect(Math.round(px(bx + 1 + wobble, bw - 2)), Math.round(top + (by - 1) * scale), Math.round((bw - 2) * scale), Math.round(scale));
+        ctx.fillRect(Math.round(px(bx + 1 - wobble, bw - 2)), Math.round(top + (by + bh) * scale), Math.round((bw - 2) * scale), Math.round(scale));
+        // 赤く光る目
+        const glow = 0.8 + Math.sin(t * 6) * 0.2;
+        k.eyes.forEach(([ex, ey]) => {
+            const cx = px(ex), cy = top + ey * scale;
+            ctx.globalAlpha = alpha * glow * 0.45;
+            ctx.fillStyle = '#ff0018';
+            ctx.fillRect(Math.round(cx - scale * 2), Math.round(cy - scale * 1.3), Math.round(scale * 4), Math.round(scale * 2.6));
+            ctx.globalAlpha = alpha * glow;
+            ctx.fillRect(Math.round(cx - scale * 1.2), Math.round(cy - scale * 0.9), Math.round(scale * 2.4), Math.round(scale * 1.8));
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#ff3a3a';
+            ctx.fillRect(Math.round(cx - scale * 0.6), Math.round(cy - scale * 0.6), Math.max(1, Math.round(scale * 1.2)), Math.max(1, Math.round(scale * 1.2)));
+            ctx.fillStyle = '#ffe0e0';
+            ctx.fillRect(Math.round(cx - scale * 0.25), Math.round(cy - scale * 0.25), Math.max(1, Math.round(scale * 0.5)), Math.max(1, Math.round(scale * 0.5)));
+        });
     }
 
     function size(id) {
@@ -491,5 +532,5 @@ const Characters = (() => {
         return c ? { w: c.w, h: c.h } : { w: 0, h: 0 };
     }
 
-    return { drawEnemy, drawCompanion, size, has: id => Boolean(ENEMIES[id]), isCompanion: id => Boolean(COMPANIONS[id]) };
+    return { drawEnemy, drawCompanion, size, has: id => Boolean(ENEMIES[id]), isCompanion: id => Boolean(COMPANIONS[id]), hasKai: id => Boolean(KAI_EYES[id]) };
 })();

@@ -172,7 +172,7 @@ const Lcd = (() => {
             if (e.result.voice) {
                 // 入賞時の音 (録音) が鳴って、ボタンが赤く光る
                 Sound.playVoice();
-                MachineButton.trigger('red', now);
+                MachineButton.trigger(e.result.kai ? 'purple' : 'red', now);   // こおりRASH の怪の先バレは紫
             } else if (e.result.button) MachineButton.trigger(e.result.button, now);
         } else if (e.type === 'holdChange') {
             // 保留変化: ピキーン！
@@ -346,6 +346,13 @@ const Lcd = (() => {
         const n = phase.name;
         const local = phase.local;
         const last = phase.index === plan.phases.length - 1;
+        if (plan.kind === 'rashBattle' && plan.revival && n !== 'roll' && n !== 'battle') {
+            // 復活: 負けて見せる result では中を止めず、暗転のあいだは隠す。撃破 (rvkill) で そろって大きく
+            if (n === 'result') return { stop: [true, false, true], big: false };
+            if (n !== 'rvkill') return { stop: [false, false, false], big: false, hidden: true };
+            const done = local >= 0.6;
+            return { stop: [true, done, true], big: done };
+        }
         if (plan.kind === 'rashBattle') {
             // こおりRASH のバトル: いつも小さく。バトルで左右、結果で中が止まる
             big = n === 'result' && local >= 0.6;
@@ -533,7 +540,19 @@ const Lcd = (() => {
     }
 
     // phase.name が 'reach' (相手が出てくる) / 'battle' / 'result'
+    // 復活 (plan.revival): result では負けて見せ、rv○○ の場面は RashView.drawRevival、最後の rvkill で撃破する
     function drawBattle(now, plan, phase) {
+        if (plan.revival) {
+            if (phase.name === 'rvkill') {
+                plan = { ...plan, revival: false };
+                phase = { ...phase, name: 'result' };
+            } else if (phase.name.startsWith('rv')) {
+                RashView.drawRevival(now, plan, phase);
+                return;
+            } else {
+                plan = { ...plan, win: false };
+            }
+        }
         const b = plan.enemyInfo || CONFIG.show.battles[plan.enemy];
         const frame = Math.floor(now * 4) % 2;
         const ground = 128;
@@ -575,7 +594,7 @@ const Lcd = (() => {
             }
         }
 
-        if (enemyAlpha > 0) Characters.drawEnemy(ctx, plan.enemy, ex, ground, { scale, frame, hurt: enemyHurt, alpha: enemyAlpha });
+        if (enemyAlpha > 0) Characters.drawEnemy(ctx, plan.enemy, ex, ground, { scale, frame, hurt: enemyHurt, alpha: enemyAlpha, kai: plan.kai });
         if (kooriDown) {
             ctx.save();
             ctx.translate(kx + 16, ground - 8);
@@ -588,8 +607,9 @@ const Lcd = (() => {
 
         // 名前と体力
         band(30, 20, 0.5);
-        const titleColor = plan.enemy === 'naitei' || plan.enemy === 'goldDog' ? 'rainbow' : plan.enemy === 'onioni' ? '#ff3a3a' : '#ffffff';
-        text(`VS ${b.name}`, W / 2 + 34, 40, plan.enemy === 'naitei' ? 10 : 12, titleColor, 'center', now);
+        // 名前の色: 確定の相手は虹、怪は紫、おにおには赤。長い名前は小さく
+        const titleColor = b.win >= 1 ? 'rainbow' : plan.kai ? '#c070ff' : plan.enemy === 'onioni' ? '#ff3a3a' : '#ffffff';
+        text(`VS ${b.name}`, W / 2 + 34, 40, b.name.length > 10 ? 10 : 12, titleColor, 'center', now);
         hpBar(90, 54, 70, kooriHp, '#7fd3f7');
         hpBar(176, 54, 70, enemyHp, '#ff6a8a');
 
@@ -726,7 +746,11 @@ const Lcd = (() => {
         if (phase.name === 'challenge') Sound.play('challenge');
         if (phase.name === 'fail') Sound.play('fail');
         if (phase.name === 'reach') Sound.play('reach');
-        if (phase.name === 'result' || phase.name === 'cresult') Sound.play(plan.win ? 'win' : 'lose');
+        if (phase.name === 'result' || phase.name === 'cresult') Sound.play(plan.win && !plan.revival ? 'win' : 'lose');   // 復活は一度負けて見せる
+        if (phase.name === 'rvdark') Sound.play('fail');
+        if (phase.name === 'rvsoredemo') Sound.play('reach');
+        if (phase.name === 'rvflash') Sound.play('win');
+        if (phase.name === 'rvkill') Sound.play('attack');
         if (phase.name === 'cintro' || phase.name === 'cfinal') Sound.play('reach');
         if (phase.name === 'cextra') Sound.play('success');
         if (phase.name === 'cround') Sound.play('attack');
@@ -801,7 +825,9 @@ const Lcd = (() => {
             }
             if (phase && phase.name === 'challenge') drawChallenge(now, plan, phase);
             if (phase && (plan.kind === 'rashBattle' || (phase.name === 'reach' && phase.local >= 1.4) || phase.name === 'battle' || (phase.name === 'result' && phase.local < 0.6))) {
-                if (plan.kind !== 'rashBattle' || !(phase.name === 'result' && phase.local >= 0.6)) drawBattle(now, plan, phase);
+                // こおりRASH の結果は 0.6 秒から図柄を大きく出す (復活の負けの result はそのまま、撃破の rvkill も同じ)
+                const bigReels = (phase.name === 'result' && !plan.revival) || phase.name === 'rvkill';
+                if (plan.kind !== 'rashBattle' || !(bigReels && phase.local >= 0.6)) drawBattle(now, plan, phase);
             }
             // 突破チャレンジで保留をためているところ
             if (m.rush.challenge && !m.challengeRun && !m.spin && Machine.inJitan(m)) {

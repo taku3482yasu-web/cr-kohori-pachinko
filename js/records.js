@@ -73,7 +73,7 @@ const Collection = (() => {
             { id: 'challenge', name: 'チャレンジ (通常時)', items: list(s.challenges), battle: true, winLabel: '成功' },
             { id: 'battle', name: 'バトルの相手 (通常時)', items: list(s.battles), battle: true, winLabel: '勝ち' },
             { id: 'weapon', name: '突破チャレンジの武器', items: list(s.challengeBattle.weapons) },
-            { id: 'kooriRash', name: 'こおりRASH の相手', items: list(s.kooriRash.enemies), battle: true, winLabel: '勝ち' },
+            { id: 'kooriRash', name: 'こおりRASH の相手', items: list(Scenario.kooriEnemies(config)), battle: true, winLabel: '勝ち' },
             { id: 'anomaly', name: 'おにおにRASH の違和感', items: list(s.onioniRash.patterns) },
             { id: 'stage', name: 'ステージ', items: Object.entries(s.stages.names).map(([id, name]) => ({ id, name })) },
             { id: 'hold', name: '保留の色', items: s.holdColors.order.map(id => ({ id, name: colorNames[id] })) },
@@ -139,8 +139,11 @@ const Collection = (() => {
         if (e.result.rashHold) see('rashHold', e.result.rashHold);
         if (p.kind === 'challenge') see('weapon', p.weapon);
         else if (p.kind === 'rashBattle') {
-            see('kooriRash', p.enemy);
-            if (p.win) win('kooriRash', p.enemy);
+            const key = p.enemyKey || p.enemy;   // 怪は ○○Kai
+            see('kooriRash', key);
+            if (p.win) win('kooriRash', key);
+            if (p.win && p.kai) add(data.records, 'kaiWins');
+            if (p.revival) add(data.records, 'revivals');
         } else if (p.kind === 'onioni' && p.pattern) see('anomaly', p.pattern);
         else if (p.kind === 'blackout') add(data.records, 'blackouts');
     }

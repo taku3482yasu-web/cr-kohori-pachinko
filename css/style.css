@@ -199,6 +199,7 @@ button:hover { border-color: var(--accent); }
 @keyframes push-glow { 50% { box-shadow: 0 4px 0 #1b3a6b, 0 0 22px 6px rgba(255, 224, 102, 0.9); } }
 /* 先読み: 赤く光る / ぶるぶる震える / 高い音 (音の波を出す) */
 .koori-button.fx-red { background: linear-gradient(135deg, #ffe0e0 0%, #ff6a6a 45%, #d01020 100%); box-shadow: 0 4px 0 #6a0a10, 0 0 26px 8px rgba(255, 40, 60, 0.9); }
+.koori-button.fx-purple { background: linear-gradient(135deg, #f0e0ff 0%, #b070ff 45%, #5a10a0 100%); box-shadow: 0 4px 0 #2a0a50, 0 0 26px 8px rgba(160, 60, 255, 0.9); }
 .koori-button.fx-shake { animation: shake 0.08s linear infinite; }
 @keyframes shake { 0% { transform: translate(-3px, 1px) rotate(-3deg); } 50% { transform: translate(3px, -1px) rotate(3deg); } 100% { transform: translate(-3px, 1px) rotate(-3deg); } }
 .koori-button.fx-beep { animation: beep-ring 0.3s ease-out infinite; }

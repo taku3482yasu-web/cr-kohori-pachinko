@@ -20,7 +20,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const JS_DIR = path.join(ROOT, 'js');
 // 画面に触らないファイルだけ読み込む
-const GAME_FILES = ['config.js', 'scenario.js', 'machine.js', 'records.js', 'updates.js', 'bgm.js'];
+const GAME_FILES = ['config.js', 'characters.js', 'scenario.js', 'machine.js', 'records.js', 'updates.js', 'bgm.js'];
 
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => {
@@ -59,7 +59,7 @@ function loadGame(seed) {
     for (const file of GAME_FILES) {
         vm.runInContext(fs.readFileSync(path.join(JS_DIR, file), 'utf8'), context, { filename: file });
     }
-    const game = vm.runInContext('({ CONFIG, Scenario, Machine, SettingHint, Collection, DataCounter, SettingEstimate, UpdateNotes, UPDATES, Bgm, BGM_TRACKS })', context);
+    const game = vm.runInContext('({ CONFIG, Characters, Scenario, Machine, SettingHint, Collection, DataCounter, SettingEstimate, UpdateNotes, UPDATES, Bgm, BGM_TRACKS })', context);
     game.rng = seededMath.random;
     return game;
 }
@@ -123,7 +123,10 @@ function run(game, specId, setting, hours) {
         rashModes: 0, unlocked: [], trophies: [], ctx: null,
         challengeKinds: {},   // 突破チャレンジ中の特図2 の変動の種類 (おまけのラウンドは 'challenge:extra')
         extraHolds: 0, extraShown: 0, extraRounds: 0,  // おまけの保留・入ったことを見せてしまった数・おまけのラウンド
-        renchan: 0, renchanWrong: 0                     // 「〇G連確定」と、〇 が残り保留の当たりの数と違った回数
+        renchan: 0, renchanWrong: 0,                    // 「〇G連確定」と、〇 が残り保留の当たりの数と違った回数
+        kooriBattles: {}, earlyStreak: 0,               // こおりRASH の相手ごとの [バトル, 勝ち] と、連チャン数が足りないのに出た相手
+        kai: { holds: 0, battles: 0, mismatch: 0 },     // 怪の保留・怪のバトル・保留とバトルが合わない (先バレしたのに怪でない など)
+        revival: { hits: 0, revivals: 0, wrongLabel: 0, sure: 0, lose: 0, labels: {} }   // こおりRASH の当たり・復活・出玉の振り分け
     };
     const ctx = () => ({ balls, launched, spins1: m.stats.spins1 });
     const record = e => {
@@ -169,6 +172,36 @@ function run(game, specId, setting, hours) {
                 log.challengeKinds[key] = (log.challengeKinds[key] || 0) + 1;
                 if (e.plan.extra) log.extraRounds++;
             }
+            if (e.type === 'spinStart' && e.plan.kind === 'rashBattle') {
+                const key = e.plan.enemyKey;
+                const b = log.kooriBattles[key] || (log.kooriBattles[key] = [0, 0]);
+                b[0]++;
+                if (e.plan.win) b[1]++;
+                const base = CONFIG.show.kooriRash.enemies[e.plan.enemy];
+                const need = (e.plan.kai ? base.kai.minStreak : base.minStreak) || 0;
+                if (m.rush.hits - 1 < need) log.earlyStreak++;
+                if (e.plan.kai) log.kai.battles++;
+            }
+            // 怪の保留 (こおりRASH): その変動は必ず怪のバトル。怪でない保留は怪にならない
+            if (e.type === 'spinStart' && e.fig === 2 && m.rush.active && !m.rush.challenge && m.rashMode === 'koori') {
+                const kaiPlan = e.plan.kind === 'rashBattle' && e.plan.kai;
+                if (Boolean(e.result.kai) !== kaiPlan) log.kai.mismatch++;
+                // 復活: こおりRASH の当たりのうちの割合、出玉 (1/99 は 900個)、確定の相手では起きない
+                const rv = log.revival;
+                if (e.plan.win) {
+                    rv.hits++;
+                    const label = e.result.alloc ? e.result.alloc.label : null;
+                    rv.labels[label] = (rv.labels[label] || 0) + 1;
+                }
+                if (e.plan.revival) {
+                    rv.revivals++;
+                    const want = CONFIG.show.revival.labels[specId];
+                    if (want && (!e.result.alloc || e.result.alloc.label !== want)) rv.wrongLabel++;
+                    if (e.plan.enemyInfo.win >= 1) rv.sure++;
+                    if (!e.plan.win) rv.lose++;
+                }
+            }
+            if (e.type === 'hold' && e.fig === 2 && e.result.kai) log.kai.holds++;
             if (e.type === 'renchan') {
                 log.renchan++;
                 if (e.games !== m.holds[2].filter(h => h.kind !== 'miss').length) log.renchanWrong++;
@@ -259,7 +292,9 @@ test('演出: 当たりでしか出ないもの (虹の保留・虹のボタン�
         for (const e of log.events) {
             const r = e.result;
             if (e.type === 'hold' && e.fig === 1 && r.kind !== 'hit' && (r.holdColor === 'rainbow' || r.button === 'rainbow')) wrong.push('虹 (通常時)');
-            if (e.type === 'hold' && e.fig === 2 && r.kind === 'miss' && (r.rashHold || r.button || r.voice)) wrong.push('RASH の保留・ボタン');
+            // 怪の保留は外れでも先バレする (紫のボタン・入賞時の音)。それ以外の RASH のボタン・音・黒/回る保留は当たりだけ
+            if (e.type === 'hold' && e.fig === 2 && r.kind === 'miss' && (r.rashHold || (!r.kai && (r.button || r.voice)))) wrong.push('RASH の保留・ボタン');
+            if (e.type === 'hold' && e.fig === 2 && r.kai && !(r.button === 'purple' && r.voice) && r.button !== null) wrong.push('怪の先バレ');
             if (e.type === 'hold' && e.fig === 2 && r.kind === 'miss' && r.weapon === 'oniKiller') wrong.push('絶対殺す剣');
             if (e.type === 'spinEnd') {
                 const p = e.plan;
@@ -294,6 +329,65 @@ test('突破チャレンジ: 変動はすべて突破チャレンジの演出で
     assert(start && start.plan.kind === 'challenge' && start.plan.extra, 'おまけの保留が突破チャレンジのラウンドにならない');
     assertEqual(start.plan.phases.map(p => p.name).join(), 'cextra,cfinal,cresult', 'おまけのラウンドの流れ');
     void Scenario;
+});
+
+test('こおりRASH: 相手と怪の状態がすべて出て、勝つ割合が config の成功率に近い。アルアルは連チャンしてから', () => {
+    const { Scenario, Characters } = base;
+    const table = Scenario.kooriEnemies(CONFIG);
+    const total = {};
+    for (const { log } of runs) {
+        for (const [key, [n, w]] of Object.entries(log.kooriBattles)) {
+            const t = total[key] || (total[key] = [0, 0]);
+            t[0] += n;
+            t[1] += w;
+        }
+        assertEqual(log.earlyStreak, 0, '連チャン数が足りないのに出た相手 (アルアル)');
+    }
+    for (const [key, e] of Object.entries(table)) {
+        const [n, w] = total[key] || [0, 0];
+        assert(n > 0, `${e.name} が1回も出ない`);
+        if (e.win >= 1) assertEqual(w, n, `${e.name} (確定) で負けた`);
+        else if (n >= 150) assertBetween(w / n, e.win - 0.1, e.win + 0.1, `${e.name} に勝つ割合 (${w}/${n})`);
+    }
+    // 怪は成功率が上がる (期待度アップ)。目の位置があって描ける
+    for (const [id, e] of Object.entries(CONFIG.show.kooriRash.enemies)) {
+        if (!e.kai) continue;
+        assert(e.kai.win >= e.win, `${e.kai.name} の成功率が ${e.name} より低い`);
+        assert(Characters.hasKai(id), `${e.kai.name} の目の位置がない (characters.js の KAI_EYES)`);
+    }
+    assert(!CONFIG.show.kooriRash.enemies.aruaru.kai, 'アルアルに怪の状態がある');
+    // 連チャン数でアルアルが入るかどうか
+    assert(!Scenario.kooriEnemies(CONFIG, 1).aruaru, '1連でアルアルが候補に入る');
+    assert(Scenario.kooriEnemies(CONFIG, 2).aruaru, '2連でアルアルが候補に入らない');
+});
+
+test('こおりRASH の怪: 先バレした保留は必ず怪のバトルになり、ゴールド金面犬・怪は連チャンしてから', () => {
+    for (const { specId, log } of runs) {
+        assert(log.kai.holds > 0 && log.kai.battles > 0, `${specId} で怪の保留・バトルがない`);
+        assertEqual(log.kai.mismatch, 0, `${specId} で怪の保留と怪のバトルが合わない`);
+    }
+    const { Scenario } = base;
+    assert(!Scenario.kooriEnemies(CONFIG, 1).goldDogKai, '1連でゴールド金面犬・怪が候補に入る');
+    assert(Scenario.kooriEnemies(CONFIG, 2).goldDogKai, '2連でゴールド金面犬・怪が候補に入らない');
+    assert(Scenario.kooriEnemies(CONFIG, 1).goldDog, '1連でゴールド金面犬 (怪でない) が候補に入らない');
+});
+
+test('復活: こおりRASH の当たりの約20%、1/99 は 900個 確定、確定の相手では起きず、出玉の振り分けは変わらない', () => {
+    for (const { specId, log } of runs) {
+        const rv = log.revival;
+        assert(rv.hits > 300, `${specId} のこおりRASH の当たりが少ない (${rv.hits})`);
+        assertBetween(rv.revivals / rv.hits, CONFIG.show.revival.share - 0.05, CONFIG.show.revival.share + 0.05, `${specId} の復活の占有率`);
+        assertEqual(rv.wrongLabel, 0, `${specId} で出玉が合わない復活`);
+        assertEqual(rv.sure, 0, `${specId} で確定の相手の復活`);
+        assertEqual(rv.lose, 0, `${specId} で外れの復活`);
+        // 出玉の振り分け (RASH 中の当たり) は config の重みのまま
+        const spec = CONFIG.specs[specId];
+        const total = spec.rushHit.reduce((a, x) => a + x.weight, 0);
+        const counted = Object.values(rv.labels).reduce((a, x) => a + x, 0);
+        for (const a of spec.rushHit) {
+            assertBetween((rv.labels[a.label] || 0) / counted, a.weight / total - 0.05, a.weight / total + 0.05, `${specId} の ${a.label}個 の割合`);
+        }
+    }
 });
 
 test('〇G連確定: 〇 は残り保留の当たりの数 (このあと確定している連チャンの数)', () => {

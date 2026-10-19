@@ -227,7 +227,7 @@ const Panels = (() => {
     const RECORDS = [
         ['spins', '総回転数', '回'], ['hits', '大当たり', '回'], ['entries', 'RASH 突入', '回'], ['bestStreak', 'RASH の最高連チャン', '連'],
         ['bestBalls', '1回の RASH の最高出玉', '発'], ['endings', 'エンディング', '回'], ['blackouts', 'ブラックアウト', '回'],
-        ['renchan', '〇G連確定', '回'], ['promotes', '昇格', '回'], ['holdChanges', '保留変化', '回']
+        ['renchan', '〇G連確定', '回'], ['promotes', '昇格', '回'], ['holdChanges', '保留変化', '回'], ['kaiWins', '怪の相手に勝った', '回'], ['revivals', '復活', '回']
     ];
 
     function renderCollection() {

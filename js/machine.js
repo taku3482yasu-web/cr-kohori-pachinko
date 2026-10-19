@@ -90,7 +90,7 @@ const Machine = (() => {
                 m.small.v = true;
                 m.stats.vHits++;
                 emit(m, 'v');
-                startBonus(m, weightedPick(m.spec.rushHit, m.rng), true);
+                startBonus(m, m.small.alloc || weightedPick(m.spec.rushHit, m.rng), true);
             }
         } else if (id === 'gate') {
             if (m.futsu.holds < m.config.machine.futsu.holdMax) m.futsu.holds++;
@@ -136,11 +136,16 @@ const Machine = (() => {
             // おまけの保留: バトルの決着のあと、その保留だけで1ラウンド (突破チャレンジのまま。RASH の演出にはしない)
             if (fig === 2 && !run && result.extra && m.rush.challenge) run = { ...Scenario.challengePlan(m.config, [result]), index: 0, extra: true };
             const jitanSpin = m.jitanLeft > 0;
+            // 小当たりの出玉 (V に入ったときの大当たりの振り分け) は変動の始まりに決める。
+            // 復活 (1/99 は 900個 確定) を出玉の割合を変えずに選べるように (振り分けの割合は V で決めるときと同じ)
+            if (result.kind === 'small' && !result.alloc) result.alloc = weightedPick(m.spec.rushHit, m.rng);
             const plan = Scenario.plan(m.config, m.spec, {
                 fig, result, holdsLeft: m.holds[fig].length, rush: m.rush.active || inJitan(m), holdColor: result.holdColor,
                 inChallenge: m.rush.challenge,
                 challenge: run ? { run, index: run.index } : null,
                 rashMode: m.rashMode,
+                specId: m.specId,
+                rushStreak: m.rush.active && !m.rush.challenge ? m.rush.hits - 1 : 0,   // いまの RASH の連チャン数 (表示の「〇連」)
                 // RASH の最後の変動 (このあと時短も保留もない)
                 isLast: fig === 2 && m.rush.active && !m.rush.challenge && m.jitanLeft - (jitanSpin ? 1 : 0) <= 0 && m.holds[2].length === 0
             }, m.rng);
@@ -171,7 +176,7 @@ const Machine = (() => {
             startBonus(m, result.alloc, false, plan.promote);
         } else if (result.kind === 'small') {
             m.stats.smalls++;
-            m.small = { timer: m.config.machine.small.open, v: false };   // V に入ったらすぐ大当たり (startBonus が閉じる)
+            m.small = { timer: m.config.machine.small.open, v: false, alloc: result.alloc };   // V に入ったらすぐ大当たり (startBonus が閉じる)
             emit(m, 'smallStart');
         }
     }
@@ -180,7 +185,10 @@ const Machine = (() => {
     function addExtras(m, fig, result) {
         if (fig === 1) Object.assign(result, Scenario.hold(m.config, m.spec, result, m.rng, m.senyomi));
         else {
-            Object.assign(result, Scenario.hold2(m.config, result, { challenge: m.rush.challenge, rash: m.rush.active }, m.rng));
+            Object.assign(result, Scenario.hold2(m.config, result, {
+                challenge: m.rush.challenge, rash: m.rush.active, koori: m.rashMode === 'koori',
+                streak: m.rush.active && !m.rush.challenge ? m.rush.hits - 1 : 0, spec: m.spec
+            }, m.rng));
             if (m.senyomi === 'none') { result.button = null; result.voice = false; result.rashHold = null; }
             if (result.extra) { result.button = null; result.voice = false; }   // おまけの保留は入ったことを見せない
         }
