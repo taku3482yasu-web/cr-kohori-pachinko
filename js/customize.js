@@ -2,15 +2,16 @@
 // カスタマイズ (演出・盤面の見た目。ユーザー指定 2026-10-19)
 // ---------------------------------------------------------------------
 // 遊ぶ人が選べる。当たりやすさ・出玉には関係しない (見た目と演出だけ)。選んだ内容はこのブラウザに保存する。
-//   演出: senyomi (先読み ON/OFF) / notice (告知: ふつう / 先告知) / furukawa (よくしゃべる / ふつう / しゃべらない) / vibrate (ボタンの振動)
+//   演出: senyomi (先読みの量: なし / チャンス / おすすめ / 熱) / notice (告知: ふつう / 先告知) / furukawa (よくしゃべる / ふつう / しゃべらない) / vibrate (ボタンの振動)
 //   見た目: theme (盤面の色) / ball (玉の色) / koori (こおりくんの色)
 // Customize.get('theme') で読む。Customize.onChange(fn) で変わったときに呼ばれる。
 // =====================================================================
 
 const Customize = (() => {
     const OPTIONS = {
-        senyomi: { label: '先読み', group: '演出', note: 'OFF: 保留の色・ボタンの先読み・高確率ステージを出さない',
-            choices: { on: 'ON', off: 'OFF' }, default: 'on' },
+        senyomi: { label: '先読み', group: '演出',
+            note: '大当たりのうち先読み演出 (保留の色・ボタン・SE城前/満月) が出る割合 (占有率)。なし 0% / チャンス 30% / おすすめ 50% / 熱 90%',
+            choices: { none: 'なし', chance: 'チャンス', recommend: 'おすすめ', hot: '熱' }, default: 'recommend' },
         notice: { label: '告知', group: '演出', note: '先告知: 当たりの変動が始まったときにボタンが虹色に光って教えてくれる',
             choices: { normal: 'ふつう', pre: '先告知' }, default: 'normal' },
         furukawa: { label: 'ふるカワ', group: '演出', note: '',

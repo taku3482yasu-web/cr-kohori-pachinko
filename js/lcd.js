@@ -46,6 +46,29 @@ const Lcd = (() => {
     let rashCount = null;   // 大当たりの終わりの「〇回目」→「〇〇RASH」 { count, start }
     let stageFx = null;     // ステージが変わったところ { stage: { id, kind }, start }
     let renchan = null;     // 「〇G連確定！」{ games, start }
+    let holdFx = null;      // 保留変化 { result, current, start }
+
+    // 保留変化: 変わった保留のまわりに光の輪と「ピキーン！」
+    function drawHoldFx(now, m) {
+        if (!holdFx) return;
+        const t = now - holdFx.start;
+        if (t > 1.2) { holdFx = null; return; }
+        let x, y = 134;
+        if (holdFx.current) x = W / 2;
+        else {
+            const i = m.holds[1].indexOf(holdFx.result);
+            if (i < 0) return;
+            x = 14 + i * 13;
+            y = 136;
+        }
+        const r = 6 + t * 18;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0, 1 - t)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        if (t < 0.8) text('ピキーン！', Math.min(W - 30, Math.max(30, x)), y - 16, 9, holdFx.result.holdColor === 'rainbow' ? 'rainbow' : '#ffffff', 'center', now);
+    }
     const RENCHAN_TIME = 3.5;
 
     // ステージが変わった: 白い光が横切って、ステージの名前 (高確率ステージは「チャンス！」)
@@ -84,7 +107,7 @@ const Lcd = (() => {
     }
 
     function reset() {
-        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = null;
+        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = holdFx = null;
     }
 
     function show(text, color, now, seconds = 1.2) {
@@ -109,10 +132,13 @@ const Lcd = (() => {
 
     // ----- 台のイベント -----
     function event(e, now) {
-        const senyomi = Customize.get('senyomi') === 'on';
         if (e.type === 'hold') {
             Sound.play('hold');
-            if (e.result.button && senyomi) MachineButton.trigger(e.result.button, now);
+            if (e.result.button) MachineButton.trigger(e.result.button, now);
+        } else if (e.type === 'holdChange') {
+            // 保留変化: ピキーン！
+            holdFx = { result: e.result, current: e.current, start: now };
+            Sound.play('success');
         } else if (e.type === 'spinStart') {
             spinView = { plan: e.plan, gaugeStop: 0.55 + Math.random() * 0.35, pushedAt: null };
             if (e.plan.talk) say(e.plan.talk.text, e.plan.talk.color, now);
@@ -145,7 +171,6 @@ const Lcd = (() => {
             MachineButton.trigger('rainbow', now);
             bubble = null;
         } else if (e.type === 'stageChange') {
-            if (!senyomi && (e.stage.kind === 'hi' || e.stage.kind === 'back')) return;
             stageFx = { stage: e.stage, start: now };
             Sound.play(e.stage.kind === 'hi' ? 'reach' : 'challenge');
         } else if (e.type === 'smallStart') {
@@ -493,7 +518,6 @@ const Lcd = (() => {
 
     // ----- 保留 (こおりくんの体の形) -----
     function holdIcon(x, y, size, color, now, active = false) {
-        if (Customize.get('senyomi') === 'off') color = 'white';
         const fill = color === 'rainbow' ? rainbow(now, x * 3) : CONFIG.show.holdColors.colors[color] || '#e8f6ff';
         const s = size;
         if (active) {
@@ -514,18 +538,20 @@ const Lcd = (() => {
 
     function drawHolds(now, m) {
         if (m.rush.challenge) {
-            m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, h.holdColor, now));
+            m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, h.shownColor || h.holdColor, now));
+        drawHoldFx(now, m);
             RashView.drawChallengeHolds(now, m);
             return;
         }
-        m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, h.holdColor, now));
+        m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, h.shownColor || h.holdColor, now));
+        drawHoldFx(now, m);
         for (let i = m.holds[1].length; i < CONFIG.machine.holdMax; i++) {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
             ctx.fillRect(10 + i * 13, 132, 8, 8);
         }
         m.holds[2].forEach((h, i) => holdIcon(W - 14 - i * 13, 136, 10, 'white', now));
         // 変動中の保留 (当該保留) は真ん中の下に大きく
-        if (m.spin && m.spin.fig === 1 && !m.bonus) holdIcon(W / 2, 134, 12, m.spin.result.holdColor, now, true);
+        if (m.spin && m.spin.fig === 1 && !m.bonus) holdIcon(W / 2, 134, 12, m.spin.result.shownColor || m.spin.result.holdColor, now, true);
     }
 
     // ----- ふるカワ -----
@@ -584,7 +610,7 @@ const Lcd = (() => {
         }
         if (m.rush.active && rashMode === 'onioni' && !m.rush.challenge) return 'castleHall';
         if (Machine.inJitan(m) || m.rush.active) return 'seCastle';
-        return Customize.get('senyomi') === 'on' ? Scenario.stageMap(m.stage) : m.stage.id;
+        return Scenario.stageMap(m.stage);
     }
 
     function phaseSounds(plan, phase) {

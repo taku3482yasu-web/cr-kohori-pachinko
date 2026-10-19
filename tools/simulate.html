@@ -10,7 +10,7 @@
          - 右打ち (電チュー・アタッカーの開け閉め 4通り): ゲート・電チュー・アタッカー・一般入賞口
       2. 1 の入賞率で玉の行き先を決めながら、台の抽選 (js/machine.js) を長い時間まわす
          通常時は左打ち、時短・大当たり・小当たり・RUSH の残り保留のあいだは右打ち。
-    ?hours=200 で1台あたりの時間、?balls=3000 で 1 の玉の数、?spec=s99 でスペックをしぼる、?seed=1、?cs=1&rs=6 で突破チャレンジ・RUSH の時短の回数を変える (調整用)
+    ?senyomi=hot で先読みの量 (none / chance / recommend / hot)、?hours=200 で1台あたりの時間、?balls=3000 で 1 の玉の数、?spec=s99 でスペックをしぼる、?seed=1、?cs=1&rs=6 で突破チャレンジ・RUSH の時短の回数を変える (調整用)
     ?settings=1,6 で測る設定をしぼる。?widths=6.2,6.6,7.0&warp=15 で、設定の代わりにこの命釘のすき間を順に測る (調整用)
     ヘッドレスChromeで: sh tools/run-sim.sh "hours=200"
 -->
@@ -116,6 +116,7 @@
     function run(specId, board) {
         const m = Machine.create(CONFIG, specId, rng);
         Machine.setRashMode(m, params.get('mode') || 'koori');
+        Machine.setSenyomi(m, params.get('senyomi') || 'recommend');
         const DT = 0.2;
         const end = HOURS * 3600;
         const flying = [];      // 打った玉 { at: 届く時刻, aim }
@@ -174,6 +175,11 @@
                     showStats.rashSpins++;
                     if (e.plan.kind === 'rashBattle') { showStats.rashBattles++; tally(showStats.rashEnemy, e.plan.enemy, e.plan.win); }
                 }
+                if (e.type === 'hold' && e.fig === 1) tally(showStats.senyomi = showStats.senyomi || {}, 'any',
+                    e.result.kind === 'hit' && (e.result.holdColor !== 'white' || e.result.button || e.result.hiStage));
+                if (e.type === 'hold' && e.fig === 1 && e.result.kind === 'hit') tally(showStats.occ = showStats.occ || {}, 'hit',
+                    e.result.holdColor !== 'white' || e.result.button || e.result.hiStage);
+                if (e.type === 'holdChange') tally(showStats.change = showStats.change || {}, e.color, false);
                 if (e.type === 'hold' && e.fig === 1) {
                     const hit = e.result.kind === 'hit';
                     tally(showStats.color, e.result.holdColor, hit);
@@ -245,6 +251,8 @@
             const enames = CONFIG.show.kooriRash.enemies;
             lines.push(`      こおりRASH (特図2 ${st.rashSpins} 回転、バトル ${pct(st.rashBattles / Math.max(1, st.rashSpins))}) のバトルの成功率: `
                 + Object.keys(enames).map(id => `${enames[id].name} ${rate(st.rashEnemy[id] || [0, 0])}`).join(' / '));
+            const occ = (st.occ || {}).hit || [0, 0];
+            lines.push(`      先読み (${params.get('senyomi') || 'recommend'}): 占有率 ${rate([occ[0], occ[1]])}  保留変化 ${Object.values(st.change || {}).reduce((a, x) => a + x[0], 0)} 回`);
             const sname = { regular: 'ふつう', quick: 'すぐ変わる', hi: '高確率ステージへ' };
             lines.push('      ステージの変わり方 (保留に当たりがある割合): ' + Object.keys(sname).map(k => `${sname[k]} ${rate(st.stage[k] || [0, 0])}`).join(' / '));
             lines.push(`      RASH 中のボタン: 起きたら当たり ${rate(st.rashButton)} / 当たりのときに起きる ${rate(st.rashButtonOnHit)}`);

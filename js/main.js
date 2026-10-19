@@ -64,6 +64,7 @@
         const board = CONFIG.settings[setting - 1];
         game.setting = setting;
         game.machine = Machine.create(CONFIG, specId);
+        Machine.setSenyomi(game.machine, Customize.get('senyomi'));
         game.board = Board.build(CONFIG, board);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
@@ -328,7 +329,10 @@
     });
     $('customize-close').addEventListener('click', () => { customizePanel.hidden = true; game.paused = false; });
     // 盤面の色・玉の色が変わったら、盤面を描き直す
-    Customize.onChange(key => { if ((key === 'theme' || key === 'ball') && game.view) BoardView.redraw(game.view); });
+    Customize.onChange((key, value) => {
+        if ((key === 'theme' || key === 'ball') && game.view) BoardView.redraw(game.view);
+        if (key === 'senyomi' && game.machine) Machine.setSenyomi(game.machine, value);
+    });
 
     // ----- 台選び -----
     // スペックと設定をボタンで選ぶ。設定の「おまかせ」は 1〜6 からランダム (画面に出さない)

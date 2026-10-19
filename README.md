@@ -75,7 +75,7 @@
 
 | 種類 | 項目 | 選べるもの |
 |---|---|---|
-| 演出 | 先読み | ON / OFF（OFF: 保留の色・ボタンの先読み・高確率ステージを出さない。保留はいつも白） |
+| 演出 | 先読み | なし（0%）/ チャンス（30%）/ おすすめ（50%。最初はこれ）/ 熱（90%）。％は占有率 = 大当たりのうち先読み演出（保留の色・ボタン・SE城前/満月）が出る割合（2026-10-19 ユーザー指定） |
 | 演出 | 告知 | ふつう / 先告知（当たりの変動が始まったときにボタンが虹色に光って「当たり確定！」） |
 | 演出 | ふるカワ | よくしゃべる / ふつう / しゃべらない |
 | 演出 | ボタンの振動 | ON / OFF（スマホの本体の振動） |
@@ -105,6 +105,8 @@
 
 ### 保留
 
+- **先読みの量**はカスタマイズで選ぶ（なし / チャンス 30% / おすすめ 50% / 熱 90%。`show.senyomi`）。当たりの保留は占有率で「先読みを出すか」を1回だけ決め、出すなら必ず色が付き、ボタン・高確率ステージもその中で出る。外れで出る量も同じ割合で増減させるので、信頼度は変わらない（1/99 設定3 で測定: 占有率 30.9% / 50.7% / 89.6%、どれも 赤保留 約35%・ボタン 約60%・虹 100%）
+- **保留変化**（ユーザー指定）: 色が付く保留の 約4割は、最初は白で出て「ピキーン！」と本来の色に変わる。変わるのは、その保留の変動が始まるとき（当該変化）か、ほかの変動が始まって保留が1つ進むとき（半々。Claude が決めた）
 - こおりくんの体の形。期待度は低い順に 白 → 青 → 緑 → 紫 → 赤 → 虹。**虹は大当たり確定**（ユーザー指定。白がふつうの保留）
 - 色は玉がヘソに入ったときに決まる（`holdColors.hit` / `holdColors.miss` の重み）
 - 変動中の保留（当該保留）は液晶の下の真ん中に大きく出る
@@ -301,7 +303,7 @@
 | `tools/bump-version.py` | `index.html`・`tools/fast.html` が読み込む js / css に版番号（`?v=` ＋中身から作った8文字）を付け直す。ブラウザに古いファイルを使わせないため。コミットのたびに `.githooks/pre-commit` が自動で動く（このフォルダで一度だけ `git config core.hooksPath .githooks`） |
 | `tools/fast.html` | `index.html` と同じゲームを、画面の更新を早送りして動かす（ヘッドレスChromeでオープニングなど時間で進むものを確かめる）。`?spec=s99&story=opening`。`index.html` を変えたら `python tools/make-fast.py` で作り直す |
 | `tools/phone.html` | `index.html` をスマホの大きさ（390x844）で表示する |
-| `tools/lcd.html` | 液晶だけを大きく表示して変動の流れを確認する。`?force=hit&enemy=onioni&color=rainbow`、`?force=challenge&win=2`、`?force=koori&enemy=goldDog`、`?force=onioni&pattern=zoom`、`?force=blackout`、`?force=koori&hit=3&fast=1`（大当たり →「〇回目」）、`?force=fail&challenge=music`（チャレンジの種類）、`&ts=2,6,12` でその秒数の画面を並べる |
+| `tools/lcd.html` | 液晶だけを大きく表示して変動の流れを確認する。`?force=hit&enemy=onioni&color=rainbow`、`?force=challenge&win=2`、`?force=koori&enemy=goldDog`、`?force=onioni&pattern=zoom`、`?force=blackout`、`?force=koori&hit=3&fast=1`（大当たり →「〇回目」）、`?force=fail&challenge=music`（チャレンジの種類）、`&change=next&color=purple`（保留変化）、`&ts=2,6,12` でその秒数の画面を並べる |
 | `tools/run-test.sh` | `test.html` をヘッドレスChromeで動かして結果を表示する（`sh tools/run-test.sh "balls=200"`） |
 | `tools/shot.sh` | ページをヘッドレスChromeで画像にする（`sh tools/shot.sh "index.html?auto=1&strength=30&skip=60" out.png 1100,900`） |
 

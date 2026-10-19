@@ -38,6 +38,7 @@ const Machine = (() => {
             challengeRun: null,       // 突破チャレンジのバトル中 (Scenario.challengePlan の結果 + 何ラウンド目か index)
             gatherTime: 0,            // 突破チャレンジで保留がたまるのを待っている秒
             rashMode: config.show.rash.defaultMode,
+            senyomi: 'recommend',          // 先読みの量 (カスタマイズ。Machine.setSenyomi)
             stage: Scenario.newStage(),   // 通常時のステージ (背景)
             holds: { 1: [], 2: [] },  // 保留 (それぞれの結果)
             spin: null,               // 変動中の特図 { fig, result, duration, elapsed }
@@ -144,6 +145,7 @@ const Machine = (() => {
             m.spin = { fig, result, plan, duration: plan.duration, elapsed: 0, jitan: jitanSpin };
             m.stats[fig === 1 ? 'spins1' : 'spins2']++;
             if (m.spin.jitan) m.jitanLeft--;
+            if (fig === 1) changeHolds(m, result);
             emit(m, 'spinStart', { fig, result, plan, duration: plan.duration, jitanLeft: m.jitanLeft });
             if (plan.stage) emit(m, 'stageChange', { stage: plan.stage });
             return;
@@ -171,8 +173,27 @@ const Machine = (() => {
 
     // 保留の色・ボタン・突破チャレンジの武器 (特図2 の保留の色はいつも白)
     function addExtras(m, fig, result) {
-        if (fig === 1) Object.assign(result, Scenario.hold(m.config, m.spec, result, m.rng));
-        else Object.assign(result, Scenario.hold2(m.config, result, { challenge: m.rush.challenge, rash: m.rush.active }, m.rng));
+        if (fig === 1) Object.assign(result, Scenario.hold(m.config, m.spec, result, m.rng, m.senyomi));
+        else {
+            Object.assign(result, Scenario.hold2(m.config, result, { challenge: m.rush.challenge, rash: m.rush.active }, m.rng));
+            if (m.senyomi === 'none') result.button = null;
+        }
+    }
+
+    function setSenyomi(m, level) {
+        if (level in m.config.show.senyomi.levels) m.senyomi = level;
+    }
+
+    // 保留変化: 変動が始まるとき、その保留 (self) と、1つ進んだ残りの保留 (next) の色を変える
+    function changeHolds(m, current) {
+        const changed = [];
+        if (current.change === 'self') changed.push(current);
+        m.holds[1].forEach(h => { if (h.change === 'next') changed.push(h); });
+        changed.forEach(h => {
+            h.shownColor = h.holdColor;
+            h.change = null;
+            emit(m, 'holdChange', { result: h, current: h === current, color: h.holdColor });
+        });
     }
 
     function setRashMode(m, mode) {
@@ -323,7 +344,7 @@ const Machine = (() => {
             : kind === 'reach' || kind === 'fail' ? { kind: 'miss', force: kind } : { kind };
         addExtras(m, fig, result);
         if (options.enemy) result.forceEnemy = options.enemy;
-        if (options.holdColor) result.holdColor = options.holdColor;
+        if (options.holdColor) { result.holdColor = result.shownColor = options.holdColor; result.change = null; }
         if (options.button) result.button = options.button;
         if (options.pattern) result.forcePattern = options.pattern;
         if (options.challenge) result.forceChallenge = options.challenge;
@@ -362,5 +383,5 @@ const Machine = (() => {
         }
     }
 
-    return { create, enter, update, aim, inJitan, setRashMode, debugHold, debugJitan, debugChallenge };
+    return { create, enter, update, aim, inJitan, setRashMode, setSenyomi, debugHold, debugJitan, debugChallenge };
 })();

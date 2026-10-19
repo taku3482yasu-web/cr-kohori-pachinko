@@ -16,6 +16,7 @@
     &t=12 その秒数まで早送りした画面で止める (ヘッドレスChromeで画像にするとき)。t がなければふつうに動く
     &ts=2,6,12 その秒数ごとの画面を並べる (1回の変動を何枚かで見る)
     &holds=3 ほかの保留の数 / &color=rainbow はじめの保留の色 / &challenge=music チャレンジの種類
+    &change=self (または next) はじめの保留を白から変化させる (当該変化 / 保留が進むとき)
 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
 <style>
@@ -81,6 +82,11 @@
     } else if (force === 'small') Machine.debugHold(m, 2, 'small', null);
     else if (force === 'rush') Machine.debugHold(m, 1, 'hit', 'jitan', options);
     else Machine.debugHold(m, 1, force, null, options);
+    if (params.get('change')) {
+        // 保留変化の確認: 当たりの保留を白で出しておき、変化させる
+        const target = params.get('change') === 'next' ? m.holds[1][1] : m.holds[1][0];
+        if (target) { target.holdColor = params.get('color') || 'red'; target.shownColor = 'white'; target.change = params.get('change'); }
+    }
     let time = 0;
     if (params.get('story')) Lcd.playStory(params.get('story'), 0);
     const step = dt => {
