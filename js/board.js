@@ -138,10 +138,13 @@ const Board = (() => {
             circles.push({ x: p.x + postX, y: p.y, r: nailR, surface: 'nail', post: id });
             sensors.push({ id, kind: 'pocket', capture: true, payout: p.payout, x0: p.x - half, x1: p.x + half, y0: p.y, y1: p.y + 5 });
             if (p.kind === 'denchu') {
-                // 閉じている: 上にふた。開いている: 羽根が外へ開いて玉を拾う
+                // 閉じている: 上に山形のふた (平らだと玉が乗ったまま止まる)。開いている: 羽根が外へ開いて玉を拾う
                 parts[id] = {
                     open: false,
-                    closed: [{ x1: p.x - postX, y1: p.y - 1.5, x2: p.x + postX, y2: p.y - 1.5, surface: 'wall' }],
+                    closed: [
+                        { x1: p.x - postX - 1, y1: p.y - 1, x2: p.x, y2: p.y - 4, surface: 'wall' },
+                        { x1: p.x, y1: p.y - 4, x2: p.x + postX + 1, y2: p.y - 1, surface: 'wall' }
+                    ],
                     opened: [
                         { x1: p.x - postX, y1: p.y, x2: p.x - postX - 7, y2: p.y - 8, surface: 'wall' },
                         { x1: p.x + postX, y1: p.y, x2: p.x + postX + 7, y2: p.y - 8, surface: 'wall' }

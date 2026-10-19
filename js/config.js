@@ -21,27 +21,27 @@ const CONFIG = {
         bottomY: 478,                       // これより下に落ちた玉はアウト
 
         // 液晶の枠 (玉は入れない)。上は山形の屋根 (平らだと玉が乗ったまま止まる): 両端の高さ shoulder、真ん中の高さ top
-        lcdFrame: { left: 96, right: 264, top: 100, shoulder: 124, bottom: 214 },
+        lcdFrame: { left: 88, right: 272, top: 100, shoulder: 121, bottom: 220 },
         // 液晶の画面 (枠の内側)。256x144 の絵を縮めて表示する
-        lcd: { x: 104, y: 126, w: 152, h: 84 },
+        lcd: { x: 94, y: 122, w: 172, h: 96 },
         // 液晶の左のワープ入口 (左上の角と幅・高さ) → 液晶の下のステージへ
         // 屋根から枠ぞいに落ちてくる玉はそのまま入らないよう、右向き (枠のほう) に minVx 以上で動いている玉だけ入る
-        warp: { x: 86, y: 150, w: 8, h: 16, minVx: 15, exitX: 108, exitY: 217, exitVx: 70 },
+        warp: { x: 78, y: 146, w: 8, h: 16, minVx: 15, exitX: 100, exitY: 223, exitVx: 70 },
         // ステージの床 (折れ線)。中央の切れ目 (gap) から落ちるとヘソのほぼ真上
         stage: {
-            left: [[102, 221], [132, 229], [172, 224]],
-            right: [[188, 224], [228, 229], [258, 221]],
+            left: [[94, 227], [127, 235], [172, 230]],
+            right: [[188, 230], [233, 235], [266, 227]],
             // 床の一番低いところの穴 (手前にこぼれる)
-            spills: [{ x: 132, y: 226 }, { x: 228, y: 226 }],
+            spills: [{ x: 127, y: 232 }, { x: 233, y: 232 }],
             spillWidth: 6
         },
         // 返しゴム: 外レールを右まで回ってきた玉を、右打ちの通り道へ跳ね返す (外レールの角度 angle から内側へ length)
         rubber: { angle: 22, length: 16, tilt: 35 },
         // 右打ちの通り道を分ける壁
-        rightDivider: [[268, 228], [262, 300], [262, 392]],
+        rightDivider: [[276, 234], [264, 300], [262, 392]],
         // 右打ちのガイド (壁の折れ線)。ゲートへは全部の玉を通し、電チューのまわりは玉が横を抜けられるすき間を残す
         guides: [
-            [[266, 238], [293.5, 264]],            // ゲートへ (左)
+            [[278, 240], [293.5, 264]],            // ゲートへ (左)
             [[336, 246], [306.5, 264]],            // ゲートへ (右)
             [[276, 296], [285, 326]],              // 電チューへ (左)
             [[322, 296], [311, 326]]               // 電チューへ (右)
@@ -96,7 +96,7 @@ const CONFIG = {
             { type: 'rect', x0: 260, x1: 336, y0: 388, y1: 420 }, // アタッカー
             { type: 'rect', x0: 70, x1: 86, y0: 384, y1: 402 },   // 一般入賞口
             { type: 'rect', x0: 224, x1: 240, y0: 392, y1: 410 },
-            { type: 'rect', x0: 256, x1: 274, y0: 220, y1: 396 }  // 右打ちの壁
+            { type: 'rect', x0: 258, x1: 282, y0: 222, y1: 396 }  // 右打ちの壁
         ]
     },
 
@@ -164,7 +164,7 @@ const CONFIG = {
                 { weight: 50, rounds: 10, next: 'jitan' }    // 1500個
             ],
             jitan: { spins: 8 },
-            board: { hesoWidth: 6.7, warpMinVx: 15 },
+            board: { hesoWidth: 7.2, warpMinVx: 40 },
             target: { rushEntry: 0.5, continuation: 0.85 }
         },
         s319: {
@@ -179,7 +179,7 @@ const CONFIG = {
                 { weight: 100, rounds: 10, next: 'jitan' }   // 1500個
             ],
             jitan: { spins: 6 },
-            board: { hesoWidth: 6.4, warpMinVx: 70 },
+            board: { hesoWidth: 6.3, warpMinVx: 40 },
             target: { rushEntry: 0.8, continuation: 0.80 }
         }
     },
