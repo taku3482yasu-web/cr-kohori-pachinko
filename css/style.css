@@ -159,6 +159,45 @@ button:hover { border-color: var(--accent); }
 .debug-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .debug-stats { color: var(--muted); line-height: 1.6; }
 
+/* 台のボタン (こおりくんの体の形) */
+.koori-button {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    flex: none;
+    padding: 0;
+    border-radius: 12px;
+    border: 3px solid #1b3a6b;
+    background: linear-gradient(135deg, #ffffff 0%, #bff0ff 35%, #7fd3f7 100%);
+    box-shadow: 0 4px 0 #1b3a6b;
+    touch-action: none;
+}
+.koori-button.pressed { transform: translateY(3px); box-shadow: 0 1px 0 #1b3a6b; }
+.koori-button .kb-shine { position: absolute; left: 6px; top: 6px; width: 8px; height: 18px; background: rgba(255, 255, 255, 0.8); border-radius: 3px; }
+.koori-button .kb-eye { position: absolute; top: 22px; width: 6px; height: 11px; background: #10162a; border-radius: 2px; }
+.koori-button .kb-eye.kb-left { left: 18px; }
+.koori-button .kb-eye.kb-right { right: 18px; }
+.koori-button .kb-cheek { position: absolute; top: 36px; width: 9px; height: 5px; background: #ff9eb5; border-radius: 3px; }
+.koori-button .kb-cheek.kb-left { left: 8px; }
+.koori-button .kb-cheek.kb-right { right: 8px; }
+.koori-button .kb-label { position: absolute; left: 0; right: 0; bottom: -20px; font-size: 11px; color: var(--muted); }
+.koori-button.push { animation: push-glow 0.4s steps(2) infinite; }
+.koori-button.push .kb-label { color: #ffe066; }
+@keyframes push-glow { 50% { box-shadow: 0 4px 0 #1b3a6b, 0 0 22px 6px rgba(255, 224, 102, 0.9); } }
+/* 先読み: 赤く光る / ぶるぶる震える / 高い音 (音の波を出す) */
+.koori-button.fx-red { background: linear-gradient(135deg, #ffe0e0 0%, #ff6a6a 45%, #d01020 100%); box-shadow: 0 4px 0 #6a0a10, 0 0 26px 8px rgba(255, 40, 60, 0.9); }
+.koori-button.fx-shake { animation: shake 0.08s linear infinite; }
+@keyframes shake { 0% { transform: translate(-3px, 1px) rotate(-3deg); } 50% { transform: translate(3px, -1px) rotate(3deg); } 100% { transform: translate(-3px, 1px) rotate(-3deg); } }
+.koori-button.fx-beep { animation: beep-ring 0.3s ease-out infinite; }
+@keyframes beep-ring { from { box-shadow: 0 4px 0 #1b3a6b, 0 0 0 0 rgba(255, 255, 255, 0.9); } to { box-shadow: 0 4px 0 #1b3a6b, 0 0 0 18px rgba(255, 255, 255, 0); } }
+.bar-buttons { display: flex; gap: 6px; }
+.push-area { display: flex; justify-content: center; padding-bottom: 18px; }
+.push-area .koori-button { width: 76px; height: 76px; }
+.push-area .koori-button .kb-eye { top: 26px; width: 7px; height: 13px; }
+.push-area .koori-button .kb-eye.kb-left { left: 22px; }
+.push-area .koori-button .kb-eye.kb-right { right: 22px; }
+.push-area .koori-button .kb-cheek { top: 43px; }
+
 /* 台の名前・状態 */
 .machine-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .spec-display { font-size: 15px; color: var(--accent); }

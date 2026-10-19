@@ -6,6 +6,7 @@
 //   特図2 (電チュー): 大当たり hitRate → rushHit / 小当たり smallRate → アタッカーが短く開き、V 入賞で大当たり (rushHit)
 //   時短 (RUSH): jitan.spins 回まわすあいだ電サポ (普図が当たりやすく電チューがよく開く)。終われば通常時
 //   保留は特図2 を先に消化する。結果は玉が入ったときに決める (先読みに使える)。
+//   保留の色・ボタン・変動の流れと時間は Scenario (js/scenario.js) が決める。
 //
 // 使い方:
 //   const m = Machine.create(config, 's199', rng)
@@ -65,6 +66,7 @@ const Machine = (() => {
             if (fig === 2 && m.futsu.opening) m.futsu.opening.count++;
             if (m.holds[fig].length >= holdMax) return;   // 保留がいっぱい (玉は入賞するが抽選しない)
             const result = draw(m, fig);
+            addExtras(m, fig, result);
             m.holds[fig].push(result);
             emit(m, 'hold', { fig, result, count: m.holds[fig].length });
         } else if (id === 'attacker') {
@@ -104,10 +106,13 @@ const Machine = (() => {
             const fig = m.holds[2].length ? 2 : m.holds[1].length ? 1 : 0;
             if (!fig) return;
             const result = m.holds[fig].shift();
-            m.spin = { fig, result, duration: spinTime(m, fig, result), elapsed: 0, jitan: m.jitanLeft > 0 };
+            const plan = Scenario.plan(m.config, m.spec, {
+                fig, result, holdsLeft: m.holds[fig].length, rush: m.rush.active || inJitan(m), holdColor: result.holdColor
+            }, m.rng);
+            m.spin = { fig, result, plan, duration: plan.duration, elapsed: 0, jitan: m.jitanLeft > 0 };
             m.stats[fig === 1 ? 'spins1' : 'spins2']++;
             if (m.spin.jitan) m.jitanLeft--;
-            emit(m, 'spinStart', { fig, result, duration: m.spin.duration, reach: m.spin.reach, jitanLeft: m.jitanLeft });
+            emit(m, 'spinStart', { fig, result, plan, duration: plan.duration, jitanLeft: m.jitanLeft });
             return;
         }
         m.spin.elapsed += dt;
@@ -125,13 +130,10 @@ const Machine = (() => {
         }
     }
 
-    // 変動時間。外れのリーチは reachRate の割合
-    function spinTime(m, fig, result) {
-        const t = m.config.machine.spin;
-        if (fig === 2) return result.kind === 'hit' ? t.fig2.hit : result.kind === 'small' ? t.fig2.small : t.fig2.miss;
-        if (result.kind === 'hit') return t.fig1.hit;
-        if (m.rng() < t.fig1.reachRate) return t.fig1.reach;
-        return m.holds[1].length + 1 >= t.fig1.shortenAt ? t.fig1.missShort : t.fig1.miss;
+    // 保留の色とボタン (特図1 だけ。特図2 の保留はいつも白)
+    function addExtras(m, fig, result) {
+        if (fig === 1) Object.assign(result, Scenario.hold(m.config, m.spec, result, m.rng));
+        else Object.assign(result, { holdColor: 'white', button: null });
     }
 
     function updateSmall(m, dt) {
@@ -253,10 +255,16 @@ const Machine = (() => {
 
     // ----- デバッグ用 -----
     // 保留を1つ足す (結果を決めて)。allocNext: 'jitan' / 'normal' でその振り分けを選ぶ (null ならふつうに抽選)
-    function debugHold(m, fig, kind, allocNext) {
+    // kind: 'hit' / 'small' / 'reach' (リーチ外れ) / 'fail' (チャレンジ失敗)。options.enemy でバトルの相手、options.holdColor で保留の色
+    function debugHold(m, fig, kind, allocNext, options = {}) {
         const list = fig === 1 ? m.spec.firstHit : m.spec.rushHit;
         const pool = allocNext ? list.filter(a => a.next === allocNext) : list;
-        const result = kind === 'hit' ? { kind, alloc: weightedPick(pool.length ? pool : list, m.rng) } : { kind };
+        const result = kind === 'hit' ? { kind, alloc: weightedPick(pool.length ? pool : list, m.rng) }
+            : kind === 'reach' || kind === 'fail' ? { kind: 'miss', force: kind } : { kind };
+        addExtras(m, fig, result);
+        if (options.enemy) result.forceEnemy = options.enemy;
+        if (options.holdColor) result.holdColor = options.holdColor;
+        if (options.button) result.button = options.button;
         m.holds[fig].unshift(result);
         if (m.holds[fig].length > m.config.machine.holdMax) m.holds[fig].pop();
         emit(m, 'hold', { fig, result, count: m.holds[fig].length });

@@ -21,6 +21,7 @@
 <script src="../js/config.js"></script>
 <script src="../js/board.js"></script>
 <script src="../js/physics.js"></script>
+<script src="../js/scenario.js"></script>
 <script src="../js/machine.js"></script>
 <script>
 (() => {
@@ -114,6 +115,13 @@
         let jitanIn = 0, jitanOut = 0, inJitanNow = false;
         let rushPaid = 0;
         let rushStartPaid = 0, rushStartShot = 0;
+        // 演出の集計 (特図1): バトルの相手・チャレンジ・ボタン・保留の色ごとに、出た回数と当たった回数
+        const showStats = { enemy: {}, challenge: {}, button: [0, 0], color: {}, reach: 0, spins: 0 };
+        const tally = (table, key, hit) => {
+            table[key] = table[key] || [0, 0];
+            table[key][0]++;
+            if (hit) table[key][1]++;
+        };
         const leftRate = leftByBoard[keyOf(board)];
         for (let t = 0; t < end; t += DT) {
             // 1分に100発。狙いは台の状態で決める
@@ -144,6 +152,17 @@
             Machine.update(m, DT);
             inJitanNow = Machine.inJitan(m);
             m.events.splice(0).forEach(e => {
+                if (e.type === 'hold' && e.fig === 1) {
+                    const hit = e.result.kind === 'hit';
+                    tally(showStats.color, e.result.holdColor, hit);
+                    if (e.result.button) { showStats.button[0]++; if (hit) showStats.button[1]++; }
+                }
+                if (e.type === 'spinStart' && e.fig === 1) {
+                    const p = e.plan;
+                    showStats.spins++;
+                    if (p.challenge) tally(showStats.challenge, p.challenge, p.type === 'reach');
+                    if (p.enemy) { showStats.reach++; tally(showStats.enemy, p.enemy, p.win); }
+                }
                 if (e.type === 'bonusStart' && !e.rush) firstHits++;
                 // 初当たりのあとの時短で当たった = RUSH の1回目の継続
                 if (e.type === 'bonusStart' && e.rush && firstJitan) { firstJitanWins++; firstJitan = false; }
@@ -171,7 +190,7 @@
             payoutRate: paid / shot,
             perHour: (paid - shot) / HOURS,
             jitanBalance: jitanIn ? (jitanOut - jitanIn) / Math.max(1, s.rushes + s.rushHits) : 0,
-            smalls: s.smalls, vRate: s.smalls ? s.vHits / s.smalls : 0, hits
+            smalls: s.smalls, vRate: s.smalls ? s.vHits / s.smalls : 0, hits, showStats
         };
     }
 
@@ -184,6 +203,15 @@
             const r = run(specId, b);
             lines.push(`  ${keyOf(b)}  ${r.rotation.toFixed(1).padStart(6)}   1/${r.hitRate.toFixed(0).padEnd(5)} ${String(r.firstHits).padStart(7)}`
                 + `   ${pct(r.jitanEntry)} ${pct(r.firstWin)}  ${pct(r.continuation)} ${r.perRush.toFixed(0).padStart(9)}  ${pct(r.vRate)}  ${pct(r.payoutRate)}  ${r.perHour.toFixed(0).padStart(8)}`);
+            const st = r.showStats;
+            const rate = ([n, hit]) => `${hit}/${n} = ${pct(n ? hit / n : 0)}`;
+            const names = { ...Object.fromEntries(Object.entries(CONFIG.show.battles).map(([id, b]) => [id, b.name])),
+                ...Object.fromEntries(Object.entries(CONFIG.show.challenges).map(([id, c]) => [id, c.name])) };
+            lines.push(`    演出 (特図1 ${st.spins} 回転、リーチ 1/${(st.spins / Math.max(1, st.reach)).toFixed(0)})`);
+            lines.push('      バトルの成功率: ' + Object.keys(CONFIG.show.battles).map(id => `${names[id]} ${rate(st.enemy[id] || [0, 0])}`).join(' / '));
+            lines.push('      チャレンジの成功率: ' + Object.keys(CONFIG.show.challenges).map(id => `${names[id]} ${rate(st.challenge[id] || [0, 0])}`).join(' / '));
+            lines.push(`      ボタン先読みの当たり: ${rate(st.button)}`);
+            lines.push('      保留の色の当たり: ' + CONFIG.show.holdColors.order.map(c => `${c} ${rate(st.color[c] || [0, 0])}`).join(' / '));
         });
     });
     lines.push(`\n(${((performance.now() - started) / 1000).toFixed(1)} 秒)`);

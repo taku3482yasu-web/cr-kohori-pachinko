@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>液晶の確認</title>
+<!--
+    液晶だけを大きく表示して、変動の流れを確認する (盤面・玉はなし)。
+    ?force=hit|rush|reach|fail|small  はじめの保留 / &enemy=onioni バトルの相手 / &spec=s319
+    &t=12 その秒数まで早送りした画面で止める (ヘッドレスChromeで画像にするとき)。t がなければふつうに動く
+    &ts=2,6,12 その秒数ごとの画面を並べる (1回の変動を何枚かで見る)
+    &holds=3 ほかの保留の数 / &color=rainbow はじめの保留の色
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+<style>
+    body { margin: 0; background: #111; color: #ccc; font: 13px monospace; }
+    canvas { display: block; width: 768px; height: 432px; image-rendering: pixelated; }
+    #sheet { display: grid; grid-template-columns: repeat(2, 512px); gap: 4px; }
+    #sheet canvas { width: 512px; height: 288px; }
+    #sheet div { position: relative; }
+    #sheet span { position: absolute; left: 4px; top: 2px; color: #ff0; background: #000; }
+    #info { padding: 4px 8px; }
+</style>
+</head>
+<body>
+<canvas id="screen" width="256" height="144"></canvas>
+<div id="info"></div>
+<div id="sheet"></div>
+<script src="../js/config.js"></script>
+<script src="../js/sprites.js"></script>
+<script src="../js/characters.js"></script>
+<script src="../js/backgrounds.js"></script>
+<script src="../js/audio.js"></script>
+<script src="../js/scenario.js"></script>
+<script src="../js/machine.js"></script>
+<script src="../js/figures.js"></script>
+<script src="../js/button.js"></script>
+<script src="../js/lcd.js"></script>
+<script>
+(() => {
+    const params = new URLSearchParams(location.search);
+    const screen = document.getElementById('screen').getContext('2d');
+    const m = Machine.create(CONFIG, params.get('spec') || 's199');
+    const lcd = Lcd.init();
+    const force = params.get('force') || 'hit';
+    const options = { enemy: params.get('enemy') || undefined, holdColor: params.get('color') || undefined };
+    for (let i = 0; i < Number(params.get('holds') || 2); i++) Machine.debugHold(m, 1, 'miss', null);
+    if (force === 'small') Machine.debugHold(m, 2, 'small', null);
+    else if (force === 'rush') Machine.debugHold(m, 1, 'hit', 'jitan', options);
+    else Machine.debugHold(m, 1, force, null, options);
+    let time = 0;
+    const step = dt => {
+        time += dt;
+        Machine.update(m, dt);
+        m.events.splice(0).forEach(e => Lcd.event(e, time));
+    };
+    const render = () => {
+        screen.imageSmoothingEnabled = false;
+        screen.drawImage(Lcd.draw(time, m), 0, 0);
+        const p = m.spin && m.spin.plan;
+        document.getElementById('info').textContent = `t=${time.toFixed(2)}s`
+            + (p ? ` / ${p.type || ''} ${p.challenge || ''} ${p.enemy || ''} ${p.win ? '勝ち' : ''} 図柄 ${p.digits.join(',')}` : '');
+    };
+    if (params.has('ts')) {
+        document.getElementById('screen').style.display = 'none';
+        params.get('ts').split(',').map(Number).forEach(target => {
+            while (time < target) step(1 / 60);
+            const box = document.createElement('div');
+            const c = document.createElement('canvas');
+            c.width = 256;
+            c.height = 144;
+            const g = c.getContext('2d');
+            g.imageSmoothingEnabled = false;
+            g.drawImage(Lcd.draw(time, m), 0, 0);
+            const label = document.createElement('span');
+            label.textContent = `${target}s`;
+            box.append(c, label);
+            document.getElementById('sheet').appendChild(box);
+        });
+        render();
+        return;
+    }
+    if (params.has('t')) {
+        const target = Number(params.get('t'));
+        while (time < target) step(1 / 60);
+        render();
+        return;
+    }
+    let last = null;
+    const frame = ts => {
+        if (last !== null) step(Math.min(0.1, ts / 1000 - last));
+        last = ts / 1000;
+        render();
+        requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+    document.addEventListener('keydown', e => { if (e.code === 'KeyB') Lcd.push(time); });
+})();
+</script>
+</body>
+</html>

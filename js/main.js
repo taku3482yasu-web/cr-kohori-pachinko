@@ -9,7 +9,8 @@
 //   ?auto=1&strength=45    開いてすぐ自動で打ちはじめる (&aim=1 で台の状態に合わせて左打ち・右打ちを切り替える)
 //   &skip=30               開いた直後に 30 秒ぶん早送りする (ヘッドレスChromeでは時間が進まないため)
 //   &balls=99999           はじめの持ち玉
-//   &force=rush            はじめの保留を決める (hit: 大当たり / rush: RUSH へ行く大当たり / small: 小当たり / jitan: 時短から)
+//   &force=rush            はじめの保留を決める (hit: 大当たり / rush: RUSH へ行く大当たり / small: 小当たり / jitan: 時短から
+//                          / reach: リーチ外れ / fail: チャレンジ失敗)。&enemy=onioni でバトルの相手
 // =====================================================================
 
 (() => {
@@ -62,6 +63,7 @@
         game.view = BoardView.create(canvas, game.board, CONFIG);
         game.stats = { launched: 0, launchedLeft: 0, foul: 0, heso: 0, gate: 0, denchu: 0, attacker: 0, general: 0, warp: 0, out: 0, paid: 0, firstHits: 0 };
         Lcd.reset(game.machine);
+        MachineButton.prompt(false);
         $('spec-display').textContent = spec.label;
         $('debug-board').textContent = `命釘 ${spec.board.hesoWidth} / ワープ ${spec.board.warpMinVx}`;
     }
@@ -181,6 +183,7 @@
             }
         } else acc = 0;
         BoardView.draw(game.view, game.world, Lcd.draw(time, game.machine));
+        MachineButton.update(time);
         updateStatus();
         requestAnimationFrame(frame);
     }
@@ -204,8 +207,16 @@
         setStrength(game.strength + (e.deltaY < 0 ? 1 : -1));
     }, { passive: false });
 
+    // 音は画面をさわる・キーを押すまで出せない
+    ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => Sound.unlock()));
+    MachineButton.init($('koori-button'), () => Lcd.push(time));
+    const updateSoundButton = () => { $('sound-button').textContent = `音: ${Sound.muted ? 'OFF' : 'ON'}`; };
+    $('sound-button').addEventListener('click', () => { Sound.setMuted(!Sound.muted); updateSoundButton(); });
+    updateSoundButton();
+
     document.addEventListener('keydown', e => {
         if (game.paused) return;
+        if (e.code === 'KeyB' && !e.repeat) Lcd.push(time);
         if (e.code === 'Space') { game.firing = true; e.preventDefault(); }
         if (e.code === 'ArrowRight') setStrength(game.strength + (e.shiftKey ? 10 : 1));
         if (e.code === 'ArrowLeft') setStrength(game.strength - (e.shiftKey ? 10 : 1));
@@ -259,6 +270,14 @@
         force('debug-hit', 1, 'hit', null);
         force('debug-hit-rush', 1, 'hit', 'jitan');
         force('debug-small', 2, 'small', null);
+        const enemy = () => $('debug-enemy').value || undefined;
+        ['debug-hit', 'debug-hit-rush'].forEach(id => $(id).addEventListener('click', () => {
+            if (enemy()) game.machine.holds[1][0].forceEnemy = enemy();
+        }));
+        $('debug-reach').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'reach', null, { enemy: enemy() === 'naitei' ? undefined : enemy() }));
+        $('debug-fail').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'fail', null));
+        $('debug-button').addEventListener('click', () => MachineButton.trigger(['red', 'shake', 'beep'][Math.floor(Math.random() * 3)], time));
+        $('debug-rainbow').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'hit', null, { holdColor: 'rainbow', enemy: enemy() }));
         $('debug-jitan').addEventListener('click', () => Machine.debugJitan(game.machine));
         $('debug-auto').addEventListener('click', () => {
             game.auto = !game.auto;
@@ -279,7 +298,9 @@
     if (!params.has('spec')) openPicker(false);
     if (params.has('balls')) game.balls = Number(params.get('balls'));
     const force = params.get('force');
-    if (force === 'hit' || force === 'rush') Machine.debugHold(game.machine, 1, 'hit', force === 'rush' ? 'jitan' : null);
+    const forceEnemy = params.get('enemy') || undefined;
+    if (force === 'hit' || force === 'rush') Machine.debugHold(game.machine, 1, 'hit', force === 'rush' ? 'jitan' : null, { enemy: forceEnemy });
+    if (force === 'reach' || force === 'fail') Machine.debugHold(game.machine, 1, force, null, { enemy: forceEnemy });
     if (force === 'small') Machine.debugHold(game.machine, 2, 'small', null);
     if (force === 'jitan') Machine.debugJitan(game.machine);
     updateHandle();

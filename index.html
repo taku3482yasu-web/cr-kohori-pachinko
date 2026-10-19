@@ -18,7 +18,10 @@
         <section class="controls">
             <div class="machine-bar">
                 <span id="spec-display" class="spec-display"></span>
-                <button id="machine-button" class="small-button">台選び</button>
+                <span class="bar-buttons">
+                    <button id="sound-button" class="small-button">音: ON</button>
+                    <button id="machine-button" class="small-button">台選び</button>
+                </span>
             </div>
             <div id="mode-display" class="mode-display"></div>
             <div id="aim-display" class="aim-display" hidden>右打ち →</div>
@@ -38,7 +41,16 @@
                 </div>
                 <button id="right-button" class="small-button">右打ち →</button>
             </div>
-            <p class="hint">ハンドルを押している間発射（Space でも）。押したまま回す・← → キー・ホイールで強さを変える</p>
+            <div class="push-area">
+                <!-- 台のボタン (こおりくんの体の形)。先読みで光る・震える・鳴る。バトルの「PUSH!」で押す (B キーでも) -->
+                <button id="koori-button" class="koori-button" aria-label="台のボタン">
+                    <span class="kb-shine"></span>
+                    <span class="kb-eye kb-left"></span><span class="kb-eye kb-right"></span>
+                    <span class="kb-cheek kb-left"></span><span class="kb-cheek kb-right"></span>
+                    <span class="kb-label">PUSH</span>
+                </button>
+            </div>
+            <p class="hint">ハンドルを押している間発射（Space でも）。押したまま回す・← → キー・ホイールで強さを変える。こおりくんのボタンは B キーでも押せる</p>
             <button id="lend-button" class="lend-button">玉貸し（+125発）</button>
         </section>
 
@@ -48,6 +60,17 @@
                 <button id="debug-hit">次は大当たり</button>
                 <button id="debug-hit-rush">次は大当たり (RUSH へ)</button>
                 <button id="debug-small">次は小当たり (特図2)</button>
+                <button id="debug-reach">次はリーチ外れ</button>
+                <button id="debug-fail">次はチャレンジ失敗</button>
+                <select id="debug-enemy" aria-label="バトルの相手">
+                    <option value="">相手: 抽選</option>
+                    <option value="okagappa">おかがっぱ</option>
+                    <option value="hibikimakuri">ひびきまくり</option>
+                    <option value="onioni">おにおに</option>
+                    <option value="naitei">ナイナイ</option>
+                </select>
+                <button id="debug-button">ボタン先読み</button>
+                <button id="debug-rainbow">虹保留の当たり</button>
                 <button id="debug-jitan">時短に入る</button>
                 <button id="debug-auto">オート発射: OFF</button>
                 <button id="debug-aim">オートで打ち分け: OFF</button>
@@ -76,8 +99,12 @@
     <script src="js/backgrounds.js"></script>
     <script src="js/board.js"></script>
     <script src="js/physics.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/scenario.js"></script>
     <script src="js/machine.js"></script>
     <script src="js/render.js"></script>
+    <script src="js/figures.js"></script>
+    <script src="js/button.js"></script>
     <script src="js/lcd.js"></script>
     <script src="js/main.js"></script>
 </body>
