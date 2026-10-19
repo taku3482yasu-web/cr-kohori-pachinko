@@ -5,6 +5,7 @@
 //   (素手 → ハルキソード → ハルキハンマー → おにおに絶対殺す剣)。cintro → cround (受け止められる) / cfinal → cresult
 // おにおにRASH (plan.kind 'onioni'): 真ん中でおにおにが椅子に座って眠っている。当たりのときだけ違和感
 //   (そのまま開眼 / 虹色 / 画面が反転 / 白黒 / 顔のドアップ) が起きて開眼する
+// ブラックアウト (plan.kind 'blackout'。RASH 中の突発当たり): dark → bokoori (虹色のこおりくん) → atari (「当たり」) → itadaki
 // Lcd から kit ({ ctx, W, H, text, band, rainbow }) を受け取って描く。こおりRASH のバトルは Lcd の drawBattle を使う。
 // =====================================================================
 
@@ -301,6 +302,63 @@ const RashView = (() => {
         void band;
     }
 
+    // ----- ブラックアウト -----
+    let kooriTint = null;
+    function rainbowKoori(cx, footY, scale, now) {
+        const rows = SPRITES.koori.frames.walk1;
+        const w = Math.ceil(rows[0].length * scale), h = Math.ceil(rows.length * scale);
+        if (!kooriTint || kooriTint.width !== w || kooriTint.height !== h) {
+            kooriTint = document.createElement('canvas');
+            kooriTint.width = w;
+            kooriTint.height = h;
+        }
+        const g = kooriTint.getContext('2d');
+        g.clearRect(0, 0, w, h);
+        g.imageSmoothingEnabled = false;
+        drawSprite(g, SPRITES.koori, Math.floor(now * 4) % 2 ? 'walk1' : 'walk2', 0, 0, scale);
+        g.globalCompositeOperation = 'source-atop';
+        g.globalAlpha = 0.55;
+        const grad = g.createLinearGradient(0, 0, w, h);
+        for (let i = 0; i < 6; i++) grad.addColorStop(i / 5, `hsl(${(now * 300 + i * 60) % 360}, 95%, 60%)`);
+        g.fillStyle = grad;
+        g.fillRect(0, 0, w, h);
+        g.globalAlpha = 1;
+        g.globalCompositeOperation = 'source-over';
+        kit.ctx.drawImage(kooriTint, Math.round(cx - w / 2), Math.round(footY - h));
+    }
+
+    function drawBlackout(now, plan, phase) {
+        const { ctx, W, H, text } = kit;
+        const n = phase.name;
+        const local = phase.local;
+        // 暗転 (最初の 0.3 秒で暗くなる)
+        ctx.fillStyle = n === 'dark' ? `rgba(0, 0, 0, ${Math.min(1, local / 0.3)})` : '#000000';
+        ctx.fillRect(0, 0, W, H);
+        if (n === 'dark') return;
+        // 虹色のこおりくん (下からせり上がる)
+        const rise = n === 'bokoori' ? Math.min(1, local / 0.8) : 1;
+        const footY = (n === 'bokoori' ? 160 - rise * 60 : 100) + Math.sin(now * 3) * 2;
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.15 + 0.1 * Math.sin(now * 8)})`;
+        ctx.beginPath();
+        ctx.arc(W / 2, footY - 24, 36, 0, Math.PI * 2);
+        ctx.fill();
+        rainbowKoori(W / 2, footY, 3, now);
+        if (n === 'atari' || n === 'itadaki') {
+            // 「当たり」: 虹色の文字が1文字ずつ
+            const chars = ['当', 'た', 'り'];
+            const shown = n === 'itadaki' ? 3 : Math.min(3, Math.floor(local / 0.35) + 1);
+            for (let i = 0; i < shown; i++) text(chars[i], W / 2 - 40 + i * 40, 30, 28, 'rainbow', 'center', now + i * 0.2);
+        }
+        if (n === 'itadaki') {
+            // 虹色にフラッシュ
+            const flash = Math.max(0, 0.75 - local * 0.9);
+            ctx.fillStyle = `hsla(${(now * 600) % 360}, 95%, 70%, ${flash})`;
+            ctx.fillRect(0, 0, W, H);
+            kit.band(112, 24, 0.6);
+            text('こおりがいただいた！', W / 2, 124, 16, 'rainbow', 'center', now);
+        }
+    }
+
     // 画面全体にかける効果 (おにおにRASH の反転・白黒)。なければ null
     function postEffect(plan, phase) {
         if (!plan || plan.kind !== 'onioni' || !phase) return null;
@@ -310,5 +368,5 @@ const RashView = (() => {
         return null;
     }
 
-    return { init, drawChallenge, drawChallengeHolds, drawOnioniRash, postEffect, drawWeapon };
+    return { init, drawChallenge, drawChallengeHolds, drawOnioniRash, drawBlackout, postEffect, drawWeapon };
 })();

@@ -42,6 +42,22 @@ const Lcd = (() => {
     function setChoosing(on) {
         choosing = on;
     }
+    let rashCount = null;   // 大当たりの終わりの「〇回目」→「〇〇RASH」 { count, start }
+
+    function drawRashCount(now) {
+        if (!rashCount) return;
+        const t = now - rashCount.start;
+        const total = CONFIG.machine.bonus.ending;
+        if (t > total) { rashCount = null; return; }
+        band(0, H, 0.6);
+        if (t < CONFIG.show.rashCount.countTime) {
+            const pop = Math.min(1, t / 0.25);
+            text(`${rashCount.count}回目`, W / 2, 66, Math.round(20 + 18 * pop), '#ffe066');
+        } else {
+            text(`${rashName()}`, W / 2, 62, 24, rashMode === 'onioni' ? '#ff6a6a' : '#7fd3f7');
+            text('継続！', W / 2, 92, 16, '#ffffff');
+        }
+    }
 
     function reset() {
         flash = summary = aimNotice = bubble = spinView = null;
@@ -76,10 +92,13 @@ const Lcd = (() => {
         } else if (e.type === 'roundStart') {
             Sound.play('round');
         } else if (e.type === 'jitanStart') {
-            show(e.challenge ? '突破チャレンジ！' : `${rashName()} ${e.rushHits - 1}連！`, '#7fd3f7', now, 2);
+            if (e.challenge) show('突破チャレンジ！', '#7fd3f7', now, 2);
 
         } else if (e.type === 'ending' && e.next === 'normal') {
             show('通常時へ', '#ffffff', now, CONFIG.machine.bonus.ending);
+        } else if (e.type === 'ending' && e.rushHits > 1) {
+            // RASH の大当たりの終わり: 「〇回目」→「〇〇RASH」
+            rashCount = { count: e.rushHits - 1, start: now };
         } else if (e.type === 'rushEnd') {
             summary = { hits: e.hits - 1, balls: e.balls, failed: e.challengeFailed, until: now + 5 };
         }
@@ -149,6 +168,7 @@ const Lcd = (() => {
             stop[1] = n === 'result' && local >= 0.6;
             return { stop, big };
         }
+        if (plan.kind === 'blackout') return { stop: [false, false, false], big: false, hidden: n !== 'itadaki' || local < 1 };
         if (plan.kind === 'challenge' || (plan.kind === 'onioni' && plan.pattern)) {
             // 突破チャレンジ・おにおにRASH の当たり: 図柄は左上に小さく、最後に止まる
             const done = last && local >= phase.t - 0.5;
@@ -200,6 +220,7 @@ const Lcd = (() => {
     function drawReels(now, plan, phase) {
         const digits = plan ? plan.digits : shown;
         const state = plan ? reelState(plan, phase) : { stop: [true, true, true], big: true };
+        if (state.hidden) return { reach: false, aligned: false, big: false };
         const layout = state.big ? BIG : SMALL;
         const reach = plan && plan.type === 'reach' && state.stop[0] && state.stop[2] && !state.stop[1];
         const aligned = state.stop.every(Boolean) && digits[0] === digits[1] && digits[1] === digits[2];
@@ -437,6 +458,11 @@ const Lcd = (() => {
         text(`ROUND ${Math.max(1, b.round)} / ${b.alloc.rounds}`, W / 2 + 14, 58, 20, '#ffffff');
         if (b.phase === 'open') text(`COUNT ${b.count} / ${b.alloc.count || CONFIG.machine.bonus.count}`, W / 2 + 14, 84, 13, '#7fd3f7');
         text('右打ち →', W / 2, 110, 14, Math.floor(now * 3) % 2 ? '#ff6a8a' : '#ffffff');
+        // RASH の2回目からは、ラウンド中にボタンで切り替え
+        if (!choosing && m.rush.active && !m.rush.challenge && m.rush.hits > 2) {
+            band(118, 16, 0.6);
+            text(`ボタンで切り替え: ${rashName()}`, W / 2, 126, 10, rashMode === 'onioni' ? '#ff6a6a' : '#7fd3f7');
+        }
         if (choosing) {
             band(90, 36, 0.75);
             text('どっちの RASH にする？', W / 2, 99, 11, '#ffffff');
@@ -472,6 +498,9 @@ const Lcd = (() => {
         if (phase.name === 'cintro' || phase.name === 'cfinal') Sound.play('reach');
         if (phase.name === 'cround') Sound.play('attack');
         if (phase.name === 'anomaly') Sound.play('challenge');
+        if (phase.name === 'dark') Sound.play('hurt');
+        if (phase.name === 'bokoori' || phase.name === 'atari') Sound.play('reach');
+        if (phase.name === 'itadaki') Sound.play('win');
         if (phase.name === 'open') Sound.play('win');
     }
 
@@ -516,9 +545,10 @@ const Lcd = (() => {
 
         if (m.bonus) drawBonus(now, m);
         else {
-            if (plan && plan.kind === 'challenge' && phase.name !== 'roll') RashView.drawChallenge(now, plan, phase, m, spinView);
+            if (plan && plan.kind === 'blackout') RashView.drawBlackout(now, plan, phase);
+            else if (plan && plan.kind === 'challenge' && phase.name !== 'roll') RashView.drawChallenge(now, plan, phase, m, spinView);
             else if (plan && plan.kind === 'onioni' && plan.pattern) RashView.drawOnioniRash(now, plan, phase);
-            else if (m.rush.active && !m.rush.challenge && rashMode === 'onioni' && (!plan || plan.kind !== 'rashBattle')) {
+            else if (m.rush.active && !m.rush.challenge && rashMode === 'onioni' && (!plan || (plan.kind !== 'rashBattle' && plan.kind !== 'blackout'))) {
                 // おにおにRASH の外れ: 眠っているおにおに
                 RashView.drawOnioniRash(now, { pattern: null }, { name: 'roll', local: 0, t: 1 });
             }
@@ -542,19 +572,21 @@ const Lcd = (() => {
             }
             if (state.aligned && plan && plan.win) text('大当たり！', W / 2, 18, 14, 'rainbow', 'center', now);
             const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
-            if (m.rush.active && !m.rush.challenge && !(plan && plan.kind !== 'plain' && plan.fig === 2)) {
+            if (m.rush.active && !m.rush.challenge && !(plan && plan.kind !== 'plain' && plan.fig === 2) && !(plan && plan.kind === 'blackout')) {
                 text(Machine.inJitan(m) ? `${rashName()} ${m.rush.hits - 1}連  時短 残り ${left}回` : `${rashName()} ${m.rush.hits - 1}連  残り保留`, W / 2, 112, 11, '#7fd3f7');
             }
         }
 
         // ふるカワのバトルの返事・撃破のひとこと
-        if (plan && phase && phase.name === 'reach' && phase.local >= 1.6 && plan.reply && (!bubble || bubble.key !== 'reply' + m.stats.spins1)) {
+        if (plan && phase && ((phase.name === 'reach' && phase.local >= 1.6) || (plan.fig === 2 && phase.index === 0 && phase.local >= 0.5)) && plan.reply && (!bubble || bubble.key !== 'reply' + m.stats.spins1)) {
             say(plan.reply, 0, now);
             bubble.key = 'reply' + m.stats.spins1;
         }
-        if (plan && phase && phase.name === 'result' && plan.defeatLine && phase.local > 0.6 && (!bubble || bubble.key !== 'defeat' + m.stats.spins1)) {
-            say(plan.defeatLine, 5, now);
-            bubble.key = 'defeat' + m.stats.spins1;
+        const reveal = plan && plan.reveal ? plan.reveal : { phase: 'result', at: 0.6 };
+        const spinKey = 'defeat' + m.stats.spins1 + ':' + m.stats.spins2;
+        if (plan && phase && phase.name === reveal.phase && plan.defeatLine && phase.local > reveal.at && (!bubble || bubble.key !== spinKey)) {
+            say(plan.defeatLine, plan.defeatColor ?? 5, now);
+            bubble.key = spinKey;
         }
         drawHolds(now, m);
         drawFurukawa(now);
@@ -579,6 +611,7 @@ const Lcd = (() => {
             band(44, 44, 0.45);
             text(flash.text, W / 2, 66, 20 + Math.round(Math.sin(Math.min(1, t * 4) * Math.PI / 2) * 4), flash.color);
         }
+        drawRashCount(now);
         applyEffect(RashView.postEffect(plan, phase));
         return canvas;
     }

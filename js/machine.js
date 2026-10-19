@@ -211,7 +211,7 @@ const Machine = (() => {
             if (b.round >= b.alloc.rounds) {
                 b.phase = 'ending';
                 b.timer = cfg.ending;
-                emit(m, 'ending', { next: b.alloc.next });
+                emit(m, 'ending', { next: b.alloc.next, rushHits: m.rush.active ? m.rush.hits : 0 });
             } else {
                 b.phase = 'interval';
                 b.timer = cfg.interval;

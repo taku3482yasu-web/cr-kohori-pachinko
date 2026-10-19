@@ -165,7 +165,14 @@ const Scenario = (() => {
         const plain = kind === 'hit' ? f2.hit : kind === 'small' ? f2.small : f2.miss;
         const p = { fig: 2, win, digits, talk: null };
 
-        if (spin.challenge) {
+        const bo = show.blackout;
+        if (spin.rush && !spin.challenge && win && (result.force === 'blackout' || rng() < bo.rate)) {
+            // ブラックアウト (突発当たり): モードに関係なく
+            p.kind = 'blackout';
+            p.phases = [{ name: 'dark', t: bo.timing.dark }, { name: 'bokoori', t: bo.timing.koori },
+                { name: 'atari', t: bo.timing.atari }, { name: 'itadaki', t: bo.timing.itadaki }];
+            p.reveal = { phase: 'itadaki', at: 0.1 };
+        } else if (spin.challenge) {
             // 突破チャレンジ: 1ラウンド目の前に登場、決着のラウンドは長く
             const { run, index } = spin.challenge;
             const t = run.timing;
@@ -179,7 +186,7 @@ const Scenario = (() => {
             else if (p.final) p.phases.push({ name: 'cfinal', t: t.final }, { name: 'cresult', t: t.result });
             else p.phases.push({ name: 'roll', t: plain });
             if (index === 0) p.reply = pickFrom(show.furukawa.challengeLines, rng);
-            if (p.win) p.defeatLine = pickFrom(show.furukawa.challengeWinLines, rng);
+            if (p.win) p.reveal = { phase: 'cresult', at: 0.4 };
         } else if (spin.rush && spin.rashMode === 'koori') {
             // こおりRASH: 当たり・最後の保留は必ずバトル。外れでもときどき (成功率を守る割合で) バトル
             const enemies = show.kooriRash.enemies;
@@ -197,7 +204,7 @@ const Scenario = (() => {
                 p.phases = [{ name: 'roll', t: t.roll }, { name: 'battle', t: t.battle }, { name: 'result', t: t.result }];
                 const f = show.furukawa;
                 p.reply = f.replies[p.enemy] ? pickFrom(f.replies[p.enemy], rng) : null;
-                p.defeatLine = win && f.defeatLines[p.enemy] ? pickFrom(f.defeatLines[p.enemy], rng) : null;
+                if (win) p.reveal = { phase: 'result', at: 0.6 };
             } else {
                 p.kind = 'plain';
                 p.phases = [{ name: 'roll', t: plain }];
@@ -209,6 +216,7 @@ const Scenario = (() => {
                 const t = show.onioniRash.timing;
                 p.pattern = result.forcePattern || weighted(Object.fromEntries(Object.entries(show.onioniRash.patterns).map(([id, x]) => [id, x.weight])), rng);
                 p.phases = [{ name: 'wait', t: t.wait }, { name: 'anomaly', t: t.anomaly }, { name: 'open', t: t.open }];
+                p.reveal = { phase: 'open', at: 0.3 };
             } else {
                 p.pattern = null;
                 p.phases = [{ name: 'roll', t: plain }];
@@ -218,7 +226,28 @@ const Scenario = (() => {
             p.phases = [{ name: 'roll', t: plain }];
         }
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
+        // 当たりが決まった瞬間に、ふるカワが虹色で「おめでとう！」 (演出のない当たりは変動の終わり)
+        if (win) {
+            if (!p.reveal) p.reveal = { phase: p.phases[p.phases.length - 1].name, at: Math.max(0, p.phases[p.phases.length - 1].t - 0.3) };
+            p.defeatLine = show.furukawa.congratsLine;
+            p.defeatColor = 6;
+        }
+        // RASH 中・突破チャレンジ中: 当たりの見込みに応じてしゃべる (突破チャレンジの1ラウンド目は勝負のセリフ)
+        // ブラックアウトは突発なので、しゃべらない
+        if (spin.rush && !p.reply && p.kind !== 'blackout') p.talk = rashTalk(show, win, rng);
         return p;
+    }
+
+    function rashTalk(show, win, rng) {
+        const f = show.furukawa;
+        const heat = Number(weighted(f.rashHeat[win ? 'win' : 'miss'], rng));
+        if (rng() >= f.rashAppearRates[heat]) return null;
+        const color = Number(weighted(f.colorWeights[heat], rng));
+        const list = color >= 4 ? f.rashHotLines : color >= 2 ? f.rashExpectLines : f.rashCalmLines;
+        const candidates = list.length > 1 ? list.filter(line => line !== lastLine) : list;
+        const text = pickFrom(candidates, rng);
+        lastLine = text;
+        return { text, color };
     }
 
     // ----- ふるカワ -----

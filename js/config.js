@@ -290,6 +290,15 @@ const CONFIG = {
                 goldDog: { name: 'ゴールド金面犬', hit: 20, win: 1, map: 'goldHall' }
             }
         },
+        // ブラックアウト (RASH 中の突発当たり。こおりRASH・おにおにRASH 共通。ユーザー指定 2026-10-19)
+        //   RASH 中の当たりの rate の割合で、前ぶれなく暗転 → 虹色のこおりくん → 「当たり」(虹色の文字) → 「こおりがいただいた！」で虹色にフラッシュ
+        //   rate は Claude が決めた
+        blackout: {
+            rate: 0.12,
+            timing: { dark: 1.2, koori: 1.5, atari: 1.5, itadaki: 1.8 }
+        },
+        // RASH の大当たりのあと: 「〇回目」を大きく出してから「〇〇RASH」で続ける (秒。大当たりの ending の中で出す)
+        rashCount: { countTime: 2.2 },
         // おにおにRASH: 真ん中でおにおにが椅子に座っている。当たりのときだけ違和感が起きて開眼する (外れでは何も起きない)
         //   wait → anomaly (違和感) → open (開眼) の秒。patterns は当たりのときに選ぶ重み
         onioniRash: {
@@ -379,7 +388,17 @@ const CONFIG = {
             },
             // 突破チャレンジが始まるとき・突破したとき
             challengeLines: ['おにおにとの勝負だよ！ がんばって！', '保留がそろった…いくよ！'],
-            challengeWinLines: ['おにおにを突破した！ RASH だよ！', 'やったー！ 突破！！']
+            challengeWinLines: ['おにおにを突破した！ RASH だよ！', 'やったー！ 突破！！'],
+            // RASH 中・突破チャレンジ中 (ユーザー指定): 変動の始まりに、当たりの見込み (熱さ) に応じてしゃべる。
+            //   当たりの保留は熱さ rashHeat.win、外れは rashHeat.miss (重み)。文字の色は colorWeights[熱さ]、出てくる確率は rashAppearRates[熱さ]
+            //   色が赤以上 → rashHotLines、緑・紫 → rashExpectLines、それ以外 → rashCalmLines
+            //   当たりが決まった瞬間は、必ず虹色で congratsLine (ユーザー指定)
+            rashHeat: { win: { 3: 20, 4: 40, 5: 40 }, miss: { 0: 70, 1: 22, 2: 6, 3: 2 } },
+            rashAppearRates: [0.2, 0.3, 0.45, 0.6, 0.8, 0.9, 1],
+            rashHotLines: ['あちあちかも！', 'ここがせめどき！', 'いけるよ！ いっけー！！', '一気にたおしちゃえ！！'],
+            rashExpectLines: ['いけるかも…？', 'そろそろせめどき…？', 'なんだかあったかい…？'],
+            rashCalmLines: ['どんどん回そう！', '右打ち、わすれないでね！', 'まだまだこれからだよ！', 'のんびりいこ♪'],
+            congratsLine: 'おめでとう！'
         }
     }
 };

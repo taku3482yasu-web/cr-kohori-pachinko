@@ -214,14 +214,14 @@
 
     // 音は画面をさわる・キーを押すまで出せない
     ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => Sound.unlock()));
-    MachineButton.init($('koori-button'), () => Lcd.push(time));
+    MachineButton.init($('koori-button'), pressButton);
     const updateSoundButton = () => { $('sound-button').textContent = `音: ${Sound.muted ? 'OFF' : 'ON'}`; };
     $('sound-button').addEventListener('click', () => { Sound.setMuted(!Sound.muted); updateSoundButton(); });
     updateSoundButton();
 
     document.addEventListener('keydown', e => {
         if (game.paused) return;
-        if (e.code === 'KeyB' && !e.repeat) Lcd.push(time);
+        if (e.code === 'KeyB' && !e.repeat) pressButton();
         if (e.code === 'Space') { game.firing = true; e.preventDefault(); }
         if (e.code === 'ArrowRight') setStrength(game.strength + (e.shiftKey ? 10 : 1));
         if (e.code === 'ArrowLeft') setStrength(game.strength - (e.shiftKey ? 10 : 1));
@@ -231,6 +231,18 @@
     $('left-button').addEventListener('click', () => setStrength(CONFIG.launch.presets.left));
     $('right-button').addEventListener('click', () => setStrength(CONFIG.launch.presets.right));
     $('lend-button').addEventListener('click', () => { game.balls += CONFIG.balls.lend; });
+
+    // 台のボタン: バトルの PUSH。RASH の2回目からの大当たり中は、こおりRASH ⇔ おにおにRASH の切り替え (ユーザー指定)
+    function pressButton() {
+        const m = game.machine;
+        if (m.bonus && m.rush.active && !m.rush.challenge && m.rush.hits > 2 && rashChoice.hidden) {
+            Machine.setRashMode(m, m.rashMode === 'koori' ? 'onioni' : 'koori');
+            Sound.play('push');
+            Lcd.show(`${CONFIG.show.rash.modes[m.rashMode].name}！`, m.rashMode === 'onioni' ? '#ff6a6a' : '#7fd3f7', time, 1);
+            return;
+        }
+        Lcd.push(time);
+    }
 
     // ----- RASH の選択 -----
     const rashChoice = $('rash-choice');

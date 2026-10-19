@@ -9,6 +9,8 @@
     ?force=challenge&win=2  突破チャレンジ (保留4つ、win 番目で当たり。-1 で負け)
     ?force=koori&enemy=goldDog&lose=1  こおりRASH のバトル (lose=1 でガセのバトル)
     ?force=onioni&pattern=zoom  おにおにRASH の当たり (open / rainbow / flip / mono / zoom)
+    ?force=blackout  RASH 中のブラックアウト (突発当たり)
+    ?force=koori&hit=3&fast=1  こおりRASH で特図2 の大当たり (3連目) → 大当たり → 「〇回目」→「〇〇RASH」
     &t=12 その秒数まで早送りした画面で止める (ヘッドレスChromeで画像にするとき)。t がなければふつうに動く
     &ts=2,6,12 その秒数ごとの画面を並べる (1回の変動を何枚かで見る)
     &holds=3 ほかの保留の数 / &color=rainbow はじめの保留の色
@@ -43,19 +45,27 @@
 (() => {
     const params = new URLSearchParams(location.search);
     const screen = document.getElementById('screen').getContext('2d');
+    // &fast=1: 大当たりのラウンドをすぐ終わらせる (玉が入らないので)
+    if (params.get('fast')) CONFIG.machine.bonus.maxTime = 0.5;
     const m = Machine.create(CONFIG, params.get('spec') || 's99');
     const lcd = Lcd.init();
     const force = params.get('force') || 'hit';
     const options = { enemy: params.get('enemy') || undefined, holdColor: params.get('color') || undefined };
-    if (!['challenge', 'koori', 'onioni'].includes(params.get('force'))) {
+    if (!['challenge', 'koori', 'onioni', 'blackout'].includes(params.get('force'))) {
         for (let i = 0; i < Number(params.get('holds') || 2); i++) Machine.debugHold(m, 1, 'miss', null);
     }
     if (force === 'challenge') Machine.debugChallenge(m, 4, Number(params.get('win') ?? -1));
+    else if (force === 'blackout') {
+        Machine.debugJitan(m);
+        Machine.debugHold(m, 2, 'small', null, {});
+        m.holds[2][0].force = 'blackout';
+    }
     else if (force === 'koori' || force === 'onioni') {
         Machine.debugJitan(m);
         Machine.setRashMode(m, force);
         m.holds[1].length = 0;
-        Machine.debugHold(m, 2, params.get('lose') ? 'reach' : 'small', null, { enemy: options.enemy, pattern: params.get('pattern') || undefined });
+        Machine.debugHold(m, 2, params.get('lose') ? 'reach' : params.get('hit') ? 'hit' : 'small', null, { enemy: options.enemy, pattern: params.get('pattern') || undefined });
+        if (params.get('hit')) m.rush.hits = Number(params.get('hit'));   // 何連目か
     } else if (force === 'small') Machine.debugHold(m, 2, 'small', null);
     else if (force === 'rush') Machine.debugHold(m, 1, 'hit', 'jitan', options);
     else Machine.debugHold(m, 1, force, null, options);
