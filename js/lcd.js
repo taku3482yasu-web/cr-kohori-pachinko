@@ -25,6 +25,7 @@ const Lcd = (() => {
     let aimNotice = null;   // { aim, until }
     let summary = null;     // RASH が終わったときの結果 { hits, balls, until }
     let trophy = null;      // 設定示唆トロフィー { level, start, until } (次の変動から minShow 秒で消える)
+    let anomalyTalk = null; // おにおにRASH の当たりの違和感 (ラウンドの始めにふるカワが教える。config の patterns の talk)
     let bubble = null;      // ふるカワの吹き出し { text, color, until }
     let spinView = null;    // いまの変動の見た目の情報 { plan, gaugeStop, pushedAt }
     let lastPhase = null;   // 効果音を鳴らすための、前のフレームの場面
@@ -120,7 +121,7 @@ const Lcd = (() => {
         if (t > 0.2 && t < 1.8) {
             band(4, 22, 0.55);
             if (kind === 'hi') text(`チャンス！ ${name}`, W / 2, 15, 14, Math.floor(now * 6) % 2 ? '#ff3a3a' : '#ffe066');
-            else if (kind !== 'back') text(`ステージ: ${name}`, W / 2, 15, 12, '#ffffff');
+            else text(`ステージ: ${name}`, W / 2, 15, 12, '#ffffff');
         }
     }
 
@@ -165,6 +166,8 @@ const Lcd = (() => {
 
     // ----- 台のイベント -----
     function event(e, now) {
+        // ラウンド中の紹介のカードは、大当たりの始まりの表示 (opening) が終わってから
+        if (e.type === 'bonusStart') infoStart = now + CONFIG.machine.bonus.opening;
         if (e.type === 'hold' && e.result.extra) {
             // おまけの保留 (突破チャレンジのバトル中に入った): 入ったことを見せない・鳴らさない
         } else if (e.type === 'hold') {
@@ -197,6 +200,8 @@ const Lcd = (() => {
                 show('当たり確定！', 'rainbow', now, 1.5);
             }
         } else if (e.type === 'spinEnd') {
+            // おにおにRASH の当たり: 違和感を覚えておき、ラウンドの始めにふるカワが教える
+            anomalyTalk = e.plan.kind === 'onioni' && e.plan.win && e.plan.pattern ? CONFIG.show.onioniRash.patterns[e.plan.pattern].talk : null;
             if (spinView) shown = spinView.plan.digits.map(d => d === 'V' ? 'V' : d);
             spinView = null;
             MachineButton.prompt(false);
@@ -208,6 +213,9 @@ const Lcd = (() => {
             const head = e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
             show(e.promote ? head : `${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
+        } else if (e.type === 'bonusEnd') {
+            if (infoStart !== null) infoBase = infoIndex(now) + 1;
+            infoStart = null;
         } else if (e.type === 'renchan') {
             renchan = { games: e.games, start: now };
             Sound.play('win');
@@ -220,6 +228,12 @@ const Lcd = (() => {
             show('V を狙え！', '#ff6a8a', now, CONFIG.machine.small.open);
         } else if (e.type === 'roundStart') {
             Sound.play('round');
+            // さっきの違和感をふるカワが教える (大当たりの始めのひとことのあと)
+            if (e.round === 1 && anomalyTalk && Customize.get('furukawa') !== 'off') {
+                const f = CONFIG.show.furukawa;
+                bubble = { text: anomalyTalk, color: f.bonusColor, from: now + 1.5, until: now + 1.5 + f.talkTime };
+            }
+            if (e.round === 1) anomalyTalk = null;
             // 昇格: 1ラウンド目の途中で図柄が現れて奇数に変わる
             if (e.round === 1 && machineRef && machineRef.bonus && machineRef.bonus.promote) {
                 promoteFx = { start: now + CONFIG.show.promote.delay, from: shown[0], to: machineRef.bonus.promote.to, bonus: machineRef.bonus };
@@ -243,6 +257,24 @@ const Lcd = (() => {
     }
 
     const summaryTime = 5;   // RASH が終わったときの結果を出しておく秒
+
+    // RASH の残り回数 (ユーザー指定 2026-10-19): 右上に「あと〇回」。時短の残り、時短が終わったら残り保留の数。
+    // おにおにRASH の違和感 count77 では「あと77回」(当たり)。大当たり中・ブラックアウト・復活の暗転・「右打ち →」の案内のあいだは出さない
+    function rashLeft(m) {
+        const jitan = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
+        return jitan > 0 ? jitan : m.holds[2].length + (m.spin && m.spin.fig === 2 ? 1 : 0);
+    }
+    function drawRashLeft(now, m, plan, phase) {
+        if (!m.rush.active || m.rush.challenge || m.bonus) return;
+        if (plan && plan.kind === 'blackout') return;
+        if (phase && phase.name.startsWith('rv') && phase.name !== 'rvkill') return;
+        if (aimNotice && now < aimNotice.until && aimNotice.aim === 'right') return;
+        const fake = plan && plan.kind === 'onioni' && plan.pattern === 'count77' && phase && (phase.name === 'anomaly' || phase.name === 'open');
+        const n = fake ? CONFIG.show.rashLeft.fake : rashLeft(m);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.fillRect(W - 62, 2, 60, 16);
+        text(`あと${n}回`, W - 32, 10, 12, fake && phase.name === 'open' ? 'rainbow' : '#ffe066', 'center', now);
+    }
 
     // ----- 設定示唆トロフィー (スロット版と同じ絵。左下に落ちてきて少し弾む) -----
     // k: 縁 / h: ハイライト / #: 本体 / d: 影 / b: 台座
@@ -309,7 +341,9 @@ const Lcd = (() => {
         return `hsl(${Math.floor((now * 240 + offset) % 360)}, 90%, 62%)`;
     }
 
+    let reverseText = false;   // おにおにRASH の違和感「文字が全部逆」(液晶の文字を後ろから並べる)
     function text(str, x, y, size, color, align = 'center', now = 0) {
+        if (reverseText) str = [...String(str)].reverse().join('');
         ctx.font = `${size}px ${FONT}`;
         ctx.textAlign = align;
         ctx.textBaseline = 'middle';
@@ -410,6 +444,13 @@ const Lcd = (() => {
     }
 
     function drawReels(now, plan, phase) {
+        // おにおにRASH の違和感: 図柄の中に 8 (ナイナイ)・9 (アルアル) が止まる
+        if (plan && plan.oddFigure && phase && phase.name === 'anomaly' && phase.local >= 0.4) {
+            drawRolling(SMALL, 0, now, 12);
+            drawRolling(SMALL, 2, now, 12);
+            Figures.draw(ctx, plan.oddFigure, SMALL.xs[1], SMALL.y, SMALL.w, SMALL.h, { glow: 0.5 + 0.5 * Math.sin(now * 10) });
+            return { reach: false, aligned: false, big: false };
+        }
         const digits = plan ? plan.digits : shown;
         const state = plan ? reelState(plan, phase) : { stop: [true, true, true], big: true };
         if (state.hidden) return { reach: false, aligned: false, big: false };
@@ -685,7 +726,13 @@ const Lcd = (() => {
         drawSprite(ctx, SPRITES.furukawa, talkFrame, W - 34, H - 46, 1.6);
         const colors = CONFIG.show.furukawa.colors;
         const color = colors[bubble.color] || '#ffffff';
-        ctx.font = `10px ${FONT}`;
+        // 長いセリフは文字を小さくして吹き出しに収める
+        let size = 10;
+        ctx.font = `${size}px ${FONT}`;
+        while (size > 7 && ctx.measureText(bubble.text).width + 12 > W - 60) {
+            size--;
+            ctx.font = `${size}px ${FONT}`;
+        }
         const width = Math.min(W - 60, ctx.measureText(bubble.text).width + 12);
         const bx = W - 40 - width;
         const by = H - 52;
@@ -696,19 +743,21 @@ const Lcd = (() => {
         ctx.strokeRect(bx + 0.5, by + 0.5, width - 1, 17);
         ctx.fillStyle = 'rgba(10, 16, 32, 0.85)';
         ctx.fillRect(bx + width, by + 6, 4, 4);
-        text(bubble.text, bx + width / 2, by + 9, 10, color, 'center', now);
+        text(bubble.text, bx + width / 2, by + 9, size, color, 'center', now);
     }
 
     // ----- 大当たり中 -----
     function drawBonus(now, m) {
         const b = m.bonus;
         band(0, H, 0.45);
-        Figures.draw(ctx, shown[0], 30, 50, 34, 40, { glow: 0.5 });
+        Figures.draw(ctx, shown[0], 22, 30, 26, 30, { glow: 0.5 });
         const hidden = b.promote && !b.promote.done;
-        text(hidden ? '大当たり' : `${b.alloc.label}個 大当たり`, W / 2 + 14, 22, 16, '#ffe066');
-        text(hidden ? `ROUND ${Math.max(1, b.round)}` : `ROUND ${Math.max(1, b.round)} / ${b.alloc.rounds}`, W / 2 + 14, 58, 20, '#ffffff');
-        if (b.phase === 'open') text(`COUNT ${b.count} / ${b.alloc.count || CONFIG.machine.bonus.count}`, W / 2 + 14, 84, 13, '#7fd3f7');
-        text('右打ち →', W / 2, 110, 14, Math.floor(now * 3) % 2 ? '#ff6a8a' : '#ffffff');
+        text(hidden ? '大当たり' : `${b.alloc.label}個 大当たり`, W / 2 + 14, 13, 14, '#ffe066');
+        // ROUND と COUNT は1行に (下に紹介のカードを出すため)
+        text(hidden ? `ROUND ${Math.max(1, b.round)}` : `ROUND ${Math.max(1, b.round)} / ${b.alloc.rounds}`, W / 2 - 6, 31, 15, '#ffffff');
+        if (b.phase === 'open') text(`COUNT ${b.count} / ${b.alloc.count || CONFIG.machine.bonus.count}`, W - 38, 31, 10, '#7fd3f7');
+        drawInfoCard(now, m);
+        text('右打ち →', W / 2, 113, 12, Math.floor(now * 3) % 2 ? '#ff6a8a' : '#ffffff');
         // RASH の2回目からは、ラウンド中にボタンで切り替え
         if (!choosing && m.rush.active && !m.rush.challenge && m.rush.hits > 2) {
             band(118, 16, 0.6);
@@ -723,12 +772,79 @@ const Lcd = (() => {
         }
     }
 
+    // ----- ラウンド中の紹介 (ユーザー指定 2026-10-19。js/round-info.js) -----
+    // キャラ紹介・ゲームの説明・舞台設定・ストーリーのカードを RoundInfo.SECONDS 秒ごとに順に出す。
+    // 次の大当たりは続きのカードから (同じカードばかりにならないように)
+    let infoCards = null;
+    let infoBase = 0;        // これまでの大当たりで出したカードの数
+    let infoStart = null;    // いまの大当たりでカードを出しはじめた時刻
+    const INFO_KIND_COLORS = { 'キャラ紹介': '#ff9ec8', 'ゲームの説明': '#7fd3f7', '舞台設定': '#3fdf6f', 'ストーリー': '#ffe066' };
+
+    function infoIndex(now) {
+        return infoBase + (infoStart === null ? 0 : Math.max(0, Math.floor((now - infoStart) / RoundInfo.SECONDS)));
+    }
+
+    // 文字が幅に収まるよう、大きさを小さくする
+    function fitText(str, x, y, size, color, maxW) {
+        let s = size;
+        ctx.font = `${s}px ${FONT}`;
+        while (s > 7 && ctx.measureText(str).width > maxW) {
+            s--;
+            ctx.font = `${s}px ${FONT}`;
+        }
+        text(str, x, y, s, color, 'left');
+    }
+
+    // カードの絵: キャラクター (こおりくん・ともいし・ふるカワはドット絵、敵は Characters)。companions は3人並べる
+    function drawInfoPortrait(who, cx, footY, maxW, maxH, now) {
+        const frame = Math.floor(now * 3) % 2;
+        if (who === 'companions') {
+            ['yasu', 'tamu', 'dake'].forEach((id, i) => {
+                const size = Characters.size(id);
+                Characters.drawCompanion(ctx, id, cx - 12 + i * 12, footY, { scale: Math.min(12 / size.w, maxH / size.h), frame });
+            });
+            return;
+        }
+        const sprite = SPRITES[who];
+        if (sprite) {
+            const frameName = who === 'koori' ? (frame ? 'walk1' : 'walk2') : 'idle';
+            const rows = sprite.frames[frameName] || sprite.frames[Object.keys(sprite.frames)[0]];
+            const scale = Math.min(maxW / rows[0].length, maxH / rows.length);
+            drawSprite(ctx, sprite, frameName, cx - rows[0].length * scale / 2, footY - rows.length * scale, scale);
+            return;
+        }
+        const size = Characters.size(who);
+        if (size.w) Characters.drawEnemy(ctx, who, cx, footY, { scale: Math.min(maxW / size.w, maxH / size.h), frame });
+    }
+
+    function drawInfoCard(now, m) {
+        if (!infoCards) infoCards = RoundInfo.cards(CONFIG, m.specId);
+        if (infoStart === null) infoStart = now;   // 前回の続きで大当たりの途中から始めたとき
+        if (now < infoStart) return;
+        const index = infoIndex(now);
+        const card = infoCards[index % infoCards.length];
+        const local = (now - infoStart) % RoundInfo.SECONDS;
+        const top = 42, bottom = 88;   // ふるカワの吹き出し (右下) と重ならない高さ
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, local / 0.3);
+        ctx.fillStyle = 'rgba(8, 16, 34, 0.85)';
+        ctx.fillRect(4, top, W - 8, bottom - top);
+        ctx.fillStyle = INFO_KIND_COLORS[card.kind] || '#ffffff';
+        ctx.fillRect(4, top, W - 8, 1);
+        const textX = card.who ? 58 : 12;
+        if (card.who) drawInfoPortrait(card.who, 30, bottom - 3, 40, 38, now);
+        text(`【${card.kind}】`, W - 8, top + 7, 8, INFO_KIND_COLORS[card.kind] || '#ffffff', 'right');
+        fitText(card.title, textX, top + 8, 11, '#ffffff', W - textX - 62);
+        card.lines.forEach((line, i) => fitText(line, textX, top + 19 + i * 9, 9, '#d8e8ff', W - textX - 8));
+        ctx.restore();
+    }
+
     // ----- 1フレーム -----
     function background(m, plan, phase) {
         if (m.bonus) return 'goldHall';
         if (plan && phase) {
             if (plan.kind === 'challenge') return CONFIG.show.challengeBattle.map;
-            if (plan.kind === 'onioni') return 'castleHall';
+            if (plan.kind === 'onioni') return plan.pattern === 'fullMoon' && (phase.name === 'anomaly' || phase.name === 'open') ? 'fullMoon' : 'castleHall';
             if (plan.kind === 'rashBattle') return plan.enemyInfo.map;
             if (phase.name === 'challenge') return CONFIG.show.challenges[plan.challenge].map;
             if (phase.name === 'reach' || phase.name === 'battle' || phase.name === 'result') return CONFIG.show.battles[plan.enemy].map;
@@ -785,6 +901,9 @@ const Lcd = (() => {
             ctx.scale(1, -1);
         } else if (fx === 'mono') {
             ctx.filter = 'grayscale(1) contrast(1.2)';
+        } else if (fx === 'shake') {
+            // ゆれる
+            ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
         }
         ctx.drawImage(effectCanvas, 0, 0);
         ctx.restore();
@@ -796,6 +915,7 @@ const Lcd = (() => {
         const phase = plan ? phaseAt(plan, m.spin.elapsed) : null;
         if (phase && (phase.name === 'battle' || phase.name === 'cfinal')) phase.pushing = phase.local >= phase.t - CONFIG.show.pushTime;
         currentPhase = phase;
+        reverseText = Boolean(plan && plan.kind === 'onioni' && plan.pattern === 'reverse' && phase && phase.name === 'anomaly');
         if (m) rashMode = m.rashMode;
         machineRef = m;
         // オープニング・エンディング中は、それだけを描く
@@ -845,7 +965,8 @@ const Lcd = (() => {
             }
             if (state.aligned && plan && plan.win) text('大当たり！', W / 2, 18, 14, 'rainbow', 'center', now);
             const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
-            if (m.rush.active && !m.rush.challenge && !(plan && plan.kind !== 'plain' && plan.fig === 2) && !(plan && plan.kind === 'blackout')) {
+            const onioniSpin = plan && plan.kind === 'onioni' && !(phase && phase.name === 'open');
+            if (m.rush.active && !m.rush.challenge && (onioniSpin || !(plan && plan.kind !== 'plain' && plan.fig === 2)) && !(plan && plan.kind === 'blackout')) {
                 text(Machine.inJitan(m) ? `${rashName()} ${m.rush.hits - 1}連  時短 残り ${left}回` : `${rashName()} ${m.rush.hits - 1}連  残り保留`, W / 2, 112, 11, '#7fd3f7');
             }
         }
@@ -877,6 +998,7 @@ const Lcd = (() => {
         drawHolds(now, m);
         drawFurukawa(now);
 
+        drawRashLeft(now, m, plan, phase);
         if (aimNotice && now < aimNotice.until && !m.bonus) {
             const blink = Math.floor(now * 3) % 2;
             if (aimNotice.aim === 'right') text('右打ち →', W - 40, 12, 12, blink ? '#ff6a8a' : '#ffffff');

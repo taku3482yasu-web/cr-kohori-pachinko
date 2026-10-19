@@ -165,7 +165,7 @@ const Machine = (() => {
         const { fig, result, plan } = m.spin;
         m.spin = null;
         if (fig === 1) {
-            const back = Scenario.endStage(m.stage, result);
+            const back = Scenario.endStage(m.config, m.stage, result);
             if (back) emit(m, 'stageChange', { stage: back });
         }
         // 突破チャレンジのバトルは、決着のラウンドで終わり

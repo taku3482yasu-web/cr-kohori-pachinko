@@ -20,7 +20,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const JS_DIR = path.join(ROOT, 'js');
 // 画面に触らないファイルだけ読み込む
-const GAME_FILES = ['config.js', 'characters.js', 'scenario.js', 'machine.js', 'records.js', 'updates.js', 'bgm.js'];
+const GAME_FILES = ['config.js', 'sprites.js', 'characters.js', 'scenario.js', 'machine.js', 'records.js', 'updates.js', 'bgm.js', 'round-info.js'];
 
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => {
@@ -59,7 +59,7 @@ function loadGame(seed) {
     for (const file of GAME_FILES) {
         vm.runInContext(fs.readFileSync(path.join(JS_DIR, file), 'utf8'), context, { filename: file });
     }
-    const game = vm.runInContext('({ CONFIG, Characters, Scenario, Machine, SettingHint, Collection, DataCounter, SettingEstimate, UpdateNotes, UPDATES, Bgm, BGM_TRACKS })', context);
+    const game = vm.runInContext('({ CONFIG, SPRITES, Characters, Scenario, Machine, SettingHint, Collection, DataCounter, SettingEstimate, UpdateNotes, UPDATES, Bgm, BGM_TRACKS, RoundInfo })', context);
     game.rng = seededMath.random;
     return game;
 }
@@ -105,12 +105,12 @@ function pick(rates, rng) {
     return 'none';
 }
 
-// specId のスペック・設定 setting の台を hours 時間まわし、イベントを図鑑とデータカウンターにも記録する
-function run(game, specId, setting, hours) {
+// specId のスペック・設定 setting の台を hours 時間まわし、イベントを図鑑とデータカウンターにも記録する (mode: RASH のモード)
+function run(game, specId, setting, hours, mode = 'koori') {
     const { CONFIG, Machine, Collection, DataCounter, SettingHint } = game;
     const rng = game.rng;
     const m = Machine.create(CONFIG, specId, rng);
-    Machine.setRashMode(m, 'koori');
+    Machine.setRashMode(m, mode);
     const DT = 0.2;
     const left = RATES.left(CONFIG.settings[setting - 1].rotation);
     const payouts = { ...CONFIG.payout, ...m.spec.payout };
@@ -126,7 +126,8 @@ function run(game, specId, setting, hours) {
         renchan: 0, renchanWrong: 0,                    // 「〇G連確定」と、〇 が残り保留の当たりの数と違った回数
         kooriBattles: {}, earlyStreak: 0,               // こおりRASH の相手ごとの [バトル, 勝ち] と、連チャン数が足りないのに出た相手
         kai: { holds: 0, battles: 0, mismatch: 0 },     // 怪の保留・怪のバトル・保留とバトルが合わない (先バレしたのに怪でない など)
-        revival: { hits: 0, revivals: 0, wrongLabel: 0, sure: 0, lose: 0, labels: {} }   // こおりRASH の当たり・復活・出玉の振り分け
+        revival: { hits: 0, revivals: 0, wrongLabel: 0, sure: 0, lose: 0, labels: {} },  // こおりRASH の当たり・復活・出玉の振り分け
+        onioni: { hits: 0, patterns: {}, wrongLabel: 0, missPattern: 0 }   // おにおにRASH の当たり・違和感ごとの回数・出玉が合わない・外れの違和感
     };
     const ctx = () => ({ balls, launched, spins1: m.stats.spins1 });
     const record = e => {
@@ -202,6 +203,17 @@ function run(game, specId, setting, hours) {
                 }
             }
             if (e.type === 'hold' && e.fig === 2 && e.result.kai) log.kai.holds++;
+            // おにおにRASH: 違和感は当たりだけ。図柄 8・9 は出玉が合う当たりだけ (1/99 は 900個)
+            if (e.type === 'spinStart' && e.plan.kind === 'onioni') {
+                const o = log.onioni;
+                if (e.plan.win) o.hits++;
+                if (e.plan.pattern) {
+                    o.patterns[e.plan.pattern] = (o.patterns[e.plan.pattern] || 0) + 1;
+                    if (!e.plan.win) o.missPattern++;
+                    const want = (CONFIG.show.onioniRash.patterns[e.plan.pattern].labels || {})[specId];
+                    if (want && (!e.result.alloc || e.result.alloc.label !== want)) o.wrongLabel++;
+                }
+            }
             if (e.type === 'renchan') {
                 log.renchan++;
                 if (e.games !== m.holds[2].filter(h => h.kind !== 'miss').length) log.renchanWrong++;
@@ -390,6 +402,63 @@ test('復活: こおりRASH の当たりの約20%、1/99 は 900個 確定、確
     }
 });
 
+test('おにおにRASH: 違和感は当たりだけで全種類出て、図柄 8・9 は 1/99 で 900個 の当たりだけ', () => {
+    const game = loadGame(SEED + 30);
+    const { log } = run(game, 's99', 4, Math.min(HOURS, 120), 'onioni');
+    const o = log.onioni;
+    assert(o.hits > 200, `おにおにRASH の当たりが少ない (${o.hits})`);
+    assertEqual(o.missPattern, 0, '外れの違和感');
+    assertEqual(o.wrongLabel, 0, '900個 でない当たりで図柄 8・9');
+    for (const [id, p] of Object.entries(CONFIG.show.onioniRash.patterns)) assert(o.patterns[id] > 0, `違和感「${p.name}」が1回も出ない`);
+    const shown = Object.values(o.patterns).reduce((a, x) => a + x, 0);
+    assertEqual(shown, o.hits, '違和感の数と当たりの数');
+    // 図柄 8・9 は config の図柄にあり、ふだんの変動 (1〜7) には出ない
+    assert(CONFIG.show.figures[8] && CONFIG.show.figures[9], '図柄 8・9 がない');
+    assert([...CONFIG.show.hitFigures.odd, ...CONFIG.show.hitFigures.even].every(n => n <= 7), '当たりの図柄に 8・9');
+});
+
+test('チャンスステージ: きっかけの保留を消化したら、元とは別の通常ステージへ', () => {
+    const { Scenario } = base;
+    const cycle = CONFIG.show.stages.cycle;
+    for (let i = 0; i < cycle.length; i++) {
+        const state = Scenario.newStage();
+        state.index = i;
+        state.id = cycle[i];
+        const target = { kind: 'hit' };
+        state.hi = { target, id: 'fullMoon' };
+        assertEqual(Scenario.endStage(CONFIG, state, { kind: 'miss' }), null, 'きっかけでない保留で戻った');
+        const back = Scenario.endStage(CONFIG, state, target);
+        assert(back && back.kind === 'back', 'きっかけの保留で戻らない');
+        assert(back.id !== cycle[i] && cycle.includes(back.id), `${cycle[i]} のあとが ${back.id}`);
+        assert(!state.hi && state.since === 0, 'チャンスステージが残っている');
+    }
+});
+
+test('おにおにRASH の違和感: ラウンドの始めにふるカワが教えるひとことが、どの違和感にもある', () => {
+    for (const [id, p] of Object.entries(CONFIG.show.onioniRash.patterns)) {
+        assert(p.talk && p.talk.length > 0, `「${p.name}」のひとことがない`);
+        assert(p.talk.length <= 18, `「${p.name}」のひとことが長い (${p.talk.length}文字)`);
+        assert(p.weight > 0, `「${p.name}」の重み`);
+        void id;
+    }
+    assert(Object.keys(CONFIG.show.onioniRash.patterns).length >= 24, '違和感の数');
+});
+
+test('ラウンド中の紹介: キャラ紹介・ゲームの説明・舞台設定・ストーリーがあり、絵が描けて、文章がある', () => {
+    const { RoundInfo, SPRITES, Characters } = base;
+    for (const specId of Object.keys(CONFIG.specs)) {
+        const cards = RoundInfo.cards(CONFIG, specId);
+        const kinds = new Set(cards.map(c => c.kind));
+        assertEqual([...kinds].sort().join(), ['キャラ紹介', 'ゲームの説明', '舞台設定', 'ストーリー'].sort().join(), '紹介の種類');
+        for (const c of cards) {
+            assert(c.title && c.lines.length > 0 && c.lines.every(l => l.length > 0), `${c.title} の文章`);
+            assert(c.lines.every(l => !/undefined|NaN/.test(l)), `${c.title} に数値が入っていない`);
+            assert(c.who === null || c.who === 'companions' || SPRITES[c.who] || Characters.has(c.who), `${c.title} の絵 (${c.who})`);
+        }
+    }
+    assert(RoundInfo.SECONDS >= 3, 'カードを出す秒が短すぎる');
+});
+
 test('〇G連確定: 〇 は残り保留の当たりの数 (このあと確定している連チャンの数)', () => {
     for (const { specId, log } of runs) {
         assert(log.renchan > 0, `${specId} で〇G連確定が1回もない (確かめられない)`);
@@ -495,13 +564,23 @@ test('BGM: 台の状態で曲が決まり、曲はすべて同じ長さのメロ
     assertEqual(Bgm.trackFor(m, null), 'normal', '通常時');
     assertEqual(Bgm.trackFor(m, 'opening'), 'normal', 'オープニング');
     m.stage.hi = { id: 'seCastle' };
-    assertEqual(Bgm.trackFor(m, null), 'hiStage', '高確率ステージ');
+    assertEqual(Bgm.trackFor(m, null), 'seCastle', 'チャンスステージ (SE城前)');
+    m.stage.hi = { id: 'fullMoon' };
+    assertEqual(Bgm.trackFor(m, null), 'fullMoon', 'チャンスステージ (満月)');
     m.rush = { active: true, hits: 1, challenge: true };
     assertEqual(Bgm.trackFor(m, null), 'challenge', '突破チャレンジ');
     m.rush.challenge = false;
     assertEqual(Bgm.trackFor(m, null), 'kooriRash', 'こおりRASH');
     Machine.setRashMode(m, 'onioni');
     assertEqual(Bgm.trackFor(m, null), 'onioniRash', 'おにおにRASH');
+    // 怪: こおりRASH の怪のバトルは変動の始めから、おにおに・怪 は違和感が始まってから
+    m.spin = { plan: { kind: 'rashBattle', kai: true, phases: [] }, elapsed: 0 };
+    assertEqual(Bgm.trackFor(m, null), 'kai', 'こおりRASH の怪のバトル');
+    m.spin = { plan: { kind: 'onioni', pattern: 'kai', phases: [{ name: 'wait', t: 1.5 }, { name: 'anomaly', t: 3 }] }, elapsed: 1 };
+    assertEqual(Bgm.trackFor(m, null), 'onioniRash', 'おにおに・怪 の違和感の前');
+    m.spin.elapsed = 2;
+    assertEqual(Bgm.trackFor(m, null), 'kai', 'おにおに・怪 の違和感');
+    m.spin = null;
     m.bonus = { round: 1 };
     assertEqual(Bgm.trackFor(m, null), 'bonus', '大当たり中');
     assertEqual(Bgm.trackFor(m, 'ending'), 'bonus', 'エンディング');

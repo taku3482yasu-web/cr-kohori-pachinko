@@ -113,10 +113,16 @@ const Scenario = (() => {
         return null;
     }
 
-    // 変動が終わったとき: 高確率ステージのきっかけの保留を消化したら元のステージに戻る
-    function endStage(state, result) {
+    // 変動が終わったとき: 高確率ステージ (チャンスステージ) のきっかけの保留を消化したら、次の通常ステージへ
+    // (前は元のステージに戻っていた。2026-10-20 ユーザー指定で、別の通常ステージに行くようにした)
+    function endStage(config, state, result) {
         if (state.hi && state.hi.target === result) {
+            const cycle = config.show.stages.cycle;
             state.hi = null;
+            state.index = (state.index + 1) % cycle.length;
+            state.id = cycle[state.index];
+            state.since = 0;
+            state.rolled = false;
             return { id: state.id, kind: 'back' };
         }
         return null;
@@ -388,7 +394,11 @@ const Scenario = (() => {
             p.kind = 'onioni';
             if (win) {
                 const t = show.onioniRash.timing;
-                p.pattern = result.forcePattern || weighted(Object.fromEntries(Object.entries(show.onioniRash.patterns).map(([id, x]) => [id, x.weight])), rng);
+                // labels のある違和感 (図柄 8・9) は、出玉が合う当たりでだけ選ぶ (1/99 は 900個)
+                const fits = x => !x.labels || !x.labels[spin.specId] || (result.alloc && result.alloc.label === x.labels[spin.specId]);
+                p.pattern = result.forcePattern || weighted(Object.fromEntries(Object.entries(show.onioniRash.patterns)
+                    .map(([id, x]) => [id, fits(x) ? x.weight : 0])), rng);
+                if (p.pattern === 'figure8' || p.pattern === 'figure9') p.oddFigure = p.pattern === 'figure8' ? 8 : 9;
                 p.phases = [{ name: 'wait', t: t.wait }, { name: 'anomaly', t: t.anomaly }, { name: 'open', t: t.open }];
                 p.reveal = { phase: 'open', at: 0.3 };
             } else {

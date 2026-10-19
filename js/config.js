@@ -232,7 +232,10 @@ const CONFIG = {
             4: { name: 'おかがっぱ', ids: ['okagappa'] },
             5: { name: 'シバター', ids: ['shibata'] },
             6: { name: 'やすさん・たむさん・だけさん', ids: ['yasu', 'tamu', 'dake'] },
-            7: { name: 'こおりくん', ids: ['koori'] }
+            7: { name: 'こおりくん', ids: ['koori'] },
+            // おにおにRASH の違和感でだけ出る図柄 (ユーザー指定 2026-10-19)。ふだんの変動には出ない (Figures.COUNT は 7)
+            8: { name: 'シーシャ・ナイテイ・ナイナイ', ids: ['naitei'] },
+            9: { name: 'シーシャ・ナイテイ・アルアル', ids: ['aruaru'] }
         },
         figureColors: { odd: '#ff3a4a', even: '#3a8aff' },
         // 大当たりでそろう図柄: 時短 (突破チャレンジ) へ行く初当たりと、RUSH 中の大きい当たり (bigLabel 個以上) は奇数 (赤)、
@@ -367,18 +370,40 @@ const CONFIG = {
         onioniRash: {
             timing: { wait: 1.5, anomaly: 3, open: 2 },
             // upsideDown・koori・tomoishi・naitei は 2026-10-19 にユーザー指定で追加。flip は左右反転にした (上下は upsideDown)
+            // talk: 当たりのラウンドの始めに、ふるカワが さっきの違和感を教えるひとこと (ユーザー指定 2026-10-20。吹き出しに入るよう短く)
             patterns: {
-                open: { name: 'そのまま開眼', weight: 20 },
-                rainbow: { name: 'おにおにが虹色', weight: 13 },
-                flip: { name: '画面が左右反転', weight: 10 },
-                upsideDown: { name: '画面が上下逆', weight: 10 },
-                mono: { name: '白黒', weight: 10 },
-                zoom: { name: '顔がドアップ', weight: 12 },
-                koori: { name: 'こおりくんが現れる', weight: 10 },
-                tomoishi: { name: 'ともいしのカットイン「内定とりなさい！」', weight: 8 },
-                naitei: { name: 'シーシャ・ナイテイ・ナイナイのカットイン「内定は…！」', weight: 7 }
+                open: { name: 'そのまま開眼', weight: 20, talk: 'さっきは そのまま開眼したね！' },
+                rainbow: { name: 'おにおにが虹色', weight: 13, talk: 'おにおにが虹色に光ってたよ！' },
+                flip: { name: '画面が左右反転', weight: 10, talk: 'さっき画面が左右反転してたよ！' },
+                upsideDown: { name: '画面が上下逆', weight: 10, talk: '画面が上下さかさまだったね！' },
+                mono: { name: '白黒', weight: 10, talk: '画面が白黒になってたよ！' },
+                zoom: { name: '顔がドアップ', weight: 12, talk: '顔がドアップになってたね…！' },
+                koori: { name: 'こおりくんが現れる', weight: 10, talk: 'こおりくんが見に来てたよ！' },
+                tomoishi: { name: 'ともいしのカットイン「内定とりなさい！」', weight: 8, talk: 'ともいしさんが応援してたね！' },
+                naitei: { name: 'シーシャ・ナイテイ・ナイナイのカットイン「内定は…！」', weight: 7, talk: 'ナイナイが出てきてたよ…！' },
+                // 2026-10-19 ユーザー指定で追加 (重みは Claude が決めた)
+                kai: { name: 'おにおにが おにおに・怪 になる', weight: 9, talk: 'おにおに・怪 になってたよ！' },
+                figure8: { name: '図柄に 8 (ナイナイ) が出る', weight: 5, labels: { s99: 900 }, talk: '図柄に 8 が出てたよ！' },
+                figure9: { name: '図柄に 9 (アルアル) が出る', weight: 4, labels: { s99: 900 }, talk: '図柄に 9 が出てたよ！' },
+                reverse: { name: '文字が全部逆になる', weight: 8, talk: '文字が全部さかさまだったね！' },
+                count77: { name: '残り回数が「あと77回」', weight: 7, talk: '「あと77回」って出てたよ！' },
+                // 2026-10-20 ユーザー指定で10個追加 (中身と重みは Claude が決めた)
+                sleepTalk: { name: 'おにおにが寝言「お金かえせ…」', weight: 5, talk: 'おにおにが寝言を言ってたね…' },
+                rainbowZ: { name: 'Zzz が虹色', weight: 5, talk: 'Zzz が虹色になってたよ！' },
+                twin: { name: 'おにおにが2人になる', weight: 5, talk: 'おにおにが2人いたよ！？' },
+                tiny: { name: 'おにおにが小さくなる', weight: 5, talk: 'おにおにが小さくなってたね！' },
+                goldThrone: { name: '椅子が金色になる', weight: 5, talk: '椅子が金色になってたよ！' },
+                oneEye: { name: '片目だけ開いている', weight: 5, talk: '片目だけ開いてたよ…！' },
+                fullMoon: { name: '急に満月の夜になる', weight: 5, talk: '急に満月の夜になってたね！' },
+                shake: { name: '画面がゆれる', weight: 5, talk: '画面がゆれてたよ！' },
+                okagappaWalk: { name: 'おかがっぱが横切る', weight: 5, talk: 'おかがっぱが横切ってたよ！' },
+                goldDogSit: { name: 'ゴールド金面犬がとなりに座っている', weight: 5, talk: '金面犬がとなりに座ってたよ！' }
             }
+            // labels: スペックごとに、この違和感が出る当たりの出玉 (図柄 8・9 は 1/99 で 900個 確定。ユーザー指定)
         },
+        // RASH の残り回数 (ユーザー指定 2026-10-19): RASH 中は液晶の右上に「あと〇回」(時短の残り。時短が終わったら残り保留の数)。
+        // おにおにRASH の違和感 count77 では「あと77回」と出る (出たら当たり)
+        rashLeft: { fake: 77 },
         // RASH 中の保留 (ユーザー指定 2026-10-19): 当たりの保留の rate で、黒い保留か回る保留になる。外れでは出ない (出たら当たり確定)
         rashHolds: { rate: 0.25, kinds: { black: 50, spin: 50 } },
 

@@ -97,6 +97,17 @@ const RashView = (() => {
         });
     }
 
+    // 片目 (向かって左) だけ閉じる (違和感「片目だけ開いている」)
+    function closeOneEye(box) {
+        const { ctx } = kit;
+        const [ex, ey] = EYES[0];
+        const x = box.left + ex * box.scale, y = box.top + ey * box.scale;
+        ctx.fillStyle = '#d83a2a';
+        ctx.fillRect(x - 1, y - 1, 3 * box.scale + 2, 2 * box.scale + 2);
+        ctx.fillStyle = '#1a0a0a';
+        ctx.fillRect(x, y + box.scale, 3 * box.scale, Math.max(1, box.scale * 0.6));
+    }
+
     // 開いた目を光らせる
     function glowEyes(box, now) {
         const { ctx } = kit;
@@ -109,7 +120,7 @@ const RashView = (() => {
 
     let tintCanvas = null;
     // glow: 開いた目を光らせる (おにおにRASH の開眼)
-    function drawOnioni(cx, ground, scale, { eyesOpen = false, glow = false, rainbow = false, now = 0, hurt = false, alpha = 1 } = {}) {
+    function drawOnioni(cx, ground, scale, { eyesOpen = false, glow = false, rainbow = false, now = 0, hurt = false, alpha = 1, kai = false } = {}) {
         const box = onioniBox(cx, ground, scale);
         if (rainbow) {
             // 一度べつの絵に描いてから、虹色を重ねる
@@ -132,8 +143,9 @@ const RashView = (() => {
             g.globalCompositeOperation = 'source-over';
             kit.ctx.drawImage(tintCanvas, Math.round(cx - w / 2), Math.round(ground - h + 1));
         } else {
-            Characters.drawEnemy(kit.ctx, 'onioni', cx, ground, { scale, hurt, alpha });
+            Characters.drawEnemy(kit.ctx, 'onioni', cx, ground, { scale, hurt, alpha, kai });
         }
+        if (kai) return box;   // 怪: 目のまわりの靄と赤く光る目 (閉じた目は描かない)
         if (!eyesOpen) closeEyes(box);
         else if (glow) glowEyes(box, now);
         return box;
@@ -257,11 +269,11 @@ const RashView = (() => {
     }
 
     // ----- おにおにRASH -----
-    function drawThrone(cx, ground) {
+    function drawThrone(cx, ground, gold = false) {
         const { ctx } = kit;
-        ctx.fillStyle = '#4a0a14';
+        ctx.fillStyle = gold ? '#8a6a10' : '#4a0a14';
         ctx.fillRect(cx - 40, ground - 92, 80, 92);
-        ctx.fillStyle = '#7a1a24';
+        ctx.fillStyle = gold ? '#ffd040' : '#7a1a24';
         ctx.fillRect(cx - 34, ground - 86, 68, 70);
         ctx.fillStyle = '#d0a040';
         ctx.fillRect(cx - 40, ground - 92, 80, 4);
@@ -278,7 +290,8 @@ const RashView = (() => {
         const local = phase.local;
         const pattern = plan.pattern;
         const open = n === 'open';
-        drawThrone(cx, ground);
+        const shown = n === 'anomaly' || open;   // 違和感が見えているあいだ
+        drawThrone(cx, ground, pattern === 'goldThrone' && shown);
 
         if (pattern === 'zoom' && (n === 'anomaly' || open)) {
             // 顔のドアップ: 顔のまわりだけを大きく
@@ -286,8 +299,31 @@ const RashView = (() => {
             const faceY = 12;   // ドット絵の顔の真ん中の高さ
             const ground2 = H / 2 + (ONI.h - faceY) * scale;
             drawOnioni(cx, ground2, scale, { eyesOpen: open, glow: open, now });
+        } else if (pattern === 'twin' && shown) {
+            // おにおにが2人
+            drawOnioni(cx - 34, ground - 4, 1.5, { eyesOpen: open, glow: open, now });
+            drawOnioni(cx + 34, ground - 4, 1.5, { eyesOpen: open, glow: open, now });
         } else {
-            drawOnioni(cx, ground - 4, 1.8, { eyesOpen: open, glow: open, rainbow: pattern === 'rainbow' && (n === 'anomaly' || open), now });
+            const kai = pattern === 'kai' && shown && !(n === 'anomaly' && local < 0.5);
+            const scale = pattern === 'tiny' && shown ? 0.9 : 1.8;
+            const oneEye = pattern === 'oneEye' && n === 'anomaly';
+            const box = drawOnioni(cx, ground - 4, scale, { eyesOpen: open || oneEye, glow: open, rainbow: pattern === 'rainbow' && shown, now, kai });
+            if (oneEye) closeOneEye(box);
+            if (kai && n === 'anomaly') text('おにおに・怪', cx, 40, 14, '#c070ff');
+        }
+        if (pattern === 'sleepTalk' && n === 'anomaly' && local > 0.4) {
+            // 寝言
+            band(30, 18, 0.5);
+            text('…お金かえせ…', cx, 39, 12, '#ffffff');
+        }
+        if (pattern === 'okagappaWalk' && n === 'anomaly') {
+            // おかがっぱが左から右へ横切る
+            const x = -20 + (local / phase.t) * (W + 40);
+            Characters.drawEnemy(ctx, 'okagappa', x, ground, { scale: 1.3, frame: Math.floor(now * 6) % 2 });
+        }
+        if (pattern === 'goldDogSit' && shown) {
+            // となりにゴールド金面犬がおすわり
+            Characters.drawEnemy(ctx, 'goldDog', cx + 76, ground, { scale: 1.1, frame: 0 });
         }
 
         const anomaly = n === 'anomaly';
@@ -320,10 +356,11 @@ const RashView = (() => {
             ctx.restore();
         }
 
-        if (!open) {
-            // 眠っている: Zzz
+        if (!open && !(pattern === 'oneEye' && n === 'anomaly')) {
+            // 眠っている: Zzz (違和感「Zzz が虹色」では大きく虹色に)
             const z = (now * 0.7) % 1;
-            text('Z', cx + 30 + z * 10, 50 - z * 20, 8 + Math.round(z * 6), `rgba(255,255,255,${1 - z})`);
+            const rainbowZ = pattern === 'rainbowZ' && n === 'anomaly';
+            text('Z', cx + 30 + z * 10, 50 - z * 20, (rainbowZ ? 14 : 8) + Math.round(z * 6), rainbowZ ? 'rainbow' : `rgba(255,255,255,${1 - z})`, 'center', now);
         }
         if (open) {
             if (local < 0.3) {
@@ -475,6 +512,7 @@ const RashView = (() => {
         if (plan.pattern === 'flip' && phase.name === 'anomaly') return 'flip';
         if (plan.pattern === 'upsideDown' && phase.name === 'anomaly') return 'upsideDown';
         if (plan.pattern === 'mono' && phase.name === 'anomaly') return 'mono';
+        if (plan.pattern === 'shake' && phase.name === 'anomaly') return 'shake';
         return null;
     }
 
