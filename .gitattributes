@@ -1,2 +1,3 @@
 # git のフック (sh で動く) やツールのスクリプトは Windows でも改行を LF のままにする
 *.sh text eol=lf
+.githooks/* text eol=lf
