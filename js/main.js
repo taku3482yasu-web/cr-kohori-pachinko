@@ -35,6 +35,7 @@
         world: null,
         view: null,
         lastAim: 'left',
+        spinsBase: 0,          // 回転数の表示をここから数える (突破チャレンジ・RASH が終わったら数え直す)
         rushStartBalls: 0
     };
     if (params.has('strength')) game.strength = Number(params.get('strength'));
@@ -68,7 +69,8 @@
         game.board = Board.build(CONFIG, board);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
-        game.stats = { launched: 0, launchedLeft: 0, foul: 0, heso: 0, gate: 0, denchu: 0, attacker: 0, general: 0, warp: 0, out: 0, paid: 0, firstHits: 0 };
+        game.spinsBase = 0;
+        game.stats = { launched: 0, launchedLeft: 0, foul: 0, foulLeft: 0, heso: 0, gate: 0, denchu: 0, attacker: 0, general: 0, warp: 0, out: 0, paid: 0, firstHits: 0 };
         Lcd.reset(game.machine);
         MachineButton.prompt(false);
         $('spec-display').textContent = `${spec.label}${settingKnown ? ` / 設定${setting}` : ''}`;
@@ -105,6 +107,7 @@
         const s = game.stats;
         if (e.type === 'foul') {
             s.foul++;
+            if (game.lastAim === 'left') s.foulLeft++;
             game.balls++;   // ファールの玉は上皿に戻る
         } else if (e.type === 'pocket') {
             s[e.payout]++;
@@ -126,7 +129,14 @@
     function handleMachineEvent(e) {
         if (e.type === 'bonusStart' && !e.rush) game.stats.firstHits++;
         if (e.type === 'jitanStart' && e.rushHits === 1) game.rushStartBalls = game.balls;
-        if (e.type === 'rushEnd') e.balls = game.balls - game.rushStartBalls;
+        if (e.type === 'rushEnd') {
+            e.balls = game.balls - game.rushStartBalls;
+            // 突破チャレンジ・RASH が終わったら、回転数と回転率を数え直す (ユーザー指定)
+            game.spinsBase = game.machine.stats.spins1;
+            game.stats.launchedLeft = 0;
+            game.stats.heso = 0;
+            game.stats.foulLeft = 0;
+        }
         // RASH 突入の大当たり中に、こおりRASH / おにおにRASH を選ぶ
         if (e.type === 'bonusStart' && e.entry) openRashChoice();
         if (e.type === 'bonusEnd') closeRashChoice();
@@ -139,9 +149,9 @@
         const m = game.machine;
         $('balls').textContent = game.balls;
         $('launched').textContent = s.launched;
-        $('spins').textContent = m.stats.spins1;
+        $('spins').textContent = m.stats.spins1 - game.spinsBase;
         // 回転率: 左打ちの 250発 (1000円分) あたりのヘソ入賞 (特図1 の抽選の回数)。ファールで戻った玉は打っていないことにする
-        const shot = s.launchedLeft - s.foul;
+        const shot = s.launchedLeft - s.foulLeft;
         $('rate').textContent = shot > 0 ? (s.heso / shot * 250).toFixed(1) : '-';
         $('mode-display').textContent = modeText(m);
         $('mode-display').className = 'mode-display mode-' + modeClass(m);
@@ -165,6 +175,7 @@
     function modeText(m) {
         if (m.bonus) {
             const b = m.bonus;
+            if (b.promote && !b.promote.done) return `大当たり  ${b.round}R`;   // 昇格するまで中身を隠す
             return `大当たり ${b.alloc.label}個  ${b.round}/${b.alloc.rounds}R`;
         }
         if (m.small) return '小当たり  V を狙え！';

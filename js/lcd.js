@@ -47,6 +47,38 @@ const Lcd = (() => {
     let stageFx = null;     // ステージが変わったところ { stage: { id, kind }, start }
     let renchan = null;     // 「〇G連確定！」{ games, start }
     let holdFx = null;      // 保留変化 { result, current, start }
+    let promoteFx = null;   // 図柄の昇格 { start, from, to, bonus }
+    let machineRef = null;  // いまの台 (イベントのときに大当たりの中身を見るため)
+
+    // 図柄の昇格: 偶数の図柄が大きく現れて震え、光って奇数の図柄に変わる →「昇格！」
+    function drawPromote(now) {
+        if (!promoteFx) return;
+        const t = now - promoteFx.start;
+        if (t < 0) return;
+        const total = CONFIG.show.promote.time;
+        if (t > total) {
+            promoteFx = null;
+            return;
+        }
+        const flip = 1.6;
+        if (t >= flip && !promoteFx.bonus.promote.done) {
+            promoteFx.bonus.promote.done = true;
+            shown = [promoteFx.to, promoteFx.to, promoteFx.to];
+            Sound.play('win');
+            say(CONFIG.show.furukawa.congratsLine, 6, now);
+        }
+        band(0, H, 0.6);
+        const shake = t < flip ? Math.sin(t * 60) * Math.min(3, t * 3) : 0;
+        const digit = t < flip ? promoteFx.from : promoteFx.to;
+        const pop = t < 0.3 ? t / 0.3 : 1;
+        Figures.draw(ctx, digit, W / 2 + shake, 62, Math.round(56 * pop) || 1, Math.round(64 * pop) || 1, { glow: t >= flip ? 1 : 0.3 });
+        if (t >= flip && t < flip + 0.3) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${(flip + 0.3 - t) * 3})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+        if (t >= flip) text('昇格！', W / 2, 112, 22, 'rainbow', 'center', now);
+        else if (t > 0.5) text('…！？', W / 2, 112, 16, '#ffffff');
+    }
 
     // 保留変化: 変わった保留のまわりに光の輪と「ピキーン！」
     function drawHoldFx(now, m) {
@@ -107,7 +139,7 @@ const Lcd = (() => {
     }
 
     function reset() {
-        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = holdFx = null;
+        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = holdFx = promoteFx = null;
     }
 
     function show(text, color, now, seconds = 1.2) {
@@ -165,9 +197,9 @@ const Lcd = (() => {
             // RASH の 10回目の大当たり: ラウンド中にエンディング
             Story.play('ending', now);
         } else if (e.type === 'bonusStart') {
-            bonusTalk(e.entry ? 'entry' : e.label >= CONFIG.show.bigLabel ? 'big' : 'small', now, CONFIG.machine.bonus.opening * 0.6);
+            bonusTalk(e.entry ? 'entry' : e.label >= CONFIG.show.bigLabel && !e.promote ? 'big' : 'small', now, CONFIG.machine.bonus.opening * 0.6);
             const head = e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
-            show(`${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
+            show(e.promote ? head : `${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
         } else if (e.type === 'renchan') {
             renchan = { games: e.games, start: now };
@@ -181,6 +213,10 @@ const Lcd = (() => {
             show('V を狙え！', '#ff6a8a', now, CONFIG.machine.small.open);
         } else if (e.type === 'roundStart') {
             Sound.play('round');
+            // 昇格: 1ラウンド目の途中で図柄が現れて奇数に変わる
+            if (e.round === 1 && machineRef && machineRef.bonus && machineRef.bonus.promote) {
+                promoteFx = { start: now + CONFIG.show.promote.delay, from: shown[0], to: machineRef.bonus.promote.to, bonus: machineRef.bonus };
+            }
             const f = CONFIG.show.furukawa;
             if (e.round === e.rounds && e.rounds > 1) bonusTalk('lastRound', now);
             else if (e.round > 1 && Math.random() < f.bonusRoundRate) bonusTalk('round', now);
@@ -584,8 +620,9 @@ const Lcd = (() => {
         const b = m.bonus;
         band(0, H, 0.45);
         Figures.draw(ctx, shown[0], 30, 50, 34, 40, { glow: 0.5 });
-        text(`${b.alloc.label}個 大当たり`, W / 2 + 14, 22, 16, '#ffe066');
-        text(`ROUND ${Math.max(1, b.round)} / ${b.alloc.rounds}`, W / 2 + 14, 58, 20, '#ffffff');
+        const hidden = b.promote && !b.promote.done;
+        text(hidden ? '大当たり' : `${b.alloc.label}個 大当たり`, W / 2 + 14, 22, 16, '#ffe066');
+        text(hidden ? `ROUND ${Math.max(1, b.round)}` : `ROUND ${Math.max(1, b.round)} / ${b.alloc.rounds}`, W / 2 + 14, 58, 20, '#ffffff');
         if (b.phase === 'open') text(`COUNT ${b.count} / ${b.alloc.count || CONFIG.machine.bonus.count}`, W / 2 + 14, 84, 13, '#7fd3f7');
         text('右打ち →', W / 2, 110, 14, Math.floor(now * 3) % 2 ? '#ff6a8a' : '#ffffff');
         // RASH の2回目からは、ラウンド中にボタンで切り替え
@@ -666,6 +703,7 @@ const Lcd = (() => {
         if (phase && (phase.name === 'battle' || phase.name === 'cfinal')) phase.pushing = phase.local >= phase.t - CONFIG.show.pushTime;
         currentPhase = phase;
         if (m) rashMode = m.rashMode;
+        machineRef = m;
         // オープニング・エンディング中は、それだけを描く
         if (Story.draw(now)) {
             MachineButton.prompt(false);
@@ -679,7 +717,10 @@ const Lcd = (() => {
         // バトル中は PUSH の案内を台のボタンにも出す
         MachineButton.prompt(Boolean(phase && phase.pushing && spinView.pushedAt === null));
 
-        if (m.bonus) drawBonus(now, m);
+        if (m.bonus) {
+            drawBonus(now, m);
+            drawPromote(now);
+        }
         else {
             if (plan && plan.kind === 'blackout') RashView.drawBlackout(now, plan, phase);
             else if (plan && plan.kind === 'challenge' && phase.name !== 'roll') RashView.drawChallenge(now, plan, phase, m, spinView);

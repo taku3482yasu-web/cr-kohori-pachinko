@@ -169,6 +169,17 @@ const Scenario = (() => {
         return pickFrom(show.hitFigures[odd ? 'odd' : 'even'], rng);
     }
 
+    // 当たりの図柄 (そろって見せる図柄)。奇数のうち promote.rate は偶数で見せて、ラウンド中に昇格させる (p.promote に本当の図柄)
+    function shownHitDigit(show, result, fig, rng, p) {
+        const real = hitDigit(show, result, fig, rng);
+        if (Figures_isOdd(real) && rng() < show.promote.rate) {
+            p.promote = { to: real };
+            return pickFrom(show.hitFigures.even, rng);
+        }
+        return real;
+    }
+    const Figures_isOdd = n => typeof n === 'number' && n % 2 === 1;
+
     const randomFigure = rng => 1 + Math.floor(rng() * 7);
 
     // reach: 左右だけそろえる (中は違う) / それ以外の外れ: 左右をそろえない
@@ -219,7 +230,7 @@ const Scenario = (() => {
                 p.enemy = result.forceEnemy || weighted(enemyWeights, rng);
                 p.phases = [{ name: 'roll', t: t.roll }, { name: 'challenge', t: t.challenge }, { name: 'reach', t: t.reach },
                     { name: 'battle', t: t.battle }, { name: 'result', t: t.result }];
-                if (hit) p.digits = Array(3).fill(hitDigit(show, result, fig, rng));
+                if (hit) p.digits = Array(3).fill(shownHitDigit(show, result, fig, rng, p));
                 else p.digits = missDigits(true, rng);
                 const f = show.furukawa;
                 p.reply = f.replies[p.enemy] ? pickFrom(f.replies[p.enemy], rng) : null;
@@ -239,9 +250,10 @@ const Scenario = (() => {
         const { result } = spin;
         const kind = result.kind;
         const win = kind !== 'miss';
-        const digits = kind === 'hit' ? Array(3).fill(hitDigit(show, result, 2, rng)) : kind === 'small' ? ['V', 'V', 'V'] : missDigits(false, rng);
+        const p = { fig: 2, win, talk: null };
+        const digits = kind === 'hit' ? Array(3).fill(shownHitDigit(show, result, 2, rng, p)) : kind === 'small' ? ['V', 'V', 'V'] : missDigits(false, rng);
+        p.digits = digits;
         const plain = kind === 'hit' ? f2.hit : kind === 'small' ? f2.small : f2.miss;
-        const p = { fig: 2, win, digits, talk: null };
 
         const bo = show.blackout;
         // RASH に入ってから (突破チャレンジ中は出さない)

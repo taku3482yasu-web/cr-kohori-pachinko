@@ -163,7 +163,7 @@ const Machine = (() => {
         emit(m, 'spinEnd', { fig, result, plan });
         if (result.kind === 'hit') {
             m.stats[fig === 1 ? 'hits1' : 'hits2']++;
-            startBonus(m, result.alloc, false);
+            startBonus(m, result.alloc, false, plan.promote);
         } else if (result.kind === 'small') {
             m.stats.smalls++;
             m.small = { timer: m.config.machine.small.open, v: false };   // V に入ったらすぐ大当たり (startBonus が閉じる)
@@ -208,14 +208,15 @@ const Machine = (() => {
     }
 
     // ----- 大当たり -----
-    function startBonus(m, alloc, fromV) {
+    // promote: 昇格する当たり ({ to: 本当の図柄 }。Scenario が決める)。昇格するまで液晶は中身を隠す (promote.done で出す)
+    function startBonus(m, alloc, fromV, promote = null) {
         const cfg = m.config.machine.bonus;
         m.small = null;
         m.spin = null;
         m.challengeRun = null;
         m.jitanLeft = 0;
         m.jitanActive = false;
-        m.bonus = { alloc, fromV, round: 0, count: 0, phase: 'opening', timer: cfg.opening };
+        m.bonus = { alloc, fromV, round: 0, count: 0, phase: 'opening', timer: cfg.opening, promote: promote ? { ...promote, done: false } : null };
         m.stats.bonusRounds += alloc.rounds;
         let entry = false;
         if (m.rush.active) {
@@ -228,7 +229,7 @@ const Machine = (() => {
                 entry = true;
             }
         }
-        emit(m, 'bonusStart', { rounds: alloc.rounds, label: alloc.label, next: alloc.next, fromV, rush: m.rush.active, rushHits: m.rush.hits, entry });
+        emit(m, 'bonusStart', { rounds: alloc.rounds, label: alloc.label, next: alloc.next, fromV, rush: m.rush.active, rushHits: m.rush.hits, entry, promote: Boolean(promote) });
     }
 
     function updateBonus(m, dt) {
