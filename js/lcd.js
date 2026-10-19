@@ -34,6 +34,7 @@ const Lcd = (() => {
         canvas.height = H;
         ctx = canvas.getContext('2d');
         RashView.init({ ctx, W, H, text, band, rainbow });
+        Story.init({ ctx, W, H, text, band, rainbow });
         return canvas;
     }
 
@@ -83,6 +84,9 @@ const Lcd = (() => {
             if (spinView) shown = spinView.plan.digits.map(d => d === 'V' ? 'V' : d);
             spinView = null;
             MachineButton.prompt(false);
+        } else if (e.type === 'bonusStart' && e.rush && e.rushHits - 1 === CONFIG.show.story.endingAt) {
+            // RASH の 10回目の大当たり: ラウンド中にエンディング
+            Story.play('ending', now);
         } else if (e.type === 'bonusStart') {
             const head = e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
             show(`${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
@@ -535,6 +539,11 @@ const Lcd = (() => {
         if (phase && (phase.name === 'battle' || phase.name === 'cfinal')) phase.pushing = phase.local >= phase.t - CONFIG.show.pushTime;
         currentPhase = phase;
         if (m) rashMode = m.rashMode;
+        // オープニング・エンディング中は、それだけを描く
+        if (Story.draw(now)) {
+            MachineButton.prompt(false);
+            return canvas;
+        }
         const rushing = m && (Machine.inJitan(m) || m.rush.active);
         Backgrounds.draw(ctx, m ? background(m, plan, phase) : 'tsugakuro', now * (rushing ? 40 : 18));
         if (!m) return canvas;
@@ -616,5 +625,7 @@ const Lcd = (() => {
         return canvas;
     }
 
-    return { init, reset, draw, event, aim, show, push, setChoosing, W, H };
+    return { init, reset, draw, event, aim, show, push, setChoosing, W, H,
+        playStory: (name, now) => Story.play(name, now), skipStory: () => Story.skip(),
+        storyPlaying: () => Story.active() ? Story.name : null };
 })();

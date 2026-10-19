@@ -2,6 +2,7 @@
 // ゲームの進行
 // ---------------------------------------------------------------------
 // はじめに「台選び」でスペック (1/99・1/159) を選ぶ。スペックごとに釘 (命釘・ワープ) の調整が違う。
+// 「この台で遊ぶ」を押すとオープニングが流れる (液晶・台のボタン・Space で飛ばせる。流れているあいだは台が止まる)。
 // 1/60 秒ごとに 物理 → 入賞を台 (Machine) に伝える → 台の時間をすすめる → 電チュー・アタッカーの開け閉めを盤面に反映。
 // 操作: ハンドルを押している間 (または Space) 発射。ハンドルを回す・← → キー・ホイールで強さ。
 // URL で (確認用):
@@ -181,7 +182,8 @@
         if (last === null) last = now;
         acc = Math.min(acc + now - last, 0.25);
         last = now;
-        if (!game.paused) {
+        // オープニングのあいだは台を止める
+        if (!game.paused && Lcd.storyPlaying() !== 'opening') {
             while (acc >= 1 / 60) {
                 tick(1 / 60);
                 acc -= 1 / 60;
@@ -212,6 +214,8 @@
         setStrength(game.strength + (e.deltaY < 0 ? 1 : -1));
     }, { passive: false });
 
+    canvas.addEventListener('pointerdown', () => { if (Lcd.storyPlaying() === 'opening') Lcd.skipStory(); });
+
     // 音は画面をさわる・キーを押すまで出せない
     ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => Sound.unlock()));
     MachineButton.init($('koori-button'), pressButton);
@@ -222,6 +226,7 @@
     document.addEventListener('keydown', e => {
         if (game.paused) return;
         if (e.code === 'KeyB' && !e.repeat) pressButton();
+        if (e.code === 'Space' && Lcd.storyPlaying() === 'opening') { Lcd.skipStory(); e.preventDefault(); return; }
         if (e.code === 'Space') { game.firing = true; e.preventDefault(); }
         if (e.code === 'ArrowRight') setStrength(game.strength + (e.shiftKey ? 10 : 1));
         if (e.code === 'ArrowLeft') setStrength(game.strength - (e.shiftKey ? 10 : 1));
@@ -235,6 +240,7 @@
     // 台のボタン: バトルの PUSH。RASH の2回目からの大当たり中は、こおりRASH ⇔ おにおにRASH の切り替え (ユーザー指定)
     function pressButton() {
         const m = game.machine;
+        if (Lcd.storyPlaying() === 'opening') { Lcd.skipStory(); return; }
         if (m.bonus && m.rush.active && !m.rush.challenge && m.rush.hits > 2 && rashChoice.hidden) {
             Machine.setRashMode(m, m.rashMode === 'koori' ? 'onioni' : 'koori');
             Sound.play('push');
@@ -300,6 +306,7 @@
         game.balls = CONFIG.balls.start;
         picker.hidden = true;
         game.paused = false;
+        Lcd.playStory('opening', time);
     });
     $('picker-close').addEventListener('click', () => { picker.hidden = true; game.paused = false; });
     $('machine-button').addEventListener('click', () => openPicker(true));
@@ -328,6 +335,8 @@
         });
         $('debug-rash-mode').textContent = `RASH: ${CONFIG.show.rash.modes[CONFIG.show.rash.defaultMode].name}`;
         $('debug-jitan').addEventListener('click', () => Machine.debugJitan(game.machine));
+        $('debug-opening').addEventListener('click', () => Lcd.playStory('opening', time));
+        $('debug-ending').addEventListener('click', () => Lcd.playStory('ending', time));
         $('debug-auto').addEventListener('click', () => {
             game.auto = !game.auto;
             $('debug-auto').textContent = `オート発射: ${game.auto ? 'ON' : 'OFF'}`;

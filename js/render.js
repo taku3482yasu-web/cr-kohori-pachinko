@@ -112,7 +112,7 @@ const BoardView = (() => {
         g.fillStyle = COLORS.frameLight;
         g.font = 'bold 9px "DotGothic16", "MS Gothic", monospace';
         g.textAlign = 'center';
-        g.fillText('CR こおりくん', b.center.x, f.shoulder - 4);
+        g.fillText('P こおりくん', b.center.x, f.shoulder - 4);
 
         // ワープ入口
         const w = b.warp;

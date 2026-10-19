@@ -10,6 +10,7 @@
     ?force=koori&enemy=goldDog&lose=1  こおりRASH のバトル (lose=1 でガセのバトル)
     ?force=onioni&pattern=zoom  おにおにRASH の当たり (open / rainbow / flip / mono / zoom)
     ?force=blackout  RASH 中のブラックアウト (突発当たり)
+    ?story=opening / ?story=ending  オープニング・エンディング
     ?force=koori&hit=3&fast=1  こおりRASH で特図2 の大当たり (3連目) → 大当たり → 「〇回目」→「〇〇RASH」
     &t=12 その秒数まで早送りした画面で止める (ヘッドレスChromeで画像にするとき)。t がなければふつうに動く
     &ts=2,6,12 その秒数ごとの画面を並べる (1回の変動を何枚かで見る)
@@ -40,6 +41,7 @@
 <script src="../js/figures.js"></script>
 <script src="../js/button.js"></script>
 <script src="../js/lcd-rash.js"></script>
+<script src="../js/lcd-story.js"></script>
 <script src="../js/lcd.js"></script>
 <script>
 (() => {
@@ -70,6 +72,7 @@
     else if (force === 'rush') Machine.debugHold(m, 1, 'hit', 'jitan', options);
     else Machine.debugHold(m, 1, force, null, options);
     let time = 0;
+    if (params.get('story')) Lcd.playStory(params.get('story'), 0);
     const step = dt => {
         time += dt;
         Machine.update(m, dt);

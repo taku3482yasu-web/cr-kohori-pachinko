@@ -297,6 +297,8 @@ const CONFIG = {
             rate: 0.12,
             timing: { dark: 1.2, koori: 1.5, atari: 1.5, itadaki: 1.8 }
         },
+        // オープニング・エンディング (段階6。ユーザー指定): エンディングは RASH の endingAt 回目の大当たりのラウンド中に流す
+        story: { endingAt: 10 },
         // RASH の大当たりのあと: 「〇回目」を大きく出してから「〇〇RASH」で続ける (秒。大当たりの ending の中で出す)
         rashCount: { countTime: 2.2 },
         // おにおにRASH: 真ん中でおにおにが椅子に座っている。当たりのときだけ違和感が起きて開眼する (外れでは何も起きない)
