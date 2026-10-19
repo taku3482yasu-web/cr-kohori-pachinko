@@ -11,7 +11,7 @@
 //   &skip=30               開いた直後に 30 秒ぶん早送りする (ヘッドレスChromeでは時間が進まないため)
 //   &balls=99999           はじめの持ち玉
 //   &force=rush            はじめの保留を決める (hit: 大当たり / rush: 突破チャレンジへ行く大当たり / small: 小当たり / jitan: RASH の時短から
-//                          / reach: リーチ外れ / fail: チャレンジ失敗)。&enemy=onioni でバトルの相手、&mode=onioni で RASH のモード
+//                          / reach: リーチ外れ / fail: チャレンジ失敗 / challenge: 突破チャレンジから)。&enemy=onioni でバトルの相手、&mode=onioni で RASH のモード
 //   &story=opening         はじめにオープニング (ending でエンディング) を流す
 // =====================================================================
 
@@ -365,6 +365,7 @@
     if (force === 'reach' || force === 'fail') Machine.debugHold(game.machine, 1, force, null, { enemy: forceEnemy });
     if (force === 'small') Machine.debugHold(game.machine, 2, 'small', null);
     if (force === 'jitan') Machine.debugJitan(game.machine);
+    if (force === 'challenge') Machine.debugChallenge(game.machine, 0);   // 突破チャレンジから (保留は玉を打ってためる)
     if (params.get('mode')) Machine.setRashMode(game.machine, params.get('mode'));
     if (params.get('story')) Lcd.playStory(params.get('story'), time);
     updateHandle();

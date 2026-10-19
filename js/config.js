@@ -157,7 +157,7 @@ const CONFIG = {
             label: '1/99',
             note: '甘い確率。初当たりの半分が突破チャレンジ (50%) へ。RUSH は継続率 約79%、半分が 900個',
             hitRate: 1 / 99,
-            smallRate: 1 / 7.5,   // 継続率 79% に合わせて少し下げた (1/7 だと 81%)
+            smallRate: 1 / 8,   // 継続率 79% に合わせた (V に入るまで開くようにしてから)
             firstHit: [
                 { weight: 50, label: 200, rounds: 2, count: 7, next: 'normal' },   // 200個のみ
                 { weight: 50, label: 200, rounds: 2, count: 7, next: 'jitan' }     // 200個 + 突破チャレンジ
@@ -166,7 +166,7 @@ const CONFIG = {
                 { weight: 50, label: 200, rounds: 2, count: 7, next: 'jitan' },    // 200個
                 { weight: 50, label: 900, rounds: 6, next: 'jitan' }               // 900個
             ],
-            challengeSmallRate: 1 / 6.5,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/6.3 で 53%、1/6.8 で 48%)
+            challengeSmallRate: 1 / 6.7,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/7 で 47〜48%)
             jitan: { challengeSpins: 1, spins: 6 },
             board: { hesoWidth: 8.8, warpMinVx: 15 },
             payout: { heso: 2 },   // 賞球をこのスペックだけ変える (1/99 は当たりが小さいので、ヘソを 2 にして出玉率を上げた)
@@ -176,7 +176,7 @@ const CONFIG = {
             label: '1/159',
             note: '初当たりの 75% が突破チャレンジ (50%) へ。RUSH は継続率 約80%、すべて 1300個',
             hitRate: 1 / 159,
-            smallRate: 1 / 7.2,   // 継続率 80% に合わせて少し下げた (1/7 だと 82%、1/7.5 だと 78%)
+            smallRate: 1 / 7.7,   // 継続率 80% に合わせた (V に入るまで開くようにしてから)
             firstHit: [
                 { weight: 25, label: 300, rounds: 2, next: 'normal' },   // 300個のみ
                 { weight: 75, label: 300, rounds: 2, next: 'jitan' }     // 300個 + 突破チャレンジ
@@ -184,7 +184,7 @@ const CONFIG = {
             rushHit: [
                 { weight: 100, label: 1300, rounds: 9, next: 'jitan' }   // 1300個
             ],
-            challengeSmallRate: 1 / 6.5,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/6.3 で 53%、1/6.8 で 48%)
+            challengeSmallRate: 1 / 6.7,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/7 で 47〜48%)
             jitan: { challengeSpins: 1, spins: 6 },
             board: { hesoWidth: 6.6, warpMinVx: 40 },
             target: { challenge: 0.5, continuation: 0.80 }
@@ -198,8 +198,9 @@ const CONFIG = {
         spin: {
             fig2: { miss: 2, small: 3, hit: 6 }
         },
-        // 小当たり: アタッカーが open 秒開く。そのあいだに入った玉で V 入賞 → 大当たり (rushHit)
-        small: { open: 1.8 },
+        // 小当たり: アタッカーが V に入るまで開いている (最大 open 秒)。入った玉で V 入賞 → 大当たり (rushHit)
+        //   演出で「当たり」と見せたあとに V に入らないことがないように (2026-10-19。前は 1.8秒だけ開いて V入賞率 約93%)
+        small: { open: 8 },
         // 大当たり: opening (秒) → ラウンド (count 個入るか maxTime 秒で閉じる) → interval → … → ending
         bonus: { opening: 3, count: 10, maxTime: 25, interval: 1.5, ending: 4 },
         // 普図 (ゲートで抽選 → 電チューが開く)。support = 時短中 (電サポ)

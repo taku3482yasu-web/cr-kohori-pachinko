@@ -132,6 +132,7 @@ const Machine = (() => {
             const jitanSpin = m.jitanLeft > 0;
             const plan = Scenario.plan(m.config, m.spec, {
                 fig, result, holdsLeft: m.holds[fig].length, rush: m.rush.active || inJitan(m), holdColor: result.holdColor,
+                inChallenge: m.rush.challenge,
                 challenge: run ? { run, index: run.index } : null,
                 rashMode: m.rashMode,
                 // RASH の最後の変動 (このあと時短も保留もない)
@@ -163,7 +164,7 @@ const Machine = (() => {
             startBonus(m, result.alloc, false);
         } else if (result.kind === 'small') {
             m.stats.smalls++;
-            m.small = { timer: m.config.machine.small.open, v: false };
+            m.small = { timer: m.config.machine.small.open, v: false };   // V に入ったらすぐ大当たり (startBonus が閉じる)
             emit(m, 'smallStart');
         }
     }

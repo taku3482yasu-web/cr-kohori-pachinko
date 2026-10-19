@@ -216,7 +216,8 @@ const Scenario = (() => {
         const p = { fig: 2, win, digits, talk: null };
 
         const bo = show.blackout;
-        if (spin.rush && !spin.challenge && win && (result.force === 'blackout' || rng() < bo.rate)) {
+        // RASH に入ってから (突破チャレンジ中は出さない)
+        if (spin.rush && !spin.inChallenge && win && (result.force === 'blackout' || rng() < bo.rate)) {
             // ブラックアウト (突発当たり): モードに関係なく
             p.kind = 'blackout';
             p.phases = [{ name: 'dark', t: bo.timing.dark }, { name: 'bokoori', t: bo.timing.koori },
