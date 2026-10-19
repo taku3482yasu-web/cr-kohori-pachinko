@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>玉の軌跡</title>
+<!--
+    玉の通り道を盤面の上に線で描く (釘の調整用)。
+    ?strength=45&balls=30&open=1 (open=1 で電チュー・アタッカーを開ける)
+    ヘッドレスChromeで画像にする:
+      chrome --headless --disable-gpu --screenshot=trace.png --window-size=720,1000 tools/trace.html?strength=45
+-->
+<style>body { margin: 0; background: #000; } canvas { display: block; width: 720px; }</style>
+</head>
+<body>
+<canvas id="board"></canvas>
+<script src="../js/config.js"></script>
+<script src="../js/sprites.js"></script>
+<script src="../js/backgrounds.js"></script>
+<script src="../js/board.js"></script>
+<script src="../js/physics.js"></script>
+<script src="../js/render.js"></script>
+<script src="../js/lcd.js"></script>
+<script>
+(() => {
+    const params = new URLSearchParams(location.search);
+    const strength = Number(params.get('strength') || 45);
+    const count = Number(params.get('balls') || 30);
+    let seed = Number(params.get('seed') || 1);
+    const rng = () => {
+        seed = (seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const board = Board.build(CONFIG);
+    Object.keys(board.parts).forEach(id => Board.setOpen(board, id, params.get('open') === '1'));
+    const view = BoardView.create(document.getElementById('board'), board, CONFIG);
+    Lcd.init();
+    BoardView.draw(view, { balls: [] }, Lcd.draw(0));
+    const ctx = view.ctx;
+    ctx.setTransform(BoardView.SCALE, 0, 0, BoardView.SCALE, 0, 0);
+    const colors = { pocket: '#ffe066', foul: '#888', out: '#ff6a8a', stuck: '#ff00ff', timeout: '#ff00ff' };
+    for (let i = 0; i < count; i++) {
+        const world = { board, balls: [], rng, events: [] };
+        const ball = Physics.launch(world, strength, CONFIG);
+        const path = [];
+        for (let t = 0; t < 20 && world.balls.length; t += 1 / 60) {
+            Physics.step(world, 1 / 60, CONFIG);
+            path.push([ball.x, ball.y]);
+        }
+        const e = world.events.find(e => e.type !== 'gate' && e.type !== 'warp' && e.type !== 'spill') || { type: 'timeout' };
+        ctx.strokeStyle = colors[e.stuck ? 'stuck' : e.type] || '#fff';
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        path.forEach(([x, y], j) => j ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+        ctx.stroke();
+        if (e.stuck) { ctx.fillStyle = '#ff00ff'; ctx.fillRect(e.x - 2, e.y - 2, 4, 4); }
+    }
+})();
+</script>
+</body>
+</html>

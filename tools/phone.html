@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>スマホ幅の確認</title>
+<!-- index.html をスマホの大きさ (390x844) で表示する。?q= の中身を index.html に渡す (例: phone.html?q=auto%3D1) -->
+<style>body { margin: 0; background: #333; } iframe { border: 0; width: 390px; height: 844px; display: block; }</style>
+</head>
+<body>
+<iframe id="f"></iframe>
+<script>document.getElementById('f').src = '../index.html?' + (new URLSearchParams(location.search).get('q') || '');</script>
+</body>
+</html>
