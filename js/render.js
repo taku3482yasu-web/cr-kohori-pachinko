@@ -31,6 +31,15 @@ const BoardView = (() => {
         base.width = canvas.width;
         base.height = canvas.height;
         drawStatic(base.getContext('2d'), board, config);
+        // ドットフォントの読み込みが終わったら描き直す (読み込み前は別の字体で描かれるため)
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => {
+                const g = base.getContext('2d');
+                g.setTransform(1, 0, 0, 1, 0, 0);
+                g.clearRect(0, 0, base.width, base.height);
+                drawStatic(g, board, config);
+            });
+        }
         return { canvas, ctx, base, board, config };
     }
 
@@ -110,9 +119,10 @@ const BoardView = (() => {
         g.fillRect(b.lcd.x - 2, b.lcd.y - 2, b.lcd.w + 4, b.lcd.h + 4);
         // 枠の上の飾り: 「こおり」の文字
         g.fillStyle = COLORS.frameLight;
-        g.font = 'bold 9px "DotGothic16", "MS Gothic", monospace';
+        // 小さすぎるとドット文字の「こ」がつぶれるので 12px
+        g.font = '12px "DotGothic16", "MS Gothic", monospace';
         g.textAlign = 'center';
-        g.fillText('P こおりくん', b.center.x, f.shoulder - 4);
+        g.fillText('P こおりくん', b.center.x, f.shoulder - 3);
 
         // ワープ入口
         const w = b.warp;

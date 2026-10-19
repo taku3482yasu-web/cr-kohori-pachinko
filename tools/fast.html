@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#05070d">
+    <title>Pこおりくん ～内定ツラヌキ物語～</title>
+    <!-- 液晶用のドットフォント (オフライン時は MS ゴシックなどで代替) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <main class="machine">
+        <canvas id="board" class="board" aria-label="パチンコの盤面"></canvas>
+
+        <section class="controls">
+            <div class="machine-bar">
+                <span id="spec-display" class="spec-display"></span>
+                <span class="bar-buttons">
+                    <button id="sound-button" class="small-button">音: ON</button>
+                    <button id="machine-button" class="small-button">台選び</button>
+                </span>
+            </div>
+            <div id="mode-display" class="mode-display"></div>
+            <div id="aim-display" class="aim-display" hidden>右打ち →</div>
+            <!-- RASH 突入の大当たり中に、RASH のモードを選ぶ (1 / 2 キーでも) -->
+            <div id="rash-choice" class="rash-choice" hidden>
+                <p>どっちの RASH にする？</p>
+                <button data-mode="koori"><span class="rc-name">こおりRASH！</span><span class="rc-note">バトルで勝てば当たり</span></button>
+                <button data-mode="onioni"><span class="rc-name">おにおにRASH！</span><span class="rc-note">おにおにが開眼すれば当たり</span></button>
+            </div>
+            <div class="status">
+                <div class="status-item"><span class="label">持ち玉</span><span id="balls" class="value">0</span></div>
+                <div class="status-item"><span class="label">発射</span><span id="launched" class="value">0</span></div>
+                <div class="status-item"><span class="label">回転数</span><span id="spins" class="value">0</span></div>
+                <div class="status-item"><span class="label">回転率 /1k</span><span id="rate" class="value">-</span></div>
+            </div>
+
+            <div class="handle-area">
+                <button id="left-button" class="small-button">← 左打ち</button>
+                <!-- 押している間発射。押したまま回すと強さが変わる -->
+                <div id="handle" class="handle" role="slider" aria-label="発射の強さ" tabindex="0">
+                    <div id="handle-knob" class="handle-knob"><span></span></div>
+                    <div class="handle-center"><span id="strength">0</span></div>
+                </div>
+                <button id="right-button" class="small-button">右打ち →</button>
+            </div>
+            <div class="push-area">
+                <!-- 台のボタン (こおりくんの体の形)。先読みで光る・震える・鳴る。バトルの「PUSH!」で押す (B キーでも) -->
+                <button id="koori-button" class="koori-button" aria-label="台のボタン">
+                    <span class="kb-shine"></span>
+                    <span class="kb-eye kb-left"></span><span class="kb-eye kb-right"></span>
+                    <span class="kb-cheek kb-left"></span><span class="kb-cheek kb-right"></span>
+                    <span class="kb-label">PUSH</span>
+                </button>
+            </div>
+            <p class="hint">ハンドルを押している間発射（Space でも）。押したまま回す・← → キー・ホイールで強さを変える。こおりくんのボタンは B キーでも押せる</p>
+            <button id="lend-button" class="lend-button">玉貸し（+125発）</button>
+        </section>
+
+        <section id="debug-panel" class="debug-panel" hidden>
+            <div class="debug-buttons">
+                <span id="debug-board" class="debug-board"></span>
+                <button id="debug-hit">次は大当たり</button>
+                <button id="debug-hit-rush">次は大当たり (RUSH へ)</button>
+                <button id="debug-small">次は小当たり (特図2)</button>
+                <button id="debug-reach">次はリーチ外れ</button>
+                <button id="debug-fail">次はチャレンジ失敗</button>
+                <select id="debug-enemy" aria-label="バトルの相手">
+                    <option value="">相手: 抽選</option>
+                    <option value="okagappa">おかがっぱ</option>
+                    <option value="hibikimakuri">ひびきまくり</option>
+                    <option value="onioni">おにおに</option>
+                    <option value="naitei">ナイナイ</option>
+                </select>
+                <button id="debug-button">ボタン先読み</button>
+                <button id="debug-rainbow">虹保留の当たり</button>
+                <button id="debug-rash-mode">RASH: こおりRASH</button>
+                <button id="debug-opening">オープニング</button>
+                <button id="debug-ending">エンディング</button>
+                <button id="debug-jitan">時短に入る</button>
+                <button id="debug-auto">オート発射: OFF</button>
+                <button id="debug-aim">オートで打ち分け: OFF</button>
+                <button id="debug-reset">集計リセット</button>
+            </div>
+            <div id="debug-stats" class="debug-stats"></div>
+        </section>
+    </main>
+
+    <!-- 台選び: ゲームを始める前にスペックと設定を選ぶ -->
+    <div id="machine-picker" class="picker" hidden>
+        <div class="picker-box" role="dialog" aria-labelledby="picker-title">
+            <h2 id="picker-title">台を選ぶ</h2>
+            <h3>スペック（大当たり確率）</h3>
+            <div id="spec-options" class="spec-options"></div>
+            <div class="picker-actions">
+                <button id="picker-close" class="small-button">もどる</button>
+                <button id="picker-start" class="start-button">この台で遊ぶ</button>
+            </div>
+        </div>
+    </div>
+
+    <!--
+    確認用: index.html と同じゲームを、画面の更新 (requestAnimationFrame) を早送りして動かす。
+    ヘッドレスChromeでは画面の更新がほとんど進まないので、オープニングなど「時間で進むもの」はこちらで確かめる。
+    例: sh tools/shot.sh "tools/fast.html?spec=s99&story=opening" out.png 1100,900 3000
+    index.html を変えたら、このファイルも同じように直す (スクリプトの読み込みの順番など)。
+-->
+<script>
+// 確認用: requestAnimationFrame を早送りする (1回ごとに 1/60 秒進める)
+(() => { let ts = 0; window.requestAnimationFrame = cb => setTimeout(() => { ts += 1000 / 60; cb(ts); }, 0); })();
+</script>
+<script src="../js/config.js"></script>
+    <script src="../js/sprites.js"></script>
+    <script src="../js/characters.js"></script>
+    <script src="../js/backgrounds.js"></script>
+    <script src="../js/board.js"></script>
+    <script src="../js/physics.js"></script>
+    <script src="../js/audio.js"></script>
+    <script src="../js/scenario.js"></script>
+    <script src="../js/machine.js"></script>
+    <script src="../js/render.js"></script>
+    <script src="../js/figures.js"></script>
+    <script src="../js/button.js"></script>
+    <script src="../js/lcd-rash.js"></script>
+    <script src="../js/lcd-story.js"></script>
+    <script src="../js/lcd.js"></script>
+    <script src="../js/main.js"></script>
+</body>
+</html>

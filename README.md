@@ -270,6 +270,7 @@
 | `tools/simulate.html` | 出玉シミュレーター。1. 盤面の物理で入賞率を測る（左打ちは命釘ごと、右打ちは電チュー・アタッカーの開け閉め4通り） 2. その入賞率で玉の行き先を決めながら、台の抽選を長い時間まわす。回転率・初当たり・時短へ行く割合・継続率・RUSH 1回の差玉・出玉率を出す。`?hours=600` `?balls=10000` `?spec=s99` `?widths=6.1,6.8,7.4`（命釘を並べて測る） |
 | `tools/run-sim.sh` | `simulate.html` をヘッドレスChromeで動かして結果を表示する（`sh tools/run-sim.sh "hours=600&balls=10000"`、10分以上かかる） |
 | `tools/trace.html` | 玉の通り道を盤面の上に線で描く（黄: 入賞 / 赤: アウト / 灰: ファール / 紫: 止まった）。`?strength=45&balls=30&open=1` |
+| `tools/fast.html` | `index.html` と同じゲームを、画面の更新を早送りして動かす（ヘッドレスChromeでオープニングなど時間で進むものを確かめる）。`?spec=s99&story=opening` |
 | `tools/phone.html` | `index.html` をスマホの大きさ（390x844）で表示する |
 | `tools/lcd.html` | 液晶だけを大きく表示して変動の流れを確認する。`?force=hit&enemy=onioni&color=rainbow`、`?force=challenge&win=2`、`?force=koori&enemy=goldDog`、`?force=onioni&pattern=zoom`、`?force=blackout`、`?force=koori&hit=3&fast=1`（大当たり →「〇回目」）、`?force=fail&challenge=music`（チャレンジの種類）、`&ts=2,6,12` でその秒数の画面を並べる |
 | `tools/run-test.sh` | `test.html` をヘッドレスChromeで動かして結果を表示する（`sh tools/run-test.sh "balls=200"`） |

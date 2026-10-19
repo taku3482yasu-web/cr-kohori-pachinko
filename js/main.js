@@ -12,6 +12,7 @@
 //   &balls=99999           はじめの持ち玉
 //   &force=rush            はじめの保留を決める (hit: 大当たり / rush: 突破チャレンジへ行く大当たり / small: 小当たり / jitan: RASH の時短から
 //                          / reach: リーチ外れ / fail: チャレンジ失敗)。&enemy=onioni でバトルの相手、&mode=onioni で RASH のモード
+//   &story=opening         はじめにオープニング (ending でエンディング) を流す
 // =====================================================================
 
 (() => {
@@ -182,8 +183,11 @@
         if (last === null) last = now;
         acc = Math.min(acc + now - last, 0.25);
         last = now;
-        // オープニングのあいだは台を止める
-        if (!game.paused && Lcd.storyPlaying() !== 'opening') {
+        // オープニングのあいだは台を止める (時計だけ進めて、オープニングを流す)
+        if (!game.paused && Lcd.storyPlaying() === 'opening') {
+            time += acc;
+            acc = 0;
+        } else if (!game.paused) {
             while (acc >= 1 / 60) {
                 tick(1 / 60);
                 acc -= 1 / 60;
@@ -362,6 +366,7 @@
     if (force === 'small') Machine.debugHold(game.machine, 2, 'small', null);
     if (force === 'jitan') Machine.debugJitan(game.machine);
     if (params.get('mode')) Machine.setRashMode(game.machine, params.get('mode'));
+    if (params.get('story')) Lcd.playStory(params.get('story'), time);
     updateHandle();
     for (let i = 0; i < Number(params.get('skip') || 0) * 60; i++) tick(1 / 60);
     requestAnimationFrame(frame);
