@@ -7,7 +7,7 @@
 //   Scenario.challengePlan(config, holds)      突破チャレンジのバトルが始まるとき: 保留ごとの武器・決着のラウンド・時間
 //   Scenario.plan(config, spec, spin, rng)     変動が始まるとき: { kind, duration, phases, digits, enemy, win, talk, ... }
 // phases は [{ name, t }] の並び。液晶はこれを時間どおりに描く。kind (特図2):
-//   'challenge' 突破チャレンジのバトルの1ラウンド (cintro → cround / cfinal → cresult)
+//   'challenge' 突破チャレンジのバトルの1ラウンド (cintro → cround / cfinal → cresult)。おまけのラウンドは cextra → cfinal → cresult
 //   'rashBattle' こおりRASH のバトル (roll → battle → result) / 'onioni' おにおにRASH (wait → anomaly → open、外れは roll だけ)
 // =====================================================================
 
@@ -277,15 +277,16 @@ const Scenario = (() => {
             const { run, index } = spin.challenge;
             const t = run.timing;
             p.kind = 'challenge';
-            p.round = index;
+            p.round = run.extra ? config.machine.holdMax : index;
+            p.extra = Boolean(run.extra);   // おまけのラウンド (「もうひとつおまけに！」から)
             p.weapon = run.weapons[index] || 'fist';
             p.final = index === run.final;
             p.win = p.final && run.winIndex >= 0;
-            p.phases = index === 0 ? [{ name: 'cintro', t: t.intro }] : [];
+            p.phases = run.extra ? [{ name: 'cextra', t: t.extra }] : index === 0 ? [{ name: 'cintro', t: t.intro }] : [];
             if (index < run.final) p.phases.push({ name: 'cround', t: t.round });
             else if (p.final) p.phases.push({ name: 'cfinal', t: t.final }, { name: 'cresult', t: t.result });
             else p.phases.push({ name: 'roll', t: plain });
-            if (index === 0) p.reply = pickFrom(show.furukawa.challengeLines, rng);
+            if (index === 0 && !run.extra) p.reply = pickFrom(show.furukawa.challengeLines, rng);
             if (p.win) p.reveal = { phase: 'cresult', at: 0.4 };
         } else if (spin.rush && spin.rashMode === 'koori') {
             // こおりRASH: 当たり・最後の保留は必ずバトル。外れでもときどき (成功率を守る割合で) バトル

@@ -302,8 +302,11 @@ const CONFIG = {
                 hammer: { name: 'ハルキハンマー', hit: 40, miss: 5 },
                 oniKiller: { name: 'おにおに絶対殺す剣', hit: 25, miss: 0 }
             },
-            // 1ラウンド目の前の登場 (intro)、途中のラウンド (round)、最後のラウンド (final) と結果 (result) の秒
-            timing: { intro: 3, round: 3.5, final: 5, result: 2.5 },
+            // 1ラウンド目の前の登場 (intro)、途中のラウンド (round)、最後のラウンド (final) と結果 (result)、
+            // おまけのラウンドの前の「もうひとつおまけに！」(extra) の秒
+            // おまけ (ユーザー指定 2026-10-19): バトルが始まってから電チューに入った保留は、見た目では保留を増やさず、
+            //   決着のあと (突破できなかったとき) に「もうひとつおまけに！」で1ラウンド。突破したときは RASH の保留として残る
+            timing: { intro: 3, round: 3.5, final: 5, result: 2.5, extra: 2.5 },
             map: 'castleHall'
         },
 

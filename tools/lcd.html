@@ -6,14 +6,14 @@
 <!--
     液晶だけを大きく表示して、変動の流れを確認する (盤面・玉はなし)。
     ?force=hit|rush|reach|fail|small  はじめの保留 / &enemy=onioni バトルの相手 / &spec=s159
-    ?force=challenge&win=2  突破チャレンジ (保留4つ、win 番目で当たり。-1 で負け)
+    ?force=challenge&win=2  突破チャレンジ (保留4つ、win 番目で当たり。-1 で負け)。&extra=hit (または miss) でおまけの保留を1つ足す
     ?force=koori&enemy=goldDog&lose=1  こおりRASH のバトル (lose=1 でガセのバトル)
     ?force=onioni&pattern=zoom  おにおにRASH の当たり (open / rainbow / flip / upsideDown / mono / zoom / koori / tomoishi / naitei)
     &rashhold=black (または spin)  RASH 中の当たりの保留を黒い保留・回る保留に (残り保留に1つ足す)
     ?force=blackout  RASH 中のブラックアウト (突発当たり)
     ?story=opening / ?story=ending  オープニング・エンディング
     ?force=rush&promote=1&fast=1  奇数の当たりを偶数で見せて、ラウンド中に昇格
-    ?force=renchan&mode=onioni&fast=1  RASH の大当たり中に残り保留の当たりで「〇G連確定！」(&pos=2 で2つ目の保留)
+    ?force=renchan&mode=onioni&fast=1  RASH の大当たり中に残り保留の当たりで「〇G連確定！」(&pos=2 で2つ目の保留。〇 は残り保留の当たりの数)
     ?force=koori&hit=3&fast=1  こおりRASH で特図2 の大当たり (3連目) → 大当たり → 「〇回目」→「〇〇RASH」
     &t=12 その秒数まで早送りした画面で止める (ヘッドレスChromeで画像にするとき)。t がなければふつうに動く
     &ts=2,6,12 その秒数ごとの画面を並べる (1回の変動を何枚かで見る)
@@ -62,7 +62,7 @@
     if (!['challenge', 'koori', 'onioni', 'blackout', 'renchan'].includes(params.get('force'))) {
         for (let i = 0; i < Number(params.get('holds') || 2); i++) Machine.debugHold(m, 1, 'miss', null);
     }
-    if (force === 'challenge') Machine.debugChallenge(m, 4, Number(params.get('win') ?? -1));
+    if (force === 'challenge') Machine.debugChallenge(m, 4, Number(params.get('win') ?? -1), params.get('extra'));
     else if (force === 'renchan') {
         Machine.debugJitan(m);
         if (params.get('mode')) Machine.setRashMode(m, params.get('mode'));

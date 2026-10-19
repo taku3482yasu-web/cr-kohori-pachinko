@@ -225,6 +225,10 @@ const RashView = (() => {
             band(64, 22, 0.55);
             text(weaponName + '！', W / 2, 75, plan.weapon === 'oniKiller' ? 13 : 16, plan.weapon === 'oniKiller' ? 'rainbow' : '#ffffff', 'center', now);
         }
+        if (n === 'cextra') {
+            band(60, 30, 0.6);
+            text('もうひとつおまけに！', W / 2, 77, 18, local < 0.3 ? '#ffffff' : 'rainbow', 'center', now);
+        }
         if (n === 'cintro' && local > 1) {
             band(64, 22, 0.55);
             text(`保留 ${m.challengeRun ? m.challengeRun.count : ''}個で勝負！`, W / 2, 75, 16, '#ffe066');
@@ -248,7 +252,7 @@ const RashView = (() => {
     // 突破チャレンジ中の保留: 武器のアイコンで出す (右下)
     function drawChallengeHolds(now, m) {
         const { W } = kit;
-        m.holds[2].forEach((h, i) => weaponIcon(h.weapon || 'fist', W - 12 - i * 16, 134, now, false));
+        m.holds[2].filter(h => !h.extra).forEach((h, i) => weaponIcon(h.weapon || 'fist', W - 12 - i * 16, 134, now, false));   // おまけの保留は出さない
         if (m.spin && m.spin.plan.kind === 'challenge') weaponIcon(m.spin.plan.weapon, W / 2, 134, now, true);
     }
 

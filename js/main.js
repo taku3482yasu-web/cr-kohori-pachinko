@@ -231,7 +231,7 @@
         }
         if (m.small) return '小当たり  V を狙え！';
         const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
-        if (m.rush.active && m.rush.challenge) return m.challengeRun ? `突破チャレンジ  おにおにと勝負！` : '突破チャレンジ  保留をためろ！';
+        if (m.rush.active && m.rush.challenge) return m.challengeRun || (m.spin && m.spin.plan.kind === 'challenge') ? `突破チャレンジ  おにおにと勝負！` : '突破チャレンジ  保留をためろ！';
         const name = CONFIG.show.rash.modes[m.rashMode].name;
         if (Machine.inJitan(m)) return `${name} ${m.rush.hits - 1}連  時短 残り ${left} 回`;
         if (m.rush.active) return `${name} ${m.rush.hits - 1}連  残り保留`;

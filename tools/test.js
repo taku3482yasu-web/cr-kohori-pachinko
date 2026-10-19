@@ -120,7 +120,10 @@ function run(game, specId, setting, hours) {
     const flying = [];
     const log = {
         events: [], firstHits: 0, firstToChallenge: 0, challengeWins: 0, challenges: 0, rushHits: 0, rushContinues: 0,
-        rashModes: 0, unlocked: [], trophies: [], ctx: null
+        rashModes: 0, unlocked: [], trophies: [], ctx: null,
+        challengeKinds: {},   // 突破チャレンジ中の特図2 の変動の種類 (おまけのラウンドは 'challenge:extra')
+        extraHolds: 0, extraShown: 0, extraRounds: 0,  // おまけの保留・入ったことを見せてしまった数・おまけのラウンド
+        renchan: 0, renchanWrong: 0                     // 「〇G連確定」と、〇 が残り保留の当たりの数と違った回数
     };
     const ctx = () => ({ balls, launched, spins1: m.stats.spins1 });
     const record = e => {
@@ -161,6 +164,19 @@ function run(game, specId, setting, hours) {
             if (e.type === 'bonusStart' && e.entry) log.challengeWins++;
             if (e.type === 'jitanStart' && e.challenge) log.challenges++;
             if (e.type === 'bonusStart' && e.rush && !e.entry) log.rushContinues++;
+            if (e.type === 'spinStart' && e.fig === 2 && m.rush.challenge) {
+                const key = e.plan.kind + (e.plan.extra ? ':extra' : '');
+                log.challengeKinds[key] = (log.challengeKinds[key] || 0) + 1;
+                if (e.plan.extra) log.extraRounds++;
+            }
+            if (e.type === 'renchan') {
+                log.renchan++;
+                if (e.games !== m.holds[2].filter(h => h.kind !== 'miss').length) log.renchanWrong++;
+            }
+            if (e.type === 'hold' && e.result.extra) {
+                log.extraHolds++;
+                if (e.result.button || e.result.voice) log.extraShown++;
+            }
             if (e.type === 'rushEnd') {
                 const level = SettingHint.trophy(CONFIG, setting, rng);
                 if (level) { log.trophies.push(level); record({ type: 'trophy', level }); }
@@ -255,6 +271,48 @@ test('演出: 当たりでしか出ないもの (虹の保留・虹のボタン�
         }
         assertEqual(wrong.length, 0, `${specId} で外れに出た (${[...new Set(wrong)].join('・')})`);
     }
+});
+
+test('突破チャレンジ: 変動はすべて突破チャレンジの演出で、バトル中に入った保留は見せずに「おまけ」のラウンドになる', () => {
+    for (const { specId, log } of runs) {
+        const other = Object.keys(log.challengeKinds).filter(k => k !== 'challenge' && k !== 'challenge:extra');
+        assertEqual(other.join(), '', `${specId} の突破チャレンジ中に RASH などの演出`);
+        assert(log.extraHolds > 0, `${specId} でおまけの保留が1回もない (確かめられない)`);
+        assert(log.extraRounds > 0 && log.extraRounds <= log.extraHolds, `${specId} のおまけのラウンド (${log.extraRounds} / 保留 ${log.extraHolds})`);
+        assertEqual(log.extraShown, 0, `${specId} でおまけの保留のボタン・入賞時の音`);
+    }
+    // おまけのラウンドの流れ: 「もうひとつおまけに！」→ 最後の一撃 → 結果
+    const { Machine, Scenario } = base;
+    const m = Machine.create(CONFIG, 's99', base.rng);
+    Machine.debugChallenge(m, 0);
+    m.jitanLeft = 0;   // バトルが始まったあと (電サポは終わり)
+    Machine.enter(m, 'denchu');
+    const hold = m.holds[2][0];
+    assert(hold && hold.extra, 'バトル中に入った保留がおまけにならない');
+    Machine.update(m, 0.01);
+    const start = m.events.find(e => e.type === 'spinStart');
+    assert(start && start.plan.kind === 'challenge' && start.plan.extra, 'おまけの保留が突破チャレンジのラウンドにならない');
+    assertEqual(start.plan.phases.map(p => p.name).join(), 'cextra,cfinal,cresult', 'おまけのラウンドの流れ');
+    void Scenario;
+});
+
+test('〇G連確定: 〇 は残り保留の当たりの数 (このあと確定している連チャンの数)', () => {
+    for (const { specId, log } of runs) {
+        assert(log.renchan > 0, `${specId} で〇G連確定が1回もない (確かめられない)`);
+        assertEqual(log.renchanWrong, 0, `${specId} で〇が残り保留の当たりの数と違う`);
+    }
+    // 3つ目だけが当たり → 「1G連確定」(前は位置で「3G連確定」と出ていた)
+    const { Machine } = base;
+    const m = Machine.create(CONFIG, 's99', base.rng);
+    Machine.debugJitan(m);
+    m.holds[2] = [{ kind: 'miss' }, { kind: 'miss' }, { kind: 'small' }];
+    m.bonus = null;
+    Machine.debugHold(m, 2, 'hit', null);
+    m.holds[2] = [m.holds[2][0], { kind: 'miss' }, { kind: 'miss' }, { kind: 'small' }];
+    for (let t = 0; t < 60 && !m.events.some(e => e.type === 'renchan'); t += 0.1) Machine.update(m, 0.1);
+    const e = m.events.find(x => x.type === 'renchan');
+    assert(e, '〇G連確定が出ない');
+    assertEqual(e.games, 1, '3つ目だけが当たりのときの〇');
 });
 
 test('図鑑: 記録が台の集計と合い、実績は値が条件を満たしたときだけ解除される', () => {

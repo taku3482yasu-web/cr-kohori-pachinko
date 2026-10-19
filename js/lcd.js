@@ -165,7 +165,9 @@ const Lcd = (() => {
 
     // ----- 台のイベント -----
     function event(e, now) {
-        if (e.type === 'hold') {
+        if (e.type === 'hold' && e.result.extra) {
+            // おまけの保留 (突破チャレンジのバトル中に入った): 入ったことを見せない・鳴らさない
+        } else if (e.type === 'hold') {
             Sound.play('hold');
             if (e.result.voice) {
                 // 入賞時の音 (録音) が鳴って、ボタンが赤く光る
@@ -726,6 +728,7 @@ const Lcd = (() => {
         if (phase.name === 'reach') Sound.play('reach');
         if (phase.name === 'result' || phase.name === 'cresult') Sound.play(plan.win ? 'win' : 'lose');
         if (phase.name === 'cintro' || phase.name === 'cfinal') Sound.play('reach');
+        if (phase.name === 'cextra') Sound.play('success');
         if (phase.name === 'cround') Sound.play('attack');
         if (phase.name === 'anomaly') Sound.play('challenge');
         if (phase.name === 'dark') Sound.play('hurt');

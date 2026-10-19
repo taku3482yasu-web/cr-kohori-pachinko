@@ -75,6 +75,9 @@ const Machine = (() => {
             if (fig === 2 && m.futsu.opening) m.futsu.opening.count++;
             if (m.holds[fig].length >= holdMax) return;   // 保留がいっぱい (玉は入賞するが抽選しない)
             const result = draw(m, fig);
+            // 突破チャレンジのバトルが始まってから入った保留 (電チューの開き残り・飛んでいた玉) は「おまけ」 (ユーザー指定 2026-10-19):
+            // 見た目では保留を増やさず、バトルの決着のあとに「もうひとつおまけに！」で1ラウンドとして結果を見せる
+            if (fig === 2 && m.rush.challenge && !inJitan(m)) result.extra = true;
             addExtras(m, fig, result);
             m.holds[fig].push(result);
             emit(m, 'hold', { fig, result, count: m.holds[fig].length });
@@ -115,9 +118,9 @@ const Machine = (() => {
         if (!m.rush.challenge || m.challengeRun || m.jitanLeft <= 0) return false;
         const cfg = m.config.show.challengeBattle;
         m.gatherTime += dt;
-        const holds = m.holds[2];
+        const holds = m.holds[2].filter(h => !h.extra);   // おまけの保留はバトルのあと
         if (holds.length < m.config.machine.holdMax && !(m.gatherTime >= cfg.gatherTimeout && holds.length > 0)) return true;
-        m.challengeRun = { ...Scenario.challengePlan(m.config, holds.slice()), index: 0 };
+        m.challengeRun = { ...Scenario.challengePlan(m.config, holds), index: 0 };
         m.jitanLeft = 0;   // バトルが始まったら電サポは終わり (たまった保留で勝負)
         emit(m, 'challengeStart', { run: m.challengeRun });
         return false;
@@ -129,7 +132,9 @@ const Machine = (() => {
             const fig = m.holds[2].length ? 2 : m.holds[1].length ? 1 : 0;
             if (!fig) return;
             const result = m.holds[fig].shift();
-            const run = fig === 2 ? m.challengeRun : null;
+            let run = fig === 2 ? m.challengeRun : null;
+            // おまけの保留: バトルの決着のあと、その保留だけで1ラウンド (突破チャレンジのまま。RASH の演出にはしない)
+            if (fig === 2 && !run && result.extra && m.rush.challenge) run = { ...Scenario.challengePlan(m.config, [result]), index: 0, extra: true };
             const jitanSpin = m.jitanLeft > 0;
             const plan = Scenario.plan(m.config, m.spec, {
                 fig, result, holdsLeft: m.holds[fig].length, rush: m.rush.active || inJitan(m), holdColor: result.holdColor,
@@ -177,6 +182,7 @@ const Machine = (() => {
         else {
             Object.assign(result, Scenario.hold2(m.config, result, { challenge: m.rush.challenge, rash: m.rush.active }, m.rng));
             if (m.senyomi === 'none') { result.button = null; result.voice = false; result.rashHold = null; }
+            if (result.extra) { result.button = null; result.voice = false; }   // おまけの保留は入ったことを見せない
         }
     }
 
@@ -257,9 +263,10 @@ const Machine = (() => {
             b.timer = cfg.maxTime;
             emit(m, 'roundStart', { round: b.round, rounds: b.alloc.rounds });
             // RASH 中の大当たりの1ラウンド目: 残り保留に当たりがあれば「〇G連確定！」(ユーザー指定)
+            //   〇 は残り保留の当たりの数 = このあと確定している連チャンの数 (2026-10-19 ユーザー指定。前は当たりの保留の位置だった)
             if (b.round === 1 && m.rush.active && !m.rush.challenge) {
-                const index = m.holds[2].findIndex(h => h.kind !== 'miss');
-                if (index >= 0) emit(m, 'renchan', { games: index + 1 });
+                const wins = m.holds[2].filter(h => h.kind !== 'miss').length;
+                if (wins > 0) emit(m, 'renchan', { games: wins });
             }
         } else if (b.phase === 'ending') {
             m.bonus = null;
@@ -393,7 +400,8 @@ const Machine = (() => {
     }
 
     // いきなり突破チャレンジにして、保留を count 個入れる (winIndex 番目だけ小当たり。-1 ならぜんぶ外れ)
-    function debugChallenge(m, count = 4, winIndex = -1) {
+    //   extra: 'hit' / 'miss' でおまけの保留 (バトル中に入った保留) を1つ足す
+    function debugChallenge(m, count = 4, winIndex = -1, extra = null) {
         if (m.bonus) return;
         m.rush = { active: true, hits: 1, startTime: m.time, challenge: true };
         m.stats.rushes++;
@@ -407,6 +415,11 @@ const Machine = (() => {
             addExtras(m, 2, result);
             m.holds[2].push(result);
             emit(m, 'hold', { fig: 2, result, count: m.holds[2].length });
+        }
+        if (extra) {
+            const result = { kind: extra === 'hit' ? 'small' : 'miss', extra: true };
+            addExtras(m, 2, result);
+            m.holds[2].push(result);
         }
     }
 
