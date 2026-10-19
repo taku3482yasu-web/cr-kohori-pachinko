@@ -13,6 +13,7 @@
 
 body {
     margin: 0;
+    -webkit-touch-callout: none;   /* スマホで長押ししてもメニューを出さない */
     background: var(--bg);
     color: var(--text);
     font-family: var(--font);
@@ -76,8 +77,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 12px;
 }
+/* パソコン: 台のボタンはハンドルの下の段。スマホ: ハンドルの横 (下の @media) */
+.handle-area .push-area { flex-basis: 100%; order: 10; }
 
 /* ハンドル: 押している間発射。つまみの向きが強さ */
 .handle {
@@ -293,10 +297,41 @@ button:hover { border-color: var(--accent); }
 .start-button { font-size: 16px; padding: 10px 16px; border-color: #ffe066; color: #ffe066; }
 .debug-board { align-self: center; color: #c8a0ff; margin-right: 6px; }
 
+/* ----- スマホ: 盤面と操作 (ハンドル・台のボタン) を1画面に収める ----- */
 @media (max-width: 640px) {
-    .machine { padding: 16px; gap: 12px; }
-    .board { width: 100%; }
-    .controls { max-width: none; }
-    .handle { width: 120px; height: 120px; }
-    .handle-center { inset: 36px; }
+    .machine { flex-direction: column; flex-wrap: nowrap; align-items: stretch; padding: 8px 8px 16px; gap: 6px; }
+    .controls { display: contents; }
+    .machine-bar { order: 1; }
+    .spec-display { font-size: 13px; }
+    .bar-buttons { gap: 4px; }
+    .bar-buttons button { padding: 5px 7px; font-size: 11px; }
+    /* 盤面: 画面の高さから、上の帯・状態・操作の段のぶんを引いた大きさ */
+    .board { order: 2; align-self: center; width: min(100%, calc((100dvh - 210px) * 0.72)); }
+    .mode-display { order: 3; padding: 4px 8px; font-size: 13px; }
+    .aim-display { order: 3; font-size: 14px; }
+    .rash-choice { order: 3; padding: 8px; }
+    .rash-choice .rc-name { font-size: 14px; }
+    /* 操作の段: ← / ハンドル / 台のボタン / → を1列 */
+    .handle-area { order: 4; flex-wrap: nowrap; gap: 8px; }
+    .handle-area .push-area { order: 0; flex-basis: auto; padding: 0 0 14px; }
+    .push-area .koori-button { width: 62px; height: 62px; }
+    .push-area .koori-button .kb-eye { top: 21px; width: 6px; height: 11px; }
+    .push-area .koori-button .kb-eye.kb-left { left: 17px; }
+    .push-area .koori-button .kb-eye.kb-right { right: 17px; }
+    .push-area .koori-button .kb-cheek { top: 35px; }
+    .handle { width: 92px; height: 92px; }
+    .handle-center { inset: 27px; font-size: 16px; }
+    .handle-knob span { top: 4px; width: 10px; height: 24px; margin-left: -5px; }
+    .aim-button { padding: 10px 8px; font-size: 13px; }
+    .aim-word { display: block; font-size: 11px; }
+    /* 数字は小さく4つ並べる */
+    .status { order: 5; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .status-item { padding: 4px 6px; }
+    .status-item .label { font-size: 10px; }
+    .status-item .value { font-size: 15px; }
+    .hint { display: none; }
+    .lend-button { order: 6; padding: 8px; font-size: 13px; }
+    .debug-panel { order: 7; }
+    .picker { padding: 8px; }
+    .picker-box { padding: 12px; }
 }

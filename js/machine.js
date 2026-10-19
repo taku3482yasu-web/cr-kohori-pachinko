@@ -234,6 +234,11 @@ const Machine = (() => {
             b.phase = 'open';
             b.timer = cfg.maxTime;
             emit(m, 'roundStart', { round: b.round, rounds: b.alloc.rounds });
+            // RASH 中の大当たりの1ラウンド目: 残り保留に当たりがあれば「〇G連確定！」(ユーザー指定)
+            if (b.round === 1 && m.rush.active && !m.rush.challenge) {
+                const index = m.holds[2].findIndex(h => h.kind !== 'miss');
+                if (index >= 0) emit(m, 'renchan', { games: index + 1 });
+            }
         } else if (b.phase === 'ending') {
             m.bonus = null;
             if (b.alloc.next === 'jitan') {

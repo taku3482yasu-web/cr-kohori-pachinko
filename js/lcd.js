@@ -45,6 +45,8 @@ const Lcd = (() => {
     }
     let rashCount = null;   // 大当たりの終わりの「〇回目」→「〇〇RASH」 { count, start }
     let stageFx = null;     // ステージが変わったところ { stage: { id, kind }, start }
+    let renchan = null;     // 「〇G連確定！」{ games, start }
+    const RENCHAN_TIME = 3.5;
 
     // ステージが変わった: 白い光が横切って、ステージの名前 (高確率ステージは「チャンス！」)
     function drawStageFx(now) {
@@ -82,7 +84,7 @@ const Lcd = (() => {
     }
 
     function reset() {
-        flash = summary = aimNotice = bubble = spinView = stageFx = null;
+        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = null;
     }
 
     function show(text, color, now, seconds = 1.2) {
@@ -137,6 +139,11 @@ const Lcd = (() => {
             const head = e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
             show(`${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
+        } else if (e.type === 'renchan') {
+            renchan = { games: e.games, start: now };
+            Sound.play('win');
+            MachineButton.trigger('rainbow', now);
+            bubble = null;
         } else if (e.type === 'stageChange') {
             if (!senyomi && (e.stage.kind === 'hi' || e.stage.kind === 'back')) return;
             stageFx = { stage: e.stage, start: now };
@@ -688,6 +695,17 @@ const Lcd = (() => {
             bubble.key = spinKey;
         }
         drawRashCount(now);
+        if (renchan) {
+            const t = now - renchan.start;
+            if (t > RENCHAN_TIME) renchan = null;
+            else {
+                RashView.drawRenchan(now, t, renchan.games, rashMode);
+                if (t > 1.4 && (!bubble || bubble.key !== 'renchan')) {
+                    say(CONFIG.show.furukawa.congratsLine, 6, now);
+                    if (bubble) bubble.key = 'renchan';
+                }
+            }
+        }
         if (!m.bonus && !(plan && plan.fig === 1 && phase && phase.name !== 'roll')) drawStageFx(now);
         drawHolds(now, m);
         drawFurukawa(now);

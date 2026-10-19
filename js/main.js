@@ -223,6 +223,8 @@
     }, { passive: false });
 
     canvas.addEventListener('pointerdown', () => { if (Lcd.storyPlaying() === 'opening') Lcd.skipStory(); });
+    // スマホで長押ししてもメニューが出ないように
+    [canvas, $('handle'), $('koori-button')].forEach(el => el.addEventListener('contextmenu', e => e.preventDefault()));
 
     // 音は画面をさわる・キーを押すまで出せない
     ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => Sound.unlock()));

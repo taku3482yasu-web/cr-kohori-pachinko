@@ -11,6 +11,7 @@
     ?force=onioni&pattern=zoom  おにおにRASH の当たり (open / rainbow / flip / mono / zoom)
     ?force=blackout  RASH 中のブラックアウト (突発当たり)
     ?story=opening / ?story=ending  オープニング・エンディング
+    ?force=renchan&mode=onioni&fast=1  RASH の大当たり中に残り保留の当たりで「〇G連確定！」(&pos=2 で2つ目の保留)
     ?force=koori&hit=3&fast=1  こおりRASH で特図2 の大当たり (3連目) → 大当たり → 「〇回目」→「〇〇RASH」
     &t=12 その秒数まで早送りした画面で止める (ヘッドレスChromeで画像にするとき)。t がなければふつうに動く
     &ts=2,6,12 その秒数ごとの画面を並べる (1回の変動を何枚かで見る)
@@ -54,11 +55,19 @@
     const lcd = Lcd.init();
     const force = params.get('force') || 'hit';
     const options = { enemy: params.get('enemy') || undefined, holdColor: params.get('color') || undefined, challenge: params.get('challenge') || undefined };
-    if (!['challenge', 'koori', 'onioni', 'blackout'].includes(params.get('force'))) {
+    if (!['challenge', 'koori', 'onioni', 'blackout', 'renchan'].includes(params.get('force'))) {
         for (let i = 0; i < Number(params.get('holds') || 2); i++) Machine.debugHold(m, 1, 'miss', null);
     }
     if (force === 'challenge') Machine.debugChallenge(m, 4, Number(params.get('win') ?? -1));
-    else if (force === 'blackout') {
+    else if (force === 'renchan') {
+        Machine.debugJitan(m);
+        if (params.get('mode')) Machine.setRashMode(m, params.get('mode'));
+        m.holds[1].length = 0;
+        Machine.debugHold(m, 2, 'hit', null, {});          // この変動で大当たり
+        const pos = Number(params.get('pos') || 1);
+        for (let i = 1; i < pos; i++) m.holds[2].push({ kind: 'miss', holdColor: 'white' });
+        m.holds[2].push({ kind: 'small', holdColor: 'white' });   // 残り保留の当たり
+    } else if (force === 'blackout') {
         Machine.debugJitan(m);
         Machine.debugHold(m, 2, 'small', null, {});
         m.holds[2][0].force = 'blackout';

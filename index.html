@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
-    <link rel="stylesheet" href="css/style.css?v=9bb3eb73">
+    <link rel="stylesheet" href="css/style.css?v=7ef1f736">
 </head>
 <body>
     <main class="machine">
@@ -40,22 +40,22 @@
             </div>
 
             <div class="handle-area">
-                <button id="left-button" class="small-button">← 左打ち</button>
+                <button id="left-button" class="small-button aim-button">← <span class="aim-word">左打ち</span></button>
                 <!-- 押している間発射。押したまま回すと強さが変わる -->
                 <div id="handle" class="handle" role="slider" aria-label="発射の強さ" tabindex="0">
                     <div id="handle-knob" class="handle-knob"><span></span></div>
                     <div class="handle-center"><span id="strength">0</span></div>
                 </div>
-                <button id="right-button" class="small-button">右打ち →</button>
-            </div>
-            <div class="push-area">
-                <!-- 台のボタン (こおりくんの体の形)。先読みで光る・震える・鳴る。バトルの「PUSH!」で押す (B キーでも) -->
-                <button id="koori-button" class="koori-button" aria-label="台のボタン">
-                    <span class="kb-shine"></span>
-                    <span class="kb-eye kb-left"></span><span class="kb-eye kb-right"></span>
-                    <span class="kb-cheek kb-left"></span><span class="kb-cheek kb-right"></span>
-                    <span class="kb-label">PUSH</span>
-                </button>
+                <div class="push-area">
+                    <!-- 台のボタン (こおりくんの体の形)。先読みで光る・震える・鳴る。バトルの「PUSH!」で押す (B キーでも) -->
+                    <button id="koori-button" class="koori-button" aria-label="台のボタン">
+                        <span class="kb-shine"></span>
+                        <span class="kb-eye kb-left"></span><span class="kb-eye kb-right"></span>
+                        <span class="kb-cheek kb-left"></span><span class="kb-cheek kb-right"></span>
+                        <span class="kb-label">PUSH</span>
+                    </button>
+                </div>
+                <button id="right-button" class="small-button aim-button"><span class="aim-word">右打ち</span> →</button>
             </div>
             <p class="hint">ハンドルを押している間発射（Space でも）。押したまま回す・← → キー・ホイールで強さを変える。こおりくんのボタンは B キーでも押せる</p>
             <button id="lend-button" class="lend-button">玉貸し（+125発）</button>
@@ -126,14 +126,14 @@
     <script src="js/physics.js?v=a1301719"></script>
     <script src="js/audio.js?v=5e9e76a0"></script>
     <script src="js/scenario.js?v=5deef4b2"></script>
-    <script src="js/machine.js?v=bb450641"></script>
+    <script src="js/machine.js?v=57079b34"></script>
     <script src="js/render.js?v=7ee56641"></script>
     <script src="js/figures.js?v=7b763032"></script>
     <script src="js/button.js?v=3d1b1ed5"></script>
-    <script src="js/lcd-rash.js?v=79755a5f"></script>
+    <script src="js/lcd-rash.js?v=669dd26c"></script>
     <script src="js/lcd-story.js?v=e954a3ad"></script>
-    <script src="js/lcd.js?v=3bc439f7"></script>
+    <script src="js/lcd.js?v=ed855986"></script>
     <script src="js/customize.js?v=96b69c56"></script>
-    <script src="js/main.js?v=fad42441"></script>
+    <script src="js/main.js?v=6493187d"></script>
 </body>
 </html>

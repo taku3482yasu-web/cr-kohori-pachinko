@@ -359,6 +359,30 @@ const RashView = (() => {
         }
     }
 
+    // ----- 〇G連確定 (RASH 中の大当たりのラウンド中。残り保留に当たりがあるとき) -----
+    // 暗転 → こおりRASH ならこおりくん、おにおにRASH ならおにおにが虹色に光る →「〇G連確定！」
+    function drawRenchan(now, t, games, mode) {
+        const { ctx, W, H, text } = kit;
+        ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, t / 0.3)})`;
+        ctx.fillRect(0, 0, W, H);
+        if (t < 0.6) return;
+        const glow = 0.2 + 0.1 * Math.sin(now * 10);
+        ctx.fillStyle = `hsla(${(now * 300) % 360}, 90%, 60%, ${glow})`;
+        ctx.beginPath();
+        ctx.arc(W / 2, 74, 46, 0, Math.PI * 2);
+        ctx.fill();
+        if (mode === 'onioni') drawOnioni(W / 2, 112, 1.6, { eyesOpen: true, glow: true, rainbow: true, now });
+        else rainbowKoori(W / 2, 108, 3.4, now);
+        if (t > 1.1) {
+            kit.band(116, 26, 0.6);
+            text(`${games}G連確定！`, W / 2, 129, 20, 'rainbow', 'center', now);
+        }
+        if (t > 1.1 && t < 1.4) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${(1.4 - t) * 3})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+    }
+
     // 画面全体にかける効果 (おにおにRASH の反転・白黒)。なければ null
     function postEffect(plan, phase) {
         if (!plan || plan.kind !== 'onioni' || !phase) return null;
@@ -368,5 +392,5 @@ const RashView = (() => {
         return null;
     }
 
-    return { init, drawChallenge, drawChallengeHolds, drawOnioniRash, drawBlackout, postEffect, drawWeapon };
+    return { init, drawChallenge, drawChallengeHolds, drawOnioniRash, drawBlackout, drawRenchan, postEffect, drawWeapon };
 })();
