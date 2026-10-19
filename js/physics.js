@@ -134,7 +134,7 @@ const Physics = (() => {
             }
         } else if (inside.kind === 'warp') {
             const w = board.config.warp;
-            if (!entered || b.vx < w.minVx) return;
+            if (!entered || b.vx < board.warpMinVx) return;
             b.x = w.exitX;
             b.y = w.exitY;
             b.vx = w.exitVx * (0.8 + world.rng() * 0.4);

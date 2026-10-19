@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>出玉シミュレーター</title>
+<!--
+    出玉シミュレーター。2段階で測る:
+      1. 盤面の物理で玉を打ち、入賞率を測る
+         - 左打ち (スペックごとに釘の調整が違う): ヘソ・一般入賞口
+         - 右打ち (電チュー・アタッカーの開け閉め 4通り): ゲート・電チュー・アタッカー・一般入賞口
+      2. 1 の入賞率で玉の行き先を決めながら、台の抽選 (js/machine.js) を長い時間まわす
+         通常時は左打ち、時短・大当たり・小当たり・RUSH の残り保留のあいだは右打ち。
+    ?hours=200 で1台あたりの時間、?balls=3000 で 1 の玉の数、?spec=s199 でスペックをしぼる、?seed=1
+    ?widths=6.2,6.6,7.0 で、スペックの命釘の代わりにこのすき間を順に測る (調整用。ワープはスペックの値)
+    ヘッドレスChromeで: sh tools/run-sim.sh "hours=200"
+-->
+<style>body { font: 13px monospace; background: #111; color: #ddd; }</style>
+</head>
+<body>
+<pre id="out">計算中…</pre>
+<script src="../js/config.js"></script>
+<script src="../js/board.js"></script>
+<script src="../js/physics.js"></script>
+<script src="../js/machine.js"></script>
+<script>
+(() => {
+    const params = new URLSearchParams(location.search);
+    const HOURS = Number(params.get('hours') || 200);
+    const BALLS = Number(params.get('balls') || 3000);
+    let seed = Number(params.get('seed') || 20261019);
+    const rng = () => {
+        seed = (seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const lines = [];
+    const started = performance.now();
+
+    // ----- 1. 物理で入賞率を測る -----
+    // 1発打って、{ pocket: 入った入賞口 (なければ null), gate: ゲートを通ったか, time: 入賞・アウトまでの秒 }
+    function shoot(board, strength) {
+        const world = { board, balls: [], rng, events: [] };
+        Physics.launch(world, strength, CONFIG);
+        let t = 0;
+        for (; t < 20 && world.balls.length; t += 1 / 60) Physics.step(world, 1 / 60, CONFIG);
+        const pocket = world.events.find(e => e.type === 'pocket');
+        return { pocket: pocket ? pocket.id : null, gate: world.events.some(e => e.type === 'gate'), time: t };
+    }
+
+    // 入った先ごとの割合 { heso: 0.05, ... } と、入賞までの平均の秒
+    function measure(board, strength) {
+        const count = {};
+        let gate = 0, time = 0, timed = 0;
+        for (let i = 0; i < BALLS; i++) {
+            const r = shoot(board, strength);
+            const key = r.pocket ? (CONFIG.board.pockets[r.pocket].payout === 'general' ? 'general' : r.pocket) : 'none';
+            count[key] = (count[key] || 0) + 1;
+            if (r.gate) gate++;
+            if (r.pocket) { time += r.time; timed++; }
+        }
+        const rates = Object.fromEntries(Object.entries(count).map(([k, v]) => [k, v / BALLS]));
+        return { rates, gate: gate / BALLS, time: timed ? time / timed : 3 };
+    }
+
+    const presets = CONFIG.launch.presets;
+    // 測る釘の調整: スペックの値 (?widths= があれば、命釘だけそれに変えて順に)
+    const boardsFor = specId => {
+        const b = CONFIG.specs[specId].board;
+        return params.get('widths') ? params.get('widths').split(',').map(w => ({ ...b, hesoWidth: Number(w) })) : [b];
+    };
+    const keyOf = b => `命釘 ${b.hesoWidth.toFixed(2)} / ワープ ${b.warpMinVx}`;
+    const specIds = Object.keys(CONFIG.specs).filter(id => !params.get('spec') || params.get('spec') === id);
+    const leftByBoard = {};
+    specIds.forEach(id => boardsFor(id).forEach(b => {
+        if (!leftByBoard[keyOf(b)]) leftByBoard[keyOf(b)] = measure(Board.build(CONFIG, b), presets.left);
+    }));
+    const rightBoard = Board.build(CONFIG);
+    const right = {};
+    [false, true].forEach(d => [false, true].forEach(a => {
+        Board.setOpen(rightBoard, 'denchu', d);
+        Board.setOpen(rightBoard, 'attacker', a);
+        right[`${d ? 1 : 0}${a ? 1 : 0}`] = measure(rightBoard, presets.right);
+    }));
+    const pct = x => ((x || 0) * 100).toFixed(1).padStart(5) + '%';
+    lines.push(`1. 入賞率 (玉 ${BALLS} 発ずつ)`);
+    lines.push(`  左打ち (強さ ${presets.left})`);
+    Object.keys(leftByBoard).sort().forEach(key => {
+        const r = leftByBoard[key];
+        lines.push(`    ${key}: ヘソ ${pct(r.rates.heso)}  一般 ${pct(r.rates.general)}`
+            + `  → 回転率 ${(r.rates.heso * 250).toFixed(1)} /1k  (入賞まで ${r.time.toFixed(1)} 秒)`);
+    });
+    lines.push(`  右打ち (強さ ${presets.right})`);
+    Object.entries(right).forEach(([k, r]) => lines.push(`    電チュー${k[0] === '1' ? '開' : '閉'} アタッカー${k[1] === '1' ? '開' : '閉'}:`
+        + ` ゲート ${pct(r.gate)}  電チュー ${pct(r.rates.denchu)}  アタッカー ${pct(r.rates.attacker)}  一般 ${pct(r.rates.general)}  (入賞まで ${r.time.toFixed(1)} 秒)`));
+
+    // ----- 2. 台の抽選をまわす -----
+    function pick(rates) {
+        let r = rng();
+        for (const [k, v] of Object.entries(rates)) {
+            if ((r -= v) < 0) return k;
+        }
+        return 'none';
+    }
+
+    function run(specId, board) {
+        const m = Machine.create(CONFIG, specId, rng);
+        const DT = 0.2;
+        const end = HOURS * 3600;
+        const flying = [];      // 打った玉 { at: 届く時刻, aim }
+        let nextShot = 0;
+        let shot = 0, paid = 0, shotLeft = 0;
+        let firstHits = 0, jitanEntries = 0, firstJitan = false, firstJitanWins = 0;
+        let jitanIn = 0, jitanOut = 0, inJitanNow = false;
+        let rushPaid = 0;
+        let rushStartPaid = 0, rushStartShot = 0;
+        const leftRate = leftByBoard[keyOf(board)];
+        for (let t = 0; t < end; t += DT) {
+            // 1分に100発。狙いは台の状態で決める
+            while (nextShot <= t) {
+                const aim = Machine.aim(m);
+                flying.push({ at: nextShot + (aim === 'left' ? leftRate.time : right['00'].time), aim });
+                nextShot += CONFIG.launch.interval;
+                shot++;
+                if (aim === 'left') shotLeft++;
+                if (inJitanNow) jitanIn++;
+            }
+            // 届いた玉: そのときの電チュー・アタッカーの開き方で行き先を決める
+            while (flying.length && flying[0].at <= t) {
+                const ball = flying.shift();
+                let where;
+                if (ball.aim === 'left') where = pick(leftRate.rates);
+                else {
+                    const r = right[`${m.parts.denchu ? 1 : 0}${m.parts.attacker ? 1 : 0}`];
+                    if (rng() < r.gate) Machine.enter(m, 'gate');
+                    where = pick(r.rates);
+                }
+                if (where === 'none') continue;
+                const pay = CONFIG.payout[CONFIG.board.pockets[where] ? CONFIG.board.pockets[where].payout : where] || 0;
+                paid += pay;
+                if (inJitanNow) jitanOut += pay;
+                if (where === 'heso' || where === 'denchu' || where === 'attacker') Machine.enter(m, where);
+            }
+            Machine.update(m, DT);
+            inJitanNow = Machine.inJitan(m);
+            m.events.splice(0).forEach(e => {
+                if (e.type === 'bonusStart' && !e.rush) firstHits++;
+                // 初当たりのあとの時短で当たった = RUSH の1回目の継続
+                if (e.type === 'bonusStart' && e.rush && firstJitan) { firstJitanWins++; firstJitan = false; }
+                if (e.type === 'jitanStart' && e.rushHits === 1) {
+                    jitanEntries++;
+                    firstJitan = true;
+                    rushStartPaid = paid;
+                    rushStartShot = shot;
+                }
+                if (e.type === 'rushEnd') {
+                    firstJitan = false;
+                    rushPaid += (paid - rushStartPaid) - (shot - rushStartShot);
+                }
+            });
+        }
+        const s = m.stats;
+        const hits = s.hits1 + s.hits2 + s.vHits;
+        return {
+            rotation: s.spins1 / shotLeft * 250,
+            hitRate: firstHits ? (s.spins1 + 0) / firstHits : 0,
+            firstHits, jitanEntry: firstHits ? jitanEntries / firstHits : 0,
+            firstWin: jitanEntries ? firstJitanWins / jitanEntries : 0,
+            continuation: s.rushHits / (s.rushHits + s.rushes || 1),
+            perRush: s.rushes ? rushPaid / s.rushes : 0,
+            payoutRate: paid / shot,
+            perHour: (paid - shot) / HOURS,
+            jitanBalance: jitanIn ? (jitanOut - jitanIn) / Math.max(1, s.rushes + s.rushHits) : 0,
+            smalls: s.smalls, vRate: s.smalls ? s.vHits / s.smalls : 0, hits
+        };
+    }
+
+    lines.push(`\n2. 台の抽選 (1台 ${HOURS} 時間ずつ)`);
+    specIds.forEach(specId => {
+        const spec = CONFIG.specs[specId];
+        lines.push(`  --- ${spec.label} (目標: 継続率 ${spec.target.continuation * 100}%) ---`);
+        lines.push('  釘の調整             回転率/1k 初当たり 初当たり回数 時短へ 時短で当たり 継続率 RUSH1回の差玉 小当たりV  出玉率  1時間の差玉');
+        boardsFor(specId).forEach(b => {
+            const r = run(specId, b);
+            lines.push(`  ${keyOf(b)}  ${r.rotation.toFixed(1).padStart(6)}   1/${r.hitRate.toFixed(0).padEnd(5)} ${String(r.firstHits).padStart(7)}`
+                + `   ${pct(r.jitanEntry)} ${pct(r.firstWin)}  ${pct(r.continuation)} ${r.perRush.toFixed(0).padStart(9)}  ${pct(r.vRate)}  ${pct(r.payoutRate)}  ${r.perHour.toFixed(0).padStart(8)}`);
+        });
+    });
+    lines.push(`\n(${((performance.now() - started) / 1000).toFixed(1)} 秒)`);
+    document.getElementById('out').textContent = lines.join('\n');
+})();
+</script>
+</body>
+</html>

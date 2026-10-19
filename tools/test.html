@@ -7,7 +7,8 @@
     盤面の物理テスト。打ち出しの強さごとに玉を打って、どこに入ったかを数える。
     ブラウザで開くか、ヘッドレスChromeで:
       chrome --headless --disable-gpu --virtual-time-budget=60000 --dump-dom tools/test.html
-    ?balls=500 で強さごとの玉の数、?seed=1 で乱数の種を変えられる。
+    ?balls=500 で強さごとの玉の数、?seed=1 で乱数の種、?heso=7.0 でヘソの命釘のすき間、?warpvx=40 でワープに入る速さを変えられる。
+    ?from=20&to=40&step=5 で測る強さの範囲。
 -->
 <style>body { font: 13px monospace; background: #111; color: #ddd; } td, th { padding: 2px 8px; text-align: right; }</style>
 </head>
@@ -44,7 +45,8 @@
     }
 
     const lines = [];
-    const board = Board.build(CONFIG);
+    if (params.get('warpvx')) CONFIG.board.warp.minVx = Number(params.get('warpvx'));
+    const board = Board.build(CONFIG, { hesoWidth: Number(params.get('heso')) || 0 });
     lines.push(`釘 ${board.nails.length} 本 / 玉 ${BALLS} 発ずつ\n`);
     const cols = ['foul', 'heso', 'general', 'gate', 'denchu', 'attacker', 'warp', 'spill', 'stuck', 'timeout'];
     lines.push('強さ  ' + cols.map(c => c.padStart(8)).join('') + '   落下位置(平均)');
@@ -52,7 +54,7 @@
     const where = [];   // 止まった・時間切れの玉の位置 (はじめの数個)
     const report = (label, opened) => {
         lines.push(`--- ${label} ---`);
-        for (let s = 0; s <= 100; s += 10) {
+        for (let s = Number(params.get('from') || 0); s <= Number(params.get('to') || 100); s += Number(params.get('step') || 10)) {
             const count = Object.fromEntries(cols.map(c => [c, 0]));
             const lands = [];
             for (let i = 0; i < BALLS; i++) {

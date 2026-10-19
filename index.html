@@ -16,10 +16,16 @@
         <canvas id="board" class="board" aria-label="パチンコの盤面"></canvas>
 
         <section class="controls">
+            <div class="machine-bar">
+                <span id="spec-display" class="spec-display"></span>
+                <button id="machine-button" class="small-button">台選び</button>
+            </div>
+            <div id="mode-display" class="mode-display"></div>
+            <div id="aim-display" class="aim-display" hidden>右打ち →</div>
             <div class="status">
                 <div class="status-item"><span class="label">持ち玉</span><span id="balls" class="value">0</span></div>
                 <div class="status-item"><span class="label">発射</span><span id="launched" class="value">0</span></div>
-                <div class="status-item"><span class="label">ヘソ入賞</span><span id="heso" class="value">0</span></div>
+                <div class="status-item"><span class="label">回転数</span><span id="spins" class="value">0</span></div>
                 <div class="status-item"><span class="label">回転率 /1k</span><span id="rate" class="value">-</span></div>
             </div>
 
@@ -38,14 +44,31 @@
 
         <section id="debug-panel" class="debug-panel" hidden>
             <div class="debug-buttons">
-                <button id="debug-denchu">電チュー: 閉</button>
-                <button id="debug-attacker">アタッカー: 閉</button>
+                <span id="debug-board" class="debug-board"></span>
+                <button id="debug-hit">次は大当たり</button>
+                <button id="debug-hit-rush">次は大当たり (RUSH へ)</button>
+                <button id="debug-small">次は小当たり (特図2)</button>
+                <button id="debug-jitan">時短に入る</button>
                 <button id="debug-auto">オート発射: OFF</button>
+                <button id="debug-aim">オートで打ち分け: OFF</button>
                 <button id="debug-reset">集計リセット</button>
             </div>
             <div id="debug-stats" class="debug-stats"></div>
         </section>
     </main>
+
+    <!-- 台選び: ゲームを始める前にスペックと設定を選ぶ -->
+    <div id="machine-picker" class="picker" hidden>
+        <div class="picker-box" role="dialog" aria-labelledby="picker-title">
+            <h2 id="picker-title">台を選ぶ</h2>
+            <h3>スペック（大当たり確率）</h3>
+            <div id="spec-options" class="spec-options"></div>
+            <div class="picker-actions">
+                <button id="picker-close" class="small-button">もどる</button>
+                <button id="picker-start" class="start-button">この台で遊ぶ</button>
+            </div>
+        </div>
+    </div>
 
     <script src="js/config.js"></script>
     <script src="js/sprites.js"></script>
@@ -53,6 +76,7 @@
     <script src="js/backgrounds.js"></script>
     <script src="js/board.js"></script>
     <script src="js/physics.js"></script>
+    <script src="js/machine.js"></script>
     <script src="js/render.js"></script>
     <script src="js/lcd.js"></script>
     <script src="js/main.js"></script>

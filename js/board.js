@@ -75,7 +75,8 @@ const Board = (() => {
         return x >= area.x0 && x <= area.x1 && y >= area.y0 && y <= area.y1;
     }
 
-    function build(config) {
+    // options: スペックごとの釘調整 (config.specs[...].board)。hesoWidth: ヘソの命釘のすき間 / warpMinVx: ワープに入る速さ。省略すると config.board の値
+    function build(config, options = {}) {
         const b = config.board;
         const nailR = b.nailRadius;
         const circles = [];
@@ -130,7 +131,8 @@ const Board = (() => {
 
         // ----- 入賞口 -----
         Object.entries(b.pockets).forEach(([id, p]) => {
-            const half = p.width / 2;
+            const width = id === 'heso' && options.hesoWidth ? options.hesoWidth : p.width;
+            const half = width / 2;
             const postX = half + nailR;
             circles.push({ x: p.x - postX, y: p.y, r: nailR, surface: 'nail', post: id });
             circles.push({ x: p.x + postX, y: p.y, r: nailR, surface: 'nail', post: id });
@@ -191,6 +193,7 @@ const Board = (() => {
         return {
             config: b, circles, segments, sensors, parts, windmills, nails,
             rails: { outer, inner }, rubber,
+            warpMinVx: options.warpMinVx || b.warp.minVx,
             grid: buildGrid(circles, segments, b.width, b.height)
         };
     }

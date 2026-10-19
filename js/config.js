@@ -132,11 +132,76 @@ const CONFIG = {
         presets: { left: 30, right: 95 }
     },
 
-    // 賞球 (入賞1個あたりに払い出す玉の数)
-    payout: { heso: 3, denchu: 1, general: 10, attacker: 15 },
+    // 賞球 (入賞1個あたりに払い出す玉の数)。アタッカー 15 はユーザー指定。ヘソ・一般入賞口は出玉率を 80〜95% にするため少なめ
+    payout: { heso: 1, denchu: 1, general: 5, attacker: 15 },
 
     balls: {
         start: 250,          // はじめの持ち玉
         lend: 125            // 「玉貸し」1回で増える数 (500円分)
+    },
+
+    // ----- スペック (ゲームを始める前に選ぶ。ユーザー指定 2026-10-19) -----
+    // 大当たりの振り分け: rounds (ラウンド数) と next (終わったあと。'normal' = 通常時 / 'jitan' = 時短 = RUSH)
+    //   1ラウンド = アタッカーに count 個 (賞球 15 → 150個)。2R = 300個 / 10R = 1500個
+    // firstHit: 通常時の特図1 (ヘソ) で当たったとき / rushHit: 特図2 (電チュー) の大当たり・小当たりからの V 入賞
+    // board: スペックごとの釘調整 (お店が機種ごとに釘を調整するのと同じ)。出玉率を 80〜95% に合わせる (ユーザー指定 2026-10-19)
+    //   hesoWidth: ヘソの命釘のすき間 (玉の直径は 6。広いほど入りやすい)
+    //   warpMinVx: ワープに入る速さ (大きいほど入りにくい = ステージ経由のヘソ入賞が減る)
+    // jitan.spins: 時短の回数 (特図を何回まわすか)。小当たりの確率と合わせて RUSH の継続率が決まる
+    //   (時短が終わったあとの残り保留でも小当たりを引ける。継続率は tools/simulate.html で測って合わせる)
+    specs: {
+        s199: {
+            label: '1/199',
+            note: '甘めの確率。初当たりの半分が RUSH へ。RUSH は継続率 約85%、半分が 1500個',
+            hitRate: 1 / 199,
+            smallRate: 1 / 7,
+            firstHit: [
+                { weight: 50, rounds: 2, next: 'normal' },   // 300個のみ
+                { weight: 50, rounds: 2, next: 'jitan' }     // 300個 + RUSH
+            ],
+            rushHit: [
+                { weight: 50, rounds: 2, next: 'jitan' },    // 300個
+                { weight: 50, rounds: 10, next: 'jitan' }    // 1500個
+            ],
+            jitan: { spins: 8 },
+            board: { hesoWidth: 6.7, warpMinVx: 15 },
+            target: { rushEntry: 0.5, continuation: 0.85 }
+        },
+        s319: {
+            label: '1/319',
+            note: '重い確率。初当たりはすべて RUSH へ挑戦。RUSH は継続率 約80%、すべて 1500個',
+            hitRate: 1 / 319,
+            smallRate: 1 / 7,
+            firstHit: [
+                { weight: 100, rounds: 2, next: 'jitan' }    // 300個 + 時短 (RUSH への挑戦)
+            ],
+            rushHit: [
+                { weight: 100, rounds: 10, next: 'jitan' }   // 1500個
+            ],
+            jitan: { spins: 6 },
+            board: { hesoWidth: 6.4, warpMinVx: 70 },
+            target: { rushEntry: 0.8, continuation: 0.80 }
+        }
+    },
+
+    // ----- 抽選と動きの時間 (両スペック共通) -----
+    machine: {
+        holdMax: 4,                  // 保留の上限 (特図1・特図2 それぞれ)
+        // 特図の変動時間 (秒)。演出は段階3で作り込む。保留が shortenAt 個以上あると外れは短くなる
+        spin: {
+            fig1: { miss: 7, missShort: 3.5, shortenAt: 3, reach: 15, reachRate: 0.12, hit: 18 },
+            fig2: { miss: 2, small: 3, hit: 6 }
+        },
+        // 小当たり: アタッカーが open 秒開く。そのあいだに入った玉で V 入賞 → 大当たり (rushHit)
+        small: { open: 1.8 },
+        // 大当たり: opening (秒) → ラウンド (count 個入るか maxTime 秒で閉じる) → interval → … → ending
+        bonus: { opening: 3, count: 10, maxTime: 25, interval: 1.5, ending: 4 },
+        // 普図 (ゲートで抽選 → 電チューが開く)。support = 時短中 (電サポ)
+        futsu: {
+            normal: { rate: 1 / 16, spin: 12, opens: 1, open: 0.2, gap: 0 },
+            support: { rate: 1, spin: 1, opens: 3, open: 1.6, gap: 0.4 },
+            holdMax: 4,
+            denchuCount: 4           // 1回の当たりで電チューに入る玉の上限 (超えると閉じる)
+        }
     }
 };

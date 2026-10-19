@@ -159,6 +159,63 @@ button:hover { border-color: var(--accent); }
 .debug-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .debug-stats { color: var(--muted); line-height: 1.6; }
 
+/* 台の名前・状態 */
+.machine-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.spec-display { font-size: 15px; color: var(--accent); }
+
+.mode-display {
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 15px;
+    text-align: center;
+}
+.mode-display.mode-rush { border-color: var(--accent); color: var(--accent); }
+.mode-display.mode-bonus { border-color: #ffe066; color: #ffe066; }
+.mode-display.mode-small { border-color: var(--hot); color: var(--hot); }
+
+.aim-display {
+    text-align: center;
+    font-size: 18px;
+    color: var(--hot);
+    animation: blink 0.7s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: 0.35; } }
+
+/* 台選び */
+.picker {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 10;
+}
+.picker[hidden] { display: none; }
+.picker-box {
+    width: min(100%, 440px);
+    max-height: 100%;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 2px solid var(--accent);
+    border-radius: 12px;
+    padding: 16px;
+}
+.picker-box h2 { margin: 0 0 12px; font-size: 20px; text-align: center; color: var(--accent); }
+.picker-box h3 { margin: 14px 0 6px; font-size: 14px; color: var(--muted); }
+.picker-note { margin: 0 0 8px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.spec-options { display: grid; gap: 8px; }
+.spec-option { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 10px 12px; }
+.spec-label { font-size: 20px; color: #ffe066; }
+.spec-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.spec-option.selected { border-color: #ffe066; background: #1f3350; }
+.picker-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.start-button { font-size: 16px; padding: 10px 16px; border-color: #ffe066; color: #ffe066; }
+.debug-board { align-self: center; color: #c8a0ff; margin-right: 6px; }
+
 @media (max-width: 640px) {
     .machine { padding: 16px; gap: 12px; }
     .board { width: 100%; }
