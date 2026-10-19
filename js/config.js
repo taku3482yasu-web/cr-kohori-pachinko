@@ -245,7 +245,7 @@ const CONFIG = {
         holdColors: {
             order: ['white', 'blue', 'green', 'purple', 'red', 'rainbow'],
             hit: { white: 10, blue: 12, green: 15, purple: 20, red: 28, rainbow: 15 },
-            miss: { white: 900, blue: 60, green: 25, purple: 10, red: 5, rainbow: 0 },
+            miss: { white: 900, blue: 60, green: 25, purple: 10, red: 1.7, rainbow: 0 },   // 赤は外れで出にくくして期待度を上げた (2026-10-19 ユーザー指定。5 → 1.7)
             colors: { white: '#e8f6ff', blue: '#4f9bff', green: '#3fdf6f', purple: '#c070ff', red: '#ff3a3a' }
         },
 
@@ -268,7 +268,7 @@ const CONFIG = {
         // 入賞時の音 (ユーザーが録音した sounds/heso.m4a。js/sound-heso.js に埋め込み): ヘソに入ったときにこの音が鳴って、台のボタンが赤く光る
         //   hitRate: 当たりの保留で鳴る割合 (占有率 60%。ユーザー指定) / reliability: ガセの量の基準 (fake 1 のとき鳴ったら当たりの割合)
         //   start〜end: 録音のうち鳴らすところ (秒。前後の無音を切った) / gain: 音量 (録音が小さめなので大きくする)
-        voice: { hitRate: 0.6, reliability: 0.4, start: 1.3, end: 5.6, gain: 4 },
+        voice: { hitRate: 0.6, reliability: 0.4, start: 1.3, end: 3.5, gain: 4 },   // 録音の2つの音のうち長いほう (ユーザー指定)
 
         // 台のボタン (こおりくんの体の形)。ヘソに入ったときに 赤く光る・ぶるぶる震える・高い音 のどれかが起きる (ユーザー指定)
         // 起きたらその保留の当たりの確率が reliability (約60%) になるよう、外れのときに起きる確率を自動で計算する
