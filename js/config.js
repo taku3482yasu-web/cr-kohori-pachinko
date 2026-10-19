@@ -186,7 +186,7 @@ const CONFIG = {
             ],
             challengeSmallRate: 1 / 6.5,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/6.3 で 53%、1/6.8 で 48%)
             jitan: { challengeSpins: 1, spins: 6 },
-            board: { hesoWidth: 6.4, warpMinVx: 40 },
+            board: { hesoWidth: 6.6, warpMinVx: 40 },
             target: { challenge: 0.5, continuation: 0.80 }
         }
     },
@@ -283,6 +283,7 @@ const CONFIG = {
         //   相手 (成功率の低い順。ゴールド金面犬は確定)。hit: 当たりのときの重み / win: 成功率 (Claude が決めた。金面犬の確定はユーザー指定)
         kooriRash: {
             timing: { roll: 1, battle: 5, result: 2 },
+            lastShare: 0.02,   // RASH の変動のうち「最後の保留」になる割合 (測った値。外れのバトルの割合の計算に使う)
             enemies: {
                 shibata: { name: 'シバター', hit: 15, win: 0.15, map: 'ebisucho' },
                 sasaki: { name: 'Mr.SASAKI', hit: 25, win: 0.35, map: 'tsugakuro' },
@@ -400,7 +401,20 @@ const CONFIG = {
             rashHotLines: ['あちあちかも！', 'ここがせめどき！', 'いけるよ！ いっけー！！', '一気にたおしちゃえ！！'],
             rashExpectLines: ['いけるかも…？', 'そろそろせめどき…？', 'なんだかあったかい…？'],
             rashCalmLines: ['どんどん回そう！', '右打ち、わすれないでね！', 'まだまだこれからだよ！', 'のんびりいこ♪'],
-            congratsLine: 'おめでとう！'
+            congratsLine: 'おめでとう！',
+            // 大当たり中 (ユーザー指定): 始め (entry: RASH 突入 / big: bigLabel 個以上 / small: それ以外)・ラウンドの始め
+            //   (2ラウンド目から roundRate の確率。最後のラウンドは lastRound)・終わり (endRash: RASH が続く / endNormal: 通常時へ)
+            bonusLines: {
+                entry: ['RASH 突入だよ！ おめでとう！', 'おにおにを突破したね！ すごい！'],
+                big: ['大きいのきた！！', 'いっぱい出るよ〜！', 'うちの実家の金庫みたい…♪'],
+                small: ['やったね！ 当たりだよ！', 'まずは出玉ゲット！'],
+                round: ['どんどん入れて！', '右打ち、そのままだよ〜', 'いい感じ！', '玉、こぼさないでね！', 'アタッカー、開いてるよ！'],
+                lastRound: ['ラストラウンド！', 'もう少しで終わりだよ！'],
+                endRash: ['まだまだ続くよ！', 'この調子でいこ！', '次も当てちゃお！'],
+                endNormal: ['おつかれさま！ また当てよう！', '次は RASH に行こうね！']
+            },
+            bonusRoundRate: 0.5,
+            bonusColor: 5
         }
     }
 };

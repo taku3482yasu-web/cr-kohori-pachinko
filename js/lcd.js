@@ -72,6 +72,17 @@ const Lcd = (() => {
         bubble = { text, color, until: now + CONFIG.show.furukawa.talkTime };
     }
 
+    // 大当たり中のふるカワ (始め・ラウンド・終わり)。delay 秒あとから出す (大当たりの文字と重ならないように)
+    let lastBonusLine = null;
+    function bonusTalk(kind, now, delay = 0) {
+        if (Story.active()) return;
+        const f = CONFIG.show.furukawa;
+        const list = f.bonusLines[kind].filter(line => line !== lastBonusLine);
+        const line = list[Math.floor(Math.random() * list.length)] || f.bonusLines[kind][0];
+        lastBonusLine = line;
+        bubble = { text: line, color: f.bonusColor, from: now + delay, until: now + delay + f.talkTime };
+    }
+
     // ----- 台のイベント -----
     function event(e, now) {
         if (e.type === 'hold') {
@@ -88,6 +99,7 @@ const Lcd = (() => {
             // RASH の 10回目の大当たり: ラウンド中にエンディング
             Story.play('ending', now);
         } else if (e.type === 'bonusStart') {
+            bonusTalk(e.entry ? 'entry' : e.label >= CONFIG.show.bigLabel ? 'big' : 'small', now, CONFIG.machine.bonus.opening * 0.6);
             const head = e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
             show(`${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
@@ -95,14 +107,19 @@ const Lcd = (() => {
             show('V を狙え！', '#ff6a8a', now, CONFIG.machine.small.open);
         } else if (e.type === 'roundStart') {
             Sound.play('round');
+            const f = CONFIG.show.furukawa;
+            if (e.round === e.rounds && e.rounds > 1) bonusTalk('lastRound', now);
+            else if (e.round > 1 && Math.random() < f.bonusRoundRate) bonusTalk('round', now);
         } else if (e.type === 'jitanStart') {
             if (e.challenge) show('突破チャレンジ！', '#7fd3f7', now, 2);
 
         } else if (e.type === 'ending' && e.next === 'normal') {
             show('通常時へ', '#ffffff', now, CONFIG.machine.bonus.ending);
+            bonusTalk('endNormal', now);
         } else if (e.type === 'ending' && e.rushHits > 1) {
             // RASH の大当たりの終わり: 「〇回目」→「〇〇RASH」
             rashCount = { count: e.rushHits - 1, start: now };
+            bonusTalk('endRash', now);
         } else if (e.type === 'rushEnd') {
             summary = { hits: e.hits - 1, balls: e.balls, failed: e.challengeFailed, until: now + 5 };
         }
@@ -434,7 +451,7 @@ const Lcd = (() => {
 
     // ----- ふるカワ -----
     function drawFurukawa(now) {
-        if (!bubble || now >= bubble.until) return;
+        if (!bubble || now >= bubble.until || (bubble.from && now < bubble.from)) return;
         const talkFrame = Math.floor(now * 6) % 2 ? 'talk' : 'idle';
         drawSprite(ctx, SPRITES.furukawa, talkFrame, W - 34, H - 46, 1.6);
         const colors = CONFIG.show.furukawa.colors;
@@ -597,6 +614,7 @@ const Lcd = (() => {
             say(plan.defeatLine, plan.defeatColor ?? 5, now);
             bubble.key = spinKey;
         }
+        drawRashCount(now);
         drawHolds(now, m);
         drawFurukawa(now);
 
@@ -620,7 +638,6 @@ const Lcd = (() => {
             band(44, 44, 0.45);
             text(flash.text, W / 2, 66, 20 + Math.round(Math.sin(Math.min(1, t * 4) * Math.PI / 2) * 4), flash.color);
         }
-        drawRashCount(now);
         applyEffect(RashView.postEffect(plan, phase));
         return canvas;
     }

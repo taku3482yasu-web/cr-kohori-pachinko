@@ -192,7 +192,10 @@ const Scenario = (() => {
             const enemies = show.kooriRash.enemies;
             const h2 = spec.hitRate + spec.smallRate;
             const mass = missBattleMass(show, spec, enemies, h2);
-            const fakeRate = Math.min(1, Object.values(mass).reduce((a, x) => a + x, 0) / (1 - h2));
+            // 当たりのうちブラックアウトになる分はバトルにならず、最後の保留 (lastShare) は外れでも必ずバトルになるので、
+            // そのぶんを差し引いて外れのバトルの割合を決める (相手の成功率を守るため)
+            const need = Object.values(mass).reduce((a, x) => a + x, 0) * (1 - show.blackout.rate) - show.kooriRash.lastShare;
+            const fakeRate = Math.min(1, Math.max(0, need) / (1 - h2));
             if (win || spin.isLast || result.force === 'reach' || rng() < fakeRate) {
                 const t = show.kooriRash.timing;
                 p.kind = 'rashBattle';
