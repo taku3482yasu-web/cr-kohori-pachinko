@@ -17,6 +17,29 @@ const Sound = (() => {
         }
         const AC = window.AudioContext || window.webkitAudioContext;
         if (AC) ctx = new AC();
+        loadVoice();
+    }
+
+    // 録音した音 (js/sound-heso.js の HESO_SOUND) を読みこむ。data: の URL なので、ファイルを直接開いても読める
+    let voiceBuffer = null;
+    function loadVoice() {
+        if (!ctx || typeof HESO_SOUND === 'undefined') return;
+        const bin = atob(HESO_SOUND.split(',')[1]);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        ctx.decodeAudioData(bytes.buffer).then(buf => { voiceBuffer = buf; }, () => { voiceBuffer = null; });
+    }
+
+    // 入賞時の音 (config.show.voice の start〜end を gain 倍で)
+    function playVoice() {
+        if (muted || !ctx || ctx.state !== 'running' || !voiceBuffer) return;
+        const v = CONFIG.show.voice;
+        const src = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        src.buffer = voiceBuffer;
+        gain.gain.value = v.gain;
+        src.connect(gain).connect(ctx.destination);
+        src.start(0, v.start, Math.max(0.1, v.end - v.start));
     }
 
     // 1つの音: 周波数 freq (Hz)、start 秒後から length 秒。slideTo で音の高さを変える
@@ -62,5 +85,5 @@ const Sound = (() => {
         try { localStorage.setItem('koori-pachinko-muted', value ? '1' : '0'); } catch (e) { /* 無視 */ }
     }
 
-    return { unlock, play, setMuted, get muted() { return muted; } };
+    return { unlock, play, playVoice, setMuted, get muted() { return muted; }, get voiceReady() { return Boolean(voiceBuffer); } };
 })();

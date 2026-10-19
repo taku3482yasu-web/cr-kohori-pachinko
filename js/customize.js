@@ -10,7 +10,7 @@
 const Customize = (() => {
     const OPTIONS = {
         senyomi: { label: '先読み', group: '演出',
-            note: '大当たりのうち先読み演出 (保留の色・ボタン・SE城前/満月) が出る割合 (占有率)。なし 0% / チャンス 30% / おすすめ 50% / 熱 90%',
+            note: '大当たりのうち先読み演出 (保留の色・ボタン・SE城前/満月) が出る割合 (占有率)。なし 0% / チャンス 30% / おすすめ 50% / 熱 90%。占有率が高いほどガセが少ない',
             choices: { none: 'なし', chance: 'チャンス', recommend: 'おすすめ', hot: '熱' }, default: 'recommend' },
         notice: { label: '告知', group: '演出', note: '先告知: 当たりの変動が始まったときにボタンが虹色に光って教えてくれる',
             choices: { normal: 'ふつう', pre: '先告知' }, default: 'normal' },

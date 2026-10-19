@@ -32,34 +32,37 @@ const Scenario = (() => {
         return b.hitRate * h * (1 - b.reliability) / b.reliability / (1 - h);
     }
 
-    // level: 先読みの量 (config.show.senyomi.levels のキー)。占有率に合わせて、当たりも外れも同じ割合で先読みの量を増減する
+    // level: 先読みの量 (config.show.senyomi.levels のキー)。当たりは占有率 occ で先読みを出し、外れのガセは fake 倍にする
     function hold(config, spec, result, rng, level = 'recommend') {
         const show = config.show;
         const sy = show.senyomi;
-        const occ = sy.levels[level] ?? sy.levels.recommend;
-        if (occ <= 0) return { holdColor: 'white', shownColor: 'white', button: null, hiStage: false };
-        const factor = occ / sy.base;
+        const lv = sy.levels[level] || sy.levels.recommend;
+        if (lv.occ <= 0) return { holdColor: 'white', shownColor: 'white', button: null, hiStage: false, voice: false };
         const hit = result.kind === 'hit';
         const weights = show.holdColors[hit ? 'hit' : 'miss'];
         const colored = Object.fromEntries(Object.entries(weights).filter(([c]) => c !== 'white'));
         // 虹色は当たりのときだけ
         const kinds = hit ? { ...show.button.kinds, ...show.button.hitOnlyKinds } : show.button.kinds;
         const hi = show.stages.hi;
-        let holdColor = 'white', button = null, hiStage = false;
+        const h = spec.hitRate;
+        let holdColor = 'white', button = null, hiStage = false, voice = false;
         if (hit) {
             // 当たり: 占有率で「先読みを出すか」を1回だけ決める。出すなら必ず色が付き、ボタン・高確率ステージはその中で
-            if (rng() < occ) {
+            if (rng() < lv.occ) {
                 holdColor = weighted(colored, rng);
                 if (rng() < show.button.hitRate / sy.base) button = weighted(kinds, rng);
                 hiStage = rng() < hi.hitRate / sy.base;
             }
+            voice = rng() < show.voice.hitRate;
         } else {
-            // 外れ: それぞれの出る量を占有率に合わせて増減する (信頼度を変えないため)
+            // 外れ (ガセ): それぞれの出る量を fake 倍
             const total = Object.values(weights).reduce((a, x) => a + x, 0);
             const coloredShare = Object.values(colored).reduce((a, x) => a + x, 0) / total;
-            if (rng() < Math.min(1, coloredShare * factor)) holdColor = weighted(colored, rng);
-            if (rng() < buttonMissRate(show, spec) * factor) button = weighted(kinds, rng);
-            hiStage = rng() < hi.hitRate * spec.hitRate * (1 - hi.reliability) / hi.reliability / (1 - spec.hitRate) * factor;
+            if (rng() < Math.min(1, coloredShare * lv.fake)) holdColor = weighted(colored, rng);
+            if (rng() < buttonMissRate(show, spec) * lv.fake) button = weighted(kinds, rng);
+            hiStage = rng() < hi.hitRate * h * (1 - hi.reliability) / hi.reliability / (1 - h) * lv.fake;
+            const v = show.voice;
+            voice = rng() < v.hitRate * h * (1 - v.reliability) / v.reliability / (1 - h) * lv.fake;
         }
         // 保留変化: 色が付く保留の一部は、最初は白で出して途中で変わる
         let shownColor = holdColor;
@@ -68,7 +71,7 @@ const Scenario = (() => {
             shownColor = 'white';
             change = rng() < sy.change.self ? 'self' : 'next';
         }
-        return { holdColor, shownColor, change, button, hiStage };
+        return { holdColor, shownColor, change, button, hiStage, voice };
     }
 
     // ----- 通常時のステージ (背景) -----

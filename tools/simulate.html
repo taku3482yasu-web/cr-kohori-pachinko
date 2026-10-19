@@ -179,6 +179,8 @@
                     e.result.kind === 'hit' && (e.result.holdColor !== 'white' || e.result.button || e.result.hiStage));
                 if (e.type === 'hold' && e.fig === 1 && e.result.kind === 'hit') tally(showStats.occ = showStats.occ || {}, 'hit',
                     e.result.holdColor !== 'white' || e.result.button || e.result.hiStage);
+                if (e.type === 'hold' && e.fig === 1 && e.result.voice) tally(showStats.voice = showStats.voice || {}, 'v', e.result.kind === 'hit');
+                if (e.type === 'hold' && e.fig === 1 && e.result.kind === 'hit') tally(showStats.voiceOcc = showStats.voiceOcc || {}, 'v', e.result.voice);
                 if (e.type === 'holdChange') tally(showStats.change = showStats.change || {}, e.color, false);
                 if (e.type === 'hold' && e.fig === 1) {
                     const hit = e.result.kind === 'hit';
@@ -253,6 +255,7 @@
                 + Object.keys(enames).map(id => `${enames[id].name} ${rate(st.rashEnemy[id] || [0, 0])}`).join(' / '));
             const occ = (st.occ || {}).hit || [0, 0];
             lines.push(`      先読み (${params.get('senyomi') || 'recommend'}): 占有率 ${rate([occ[0], occ[1]])}  保留変化 ${Object.values(st.change || {}).reduce((a, x) => a + x[0], 0)} 回`);
+            lines.push(`      入賞時の音: 占有率 ${rate((st.voiceOcc || {}).v || [0, 0])} / 鳴ったら当たり ${rate((st.voice || {}).v || [0, 0])}`);
             const sname = { regular: 'ふつう', quick: 'すぐ変わる', hi: '高確率ステージへ' };
             lines.push('      ステージの変わり方 (保留に当たりがある割合): ' + Object.keys(sname).map(k => `${sname[k]} ${rate(st.stage[k] || [0, 0])}`).join(' / '));
             lines.push(`      RASH 中のボタン: 起きたら当たり ${rate(st.rashButton)} / 当たりのときに起きる ${rate(st.rashButtonOnHit)}`);

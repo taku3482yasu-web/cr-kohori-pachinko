@@ -134,7 +134,11 @@ const Lcd = (() => {
     function event(e, now) {
         if (e.type === 'hold') {
             Sound.play('hold');
-            if (e.result.button) MachineButton.trigger(e.result.button, now);
+            if (e.result.voice) {
+                // 入賞時の音 (録音) が鳴って、ボタンが赤く光る
+                Sound.playVoice();
+                MachineButton.trigger('red', now);
+            } else if (e.result.button) MachineButton.trigger(e.result.button, now);
         } else if (e.type === 'holdChange') {
             // 保留変化: ピキーン！
             holdFx = { result: e.result, current: e.current, start: now };
