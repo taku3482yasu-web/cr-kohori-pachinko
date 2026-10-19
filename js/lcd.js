@@ -557,8 +557,18 @@ const Lcd = (() => {
     let lastTurn = -1;
 
     // ----- 保留 (こおりくんの体の形) -----
-    function holdIcon(x, y, size, color, now, active = false) {
-        const fill = color === 'rainbow' ? rainbow(now, x * 3) : CONFIG.show.holdColors.colors[color] || '#e8f6ff';
+    // color: 保留の色 ('black' は RASH 中の黒い保留) / spin: 回る保留 (RASH 中)
+    function holdIcon(x, y, size, color, now, active = false, spin = false) {
+        if (spin) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(now * 6);
+            ctx.translate(-x, -y);
+            holdIcon(x, y, size, color, now, active, false);
+            ctx.restore();
+            return;
+        }
+        const fill = color === 'rainbow' ? rainbow(now, x * 3) : color === 'black' ? '#141418' : CONFIG.show.holdColors.colors[color] || '#e8f6ff';
         const s = size;
         if (active) {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
@@ -570,7 +580,7 @@ const Lcd = (() => {
         ctx.fillRect(x - s / 2 + 1, y - s / 2 + 1, s - 2, s - 2);
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         ctx.fillRect(x - s / 2 + 2, y - s / 2 + 2, Math.max(1, s / 5), Math.max(1, s / 3));
-        ctx.fillStyle = '#10162a';
+        ctx.fillStyle = color === 'black' ? '#ff3a3a' : '#10162a';
         const eye = Math.max(1, Math.round(s / 8));
         ctx.fillRect(Math.round(x - s / 5), Math.round(y - s / 10), eye, eye * 2);
         ctx.fillRect(Math.round(x + s / 5 - eye), Math.round(y - s / 10), eye, eye * 2);
@@ -589,7 +599,7 @@ const Lcd = (() => {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
             ctx.fillRect(10 + i * 13, 132, 8, 8);
         }
-        m.holds[2].forEach((h, i) => holdIcon(W - 14 - i * 13, 136, 10, 'white', now));
+        m.holds[2].forEach((h, i) => holdIcon(W - 14 - i * 13, 136, 10, h.rashHold === 'black' ? 'black' : 'white', now, false, h.rashHold === 'spin'));
         // 変動中の保留 (当該保留) は真ん中の下に大きく
         if (m.spin && m.spin.fig === 1 && !m.bonus) holdIcon(W / 2, 134, 12, m.spin.result.shownColor || m.spin.result.holdColor, now, true);
     }
@@ -687,8 +697,13 @@ const Lcd = (() => {
         ctx.save();
         ctx.clearRect(0, 0, W, H);
         if (fx === 'flip') {
-            ctx.translate(W, H);
-            ctx.scale(-1, -1);
+            // 左右反転
+            ctx.translate(W, 0);
+            ctx.scale(-1, 1);
+        } else if (fx === 'upsideDown') {
+            // 上下逆
+            ctx.translate(0, H);
+            ctx.scale(1, -1);
         } else if (fx === 'mono') {
             ctx.filter = 'grayscale(1) contrast(1.2)';
         }

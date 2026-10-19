@@ -258,7 +258,7 @@ const CONFIG = {
         //   fake: 外れのときに出る先読み (ガセ) の量 (1 = holdColors.miss などの重みのまま)。占有率が高いほどガセを少なくする (ユーザー指定。値は Claude が決めた)
         //   → 占有率が高いほど、先読みが出たときの信頼度が高い
         //   base: holdColors.hit などの重みのときの占有率 (ボタン・高確率ステージの当たりでの出やすさの基準)
-        //   change: 色が付く保留のうち、最初は白で出して途中で色が変わる (保留変化) 割合。self: その保留の変動が始まるとき / それ以外: 保留が1つ進むとき
+        //   change: 色が付く保留のうち、最初は白で出して途中で色が変わる (保留変化) 割合 (当たり hitRate / 外れ missRate)。self: その保留の変動が始まるとき / それ以外: 保留が1つ進むとき
         senyomi: {
             levels: {
                 none: { occ: 0, fake: 0 },
@@ -267,7 +267,8 @@ const CONFIG = {
                 hot: { occ: 0.9, fake: 0.3 }
             },
             base: 0.9,
-            change: { rate: 0.4, self: 0.5 }
+            // 保留変化は当たりの保留で起きやすい (hitRate) / 外れで起きにくい (missRate)。保留変化したら外れでも必ずチャレンジ演出に入る (ユーザー指定)
+            change: { hitRate: 0.7, missRate: 0.1, self: 0.5 }
         },
         // 入賞時の音 (ユーザーが録音した sounds/heso.m4a。js/sound-heso.js に埋め込み): ヘソに入ったときにこの音が鳴って、台のボタンが赤く光る
         //   hitRate: 当たりの保留で鳴る割合 (占有率 60%。ユーザー指定) / reliability: ガセの量の基準 (fake 1 のとき鳴ったら当たりの割合)
@@ -342,14 +343,21 @@ const CONFIG = {
         //   wait → anomaly (違和感) → open (開眼) の秒。patterns は当たりのときに選ぶ重み
         onioniRash: {
             timing: { wait: 1.5, anomaly: 3, open: 2 },
+            // upsideDown・koori・tomoishi・naitei は 2026-10-19 にユーザー指定で追加。flip は左右反転にした (上下は upsideDown)
             patterns: {
-                open: { name: 'そのまま開眼', weight: 30 },
-                rainbow: { name: 'おにおにが虹色', weight: 20 },
-                flip: { name: '画面が反転', weight: 15 },
-                mono: { name: '白黒', weight: 15 },
-                zoom: { name: '顔がドアップ', weight: 20 }
+                open: { name: 'そのまま開眼', weight: 20 },
+                rainbow: { name: 'おにおにが虹色', weight: 13 },
+                flip: { name: '画面が左右反転', weight: 10 },
+                upsideDown: { name: '画面が上下逆', weight: 10 },
+                mono: { name: '白黒', weight: 10 },
+                zoom: { name: '顔がドアップ', weight: 12 },
+                koori: { name: 'こおりくんが現れる', weight: 10 },
+                tomoishi: { name: 'ともいしのカットイン「内定とりなさい！」', weight: 8 },
+                naitei: { name: 'シーシャ・ナイテイ・ナイナイのカットイン「内定は…！」', weight: 7 }
             }
         },
+        // RASH 中の保留 (ユーザー指定 2026-10-19): 当たりの保留の rate で、黒い保留か回る保留になる。外れでは出ない (出たら当たり確定)
+        rashHolds: { rate: 0.25, kinds: { black: 50, spin: 50 } },
 
         // 通常時のステージ (背景。ユーザー指定 2026-10-19)
         //   cycle の順に interval 回転ごとに変わる (回転数は Claude が決めた)

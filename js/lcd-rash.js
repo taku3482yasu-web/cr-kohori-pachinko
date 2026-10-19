@@ -286,6 +286,36 @@ const RashView = (() => {
             drawOnioni(cx, ground - 4, 1.8, { eyesOpen: open, glow: open, rainbow: pattern === 'rainbow' && (n === 'anomaly' || open), now });
         }
 
+        const anomaly = n === 'anomaly';
+        if (pattern === 'koori' && (anomaly || open)) {
+            // こおりくんが現れる: 横から歩いてきて、おにおにを見上げる
+            const kx = anomaly ? Math.min(40, -30 + local * 70) : 40;
+            drawSprite(ctx, SPRITES.koori, Math.floor(now * 5) % 2 ? 'walk1' : 'walk2', kx, ground - 34, 2);
+            if (anomaly && local > 1.2) text('？', kx + 34, ground - 44, 14, '#ffe066');
+        }
+        if ((pattern === 'tomoishi' || pattern === 'naitei') && anomaly && local > 0.3) {
+            // カットイン: 斜めの帯にキャラクターとセリフ
+            const k = Math.min(1, (local - 0.3) / 0.25);
+            ctx.save();
+            ctx.fillStyle = pattern === 'tomoishi' ? 'rgba(120, 60, 160, 0.92)' : 'rgba(120, 20, 20, 0.92)';
+            ctx.beginPath();
+            ctx.moveTo(W * (1 - k), 34);
+            ctx.lineTo(W * (1 - k) + W, 22);
+            ctx.lineTo(W * (1 - k) + W, 96);
+            ctx.lineTo(W * (1 - k), 108);
+            ctx.closePath();
+            ctx.fill();
+            const ox = W * (1 - k);
+            if (pattern === 'tomoishi') {
+                drawSprite(ctx, SPRITES.tomoishi, Math.floor(now * 4) % 2 ? 'shout' : 'idle', ox + 14, 40, 3.4);
+                text('内定とりなさい！', ox + 162, 64, 17, '#ffe066');
+            } else {
+                Characters.drawEnemy(ctx, 'naitei', ox + 46, 106, { scale: 1.45 });
+                text('内定は…！', ox + 168, 64, 20, '#ffffff');
+            }
+            ctx.restore();
+        }
+
         if (!open) {
             // 眠っている: Zzz
             const z = (now * 0.7) % 1;
@@ -388,6 +418,7 @@ const RashView = (() => {
         if (!plan || plan.kind !== 'onioni' || !phase) return null;
         if (phase.name !== 'anomaly' && phase.name !== 'open') return null;
         if (plan.pattern === 'flip' && phase.name === 'anomaly') return 'flip';
+        if (plan.pattern === 'upsideDown' && phase.name === 'anomaly') return 'upsideDown';
         if (plan.pattern === 'mono' && phase.name === 'anomaly') return 'mono';
         return null;
     }

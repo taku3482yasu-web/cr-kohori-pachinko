@@ -67,11 +67,13 @@ const Scenario = (() => {
         // 保留変化: 色が付く保留の一部は、最初は白で出して途中で変わる
         let shownColor = holdColor;
         let change = null;
-        if (holdColor !== 'white' && rng() < sy.change.rate) {
+        let changed = false;
+        if (holdColor !== 'white' && rng() < (hit ? sy.change.hitRate : sy.change.missRate)) {
             shownColor = 'white';
             change = rng() < sy.change.self ? 'self' : 'next';
+            changed = true;   // 保留変化した保留は、外れでも必ずチャレンジ演出に入る
         }
-        return { holdColor, shownColor, change, button, hiStage, voice };
+        return { holdColor, shownColor, change, changed, button, hiStage, voice };
     }
 
     // ----- 通常時のステージ (背景) -----
@@ -129,12 +131,15 @@ const Scenario = (() => {
         const button = ctx.rash && win && rng() < show.rashButton.hitRate ? weighted(show.rashButton.kinds, rng) : null;
         // 入賞時の音 + 赤いボタン (ユーザー指定 2026-10-19): RASH 中・突破チャレンジ中も、当たりの保留の voice.hitRate (60%)。外れでは鳴らない
         const voice = ctx.rash && win && rng() < show.voice.hitRate;
+        // RASH 中の当たりの保留は、黒い保留か回る保留になることがある (当たり確定)
+        const rh = show.rashHolds;
+        const rashHold = ctx.rash && !ctx.challenge && win && rng() < rh.rate ? weighted(rh.kinds, rng) : null;
         let weapon = null;
         if (ctx.challenge) {
             const weapons = show.challengeBattle.weapons;
             weapon = weighted(Object.fromEntries(Object.entries(weapons).map(([id, w]) => [id, win ? w.hit : w.miss])), rng);
         }
-        return { holdColor: 'white', button, weapon, voice };
+        return { holdColor: 'white', button, weapon, voice, rashHold };
     }
 
     // ----- 突破チャレンジのバトル -----
@@ -212,6 +217,8 @@ const Scenario = (() => {
             const r = rng();
             const reach = reachMissRate(show, spec);
             type = r < reach ? 'reach' : r < show.challengeRate ? 'fail' : 'plain';
+            // 保留変化した外れの保留は、必ずチャレンジ (失敗) に入る
+            if (type === 'plain' && result.changed) type = 'fail';
         }
 
         const p = { fig, type, win: hit, talk: null };

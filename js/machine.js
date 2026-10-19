@@ -176,7 +176,7 @@ const Machine = (() => {
         if (fig === 1) Object.assign(result, Scenario.hold(m.config, m.spec, result, m.rng, m.senyomi));
         else {
             Object.assign(result, Scenario.hold2(m.config, result, { challenge: m.rush.challenge, rash: m.rush.active }, m.rng));
-            if (m.senyomi === 'none') { result.button = null; result.voice = false; }
+            if (m.senyomi === 'none') { result.button = null; result.voice = false; result.rashHold = null; }
         }
     }
 
