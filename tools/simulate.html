@@ -10,7 +10,7 @@
          - 右打ち (電チュー・アタッカーの開け閉め 4通り): ゲート・電チュー・アタッカー・一般入賞口
       2. 1 の入賞率で玉の行き先を決めながら、台の抽選 (js/machine.js) を長い時間まわす
          通常時は左打ち、時短・大当たり・小当たり・RUSH の残り保留のあいだは右打ち。
-    ?hours=200 で1台あたりの時間、?balls=3000 で 1 の玉の数、?spec=s199 でスペックをしぼる、?seed=1
+    ?hours=200 で1台あたりの時間、?balls=3000 で 1 の玉の数、?spec=s99 でスペックをしぼる、?seed=1、?cs=1&rs=6 で突破チャレンジ・RUSH の時短の回数を変える (調整用)
     ?widths=6.2,6.6,7.0 で、スペックの命釘の代わりにこのすき間を順に測る (調整用。ワープはスペックの値)
     ヘッドレスChromeで: sh tools/run-sim.sh "hours=200"
 -->
@@ -35,6 +35,11 @@
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+    // 時短の回数を変えて測る (調整用)
+    Object.values(CONFIG.specs).forEach(spec => {
+        if (params.get('cs')) spec.jitan.challengeSpins = Number(params.get('cs'));
+        if (params.get('rs')) spec.jitan.spins = Number(params.get('rs'));
+    });
     const lines = [];
     const started = performance.now();
 
@@ -123,6 +128,7 @@
             if (hit) table[key][1]++;
         };
         const leftRate = leftByBoard[keyOf(board)];
+        const payouts = { ...CONFIG.payout, ...m.spec.payout };
         for (let t = 0; t < end; t += DT) {
             // 1分に100発。狙いは台の状態で決める
             while (nextShot <= t) {
@@ -144,7 +150,7 @@
                     where = pick(r.rates);
                 }
                 if (where === 'none') continue;
-                const pay = CONFIG.payout[CONFIG.board.pockets[where] ? CONFIG.board.pockets[where].payout : where] || 0;
+                const pay = payouts[CONFIG.board.pockets[where] ? CONFIG.board.pockets[where].payout : where] || 0;
                 paid += pay;
                 if (inJitanNow) jitanOut += pay;
                 if (where === 'heso' || where === 'denchu' || where === 'attacker') Machine.enter(m, where);
@@ -185,7 +191,8 @@
             hitRate: firstHits ? (s.spins1 + 0) / firstHits : 0,
             firstHits, jitanEntry: firstHits ? jitanEntries / firstHits : 0,
             firstWin: jitanEntries ? firstJitanWins / jitanEntries : 0,
-            continuation: s.rushHits / (s.rushHits + s.rushes || 1),
+            // 継続率: RUSH 突入後の時短で当たった割合 (突破チャレンジで当たった分は除く)
+            continuation: s.rushHits ? (s.rushHits - s.rushEntries) / s.rushHits : 0,
             perRush: s.rushes ? rushPaid / s.rushes : 0,
             payoutRate: paid / shot,
             perHour: (paid - shot) / HOURS,
@@ -197,8 +204,8 @@
     lines.push(`\n2. 台の抽選 (1台 ${HOURS} 時間ずつ)`);
     specIds.forEach(specId => {
         const spec = CONFIG.specs[specId];
-        lines.push(`  --- ${spec.label} (目標: 継続率 ${spec.target.continuation * 100}%) ---`);
-        lines.push('  釘の調整             回転率/1k 初当たり 初当たり回数 時短へ 時短で当たり 継続率 RUSH1回の差玉 小当たりV  出玉率  1時間の差玉');
+        lines.push(`  --- ${spec.label} 時短 突破チャレンジ ${spec.jitan.challengeSpins} 回 / RUSH ${spec.jitan.spins} 回 (目標: 突破率 ${spec.target.challenge * 100}% / 継続率 ${spec.target.continuation * 100}%) ---`);
+        lines.push('  釘の調整             回転率/1k 初当たり 初当たり回数 時短へ   突破率 継続率 RUSH1回の差玉 小当たりV  出玉率  1時間の差玉');
         boardsFor(specId).forEach(b => {
             const r = run(specId, b);
             lines.push(`  ${keyOf(b)}  ${r.rotation.toFixed(1).padStart(6)}   1/${r.hitRate.toFixed(0).padEnd(5)} ${String(r.firstHits).padStart(7)}`

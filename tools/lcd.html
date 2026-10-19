@@ -5,7 +5,7 @@
 <title>液晶の確認</title>
 <!--
     液晶だけを大きく表示して、変動の流れを確認する (盤面・玉はなし)。
-    ?force=hit|rush|reach|fail|small  はじめの保留 / &enemy=onioni バトルの相手 / &spec=s319
+    ?force=hit|rush|reach|fail|small  はじめの保留 / &enemy=onioni バトルの相手 / &spec=s159
     &t=12 その秒数まで早送りした画面で止める (ヘッドレスChromeで画像にするとき)。t がなければふつうに動く
     &ts=2,6,12 その秒数ごとの画面を並べる (1回の変動を何枚かで見る)
     &holds=3 ほかの保留の数 / &color=rainbow はじめの保留の色
@@ -39,7 +39,7 @@
 (() => {
     const params = new URLSearchParams(location.search);
     const screen = document.getElementById('screen').getContext('2d');
-    const m = Machine.create(CONFIG, params.get('spec') || 's199');
+    const m = Machine.create(CONFIG, params.get('spec') || 's99');
     const lcd = Lcd.init();
     const force = params.get('force') || 'hit';
     const options = { enemy: params.get('enemy') || undefined, holdColor: params.get('color') || undefined };

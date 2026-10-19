@@ -4,12 +4,13 @@
 // 1種2種混合:
 //   特図1 (ヘソ): 大当たり hitRate → firstHit の振り分け
 //   特図2 (電チュー): 大当たり hitRate → rushHit / 小当たり smallRate → アタッカーが短く開き、V 入賞で大当たり (rushHit)
-//   時短 (RUSH): jitan.spins 回まわすあいだ電サポ (普図が当たりやすく電チューがよく開く)。終われば通常時
+//   時短: まわすあいだ電サポ (普図が当たりやすく電チューがよく開く)。終われば通常時
+//     初当たりのあとの時短は突破チャレンジ (jitan.challengeSpins 回)。そこで当たれば RUSH 突入。RUSH 中は jitan.spins 回
 //   保留は特図2 を先に消化する。結果は玉が入ったときに決める (先読みに使える)。
 //   保留の色・ボタン・変動の流れと時間は Scenario (js/scenario.js) が決める。
 //
 // 使い方:
-//   const m = Machine.create(config, 's199', rng)
+//   const m = Machine.create(config, 's99', rng)
 //   Machine.enter(m, 'heso' | 'denchu' | 'attacker' | 'gate')   玉が入った・通った
 //   Machine.update(m, dt)                                       時間をすすめる
 //   m.parts.denchu / m.parts.attacker                           いま開いているか (盤面に反映する)
@@ -38,8 +39,8 @@ const Machine = (() => {
             bonus: null,              // 大当たり中 { alloc, round, count, phase, timer, fromV }
             futsu: { holds: 0, spin: 0, opening: null },  // 普図 (電チュー)
             parts: { denchu: false, attacker: false },
-            rush: { active: false, hits: 0, startTime: 0 },
-            stats: { spins1: 0, spins2: 0, hits1: 0, hits2: 0, smalls: 0, vHits: 0, rushes: 0, rushHits: 0, bonusRounds: 0 },
+            rush: { active: false, hits: 0, startTime: 0, challenge: false },   // challenge: 突破チャレンジ中 (まだ RUSH に入っていない)
+            stats: { spins1: 0, spins2: 0, hits1: 0, hits2: 0, smalls: 0, vHits: 0, rushes: 0, rushEntries: 0, rushHits: 0, bonusRounds: 0 },
             events: []
         };
     }
@@ -152,11 +153,18 @@ const Machine = (() => {
         m.jitanActive = false;
         m.bonus = { alloc, fromV, round: 0, count: 0, phase: 'opening', timer: cfg.opening };
         m.stats.bonusRounds += alloc.rounds;
+        let entry = false;
         if (m.rush.active) {
             m.rush.hits++;
             m.stats.rushHits++;
+            // 突破チャレンジで当たった → RUSH 突入
+            if (m.rush.challenge) {
+                m.rush.challenge = false;
+                m.stats.rushEntries++;
+                entry = true;
+            }
         }
-        emit(m, 'bonusStart', { rounds: alloc.rounds, next: alloc.next, fromV, rush: m.rush.active, rushHits: m.rush.hits });
+        emit(m, 'bonusStart', { rounds: alloc.rounds, label: alloc.label, next: alloc.next, fromV, rush: m.rush.active, rushHits: m.rush.hits, entry });
     }
 
     function updateBonus(m, dt) {
@@ -164,7 +172,7 @@ const Machine = (() => {
         const b = m.bonus;
         b.timer -= dt;
         if (b.phase === 'open') {
-            if (b.count < cfg.count && b.timer > 0) return;
+            if (b.count < (b.alloc.count || cfg.count) && b.timer > 0) return;
             emit(m, 'roundEnd', { round: b.round, count: b.count });
             if (b.round >= b.alloc.rounds) {
                 b.phase = 'ending';
@@ -186,13 +194,14 @@ const Machine = (() => {
         } else if (b.phase === 'ending') {
             m.bonus = null;
             if (b.alloc.next === 'jitan') {
-                m.jitanLeft = m.spec.jitan.spins;
-                m.jitanActive = true;
+                // 初当たりのあと = 突破チャレンジ。RUSH 中 = 次の大当たりまでの時短
                 if (!m.rush.active) {
-                    m.rush = { active: true, hits: 1, startTime: m.time };
+                    m.rush = { active: true, hits: 1, startTime: m.time, challenge: true };
                     m.stats.rushes++;
                 }
-                emit(m, 'jitanStart', { spins: m.jitanLeft, rushHits: m.rush.hits });
+                m.jitanLeft = m.rush.challenge ? m.spec.jitan.challengeSpins : m.spec.jitan.spins;
+                m.jitanActive = true;
+                emit(m, 'jitanStart', { spins: m.jitanLeft, rushHits: m.rush.hits, challenge: m.rush.challenge });
             }
             emit(m, 'bonusEnd', { next: b.alloc.next });
         }
@@ -202,8 +211,8 @@ const Machine = (() => {
     function checkRushEnd(m) {
         if (!m.rush.active || inJitan(m) || m.bonus || m.small) return;
         if (m.holds[2].length || (m.spin && m.spin.fig === 2)) return;
-        emit(m, 'rushEnd', { hits: m.rush.hits, time: m.time - m.rush.startTime });
-        m.rush = { active: false, hits: 0, startTime: 0 };
+        emit(m, 'rushEnd', { hits: m.rush.hits, time: m.time - m.rush.startTime, challengeFailed: m.rush.challenge });
+        m.rush = { active: false, hits: 0, startTime: 0, challenge: false };
     }
 
     // ----- 普図 (ゲート → 電チュー) -----
@@ -270,16 +279,16 @@ const Machine = (() => {
         emit(m, 'hold', { fig, result, count: m.holds[fig].length });
     }
 
-    // いきなり時短 (RUSH) に入る
+    // いきなり時短 (突破チャレンジを飛ばして RUSH) に入る
     function debugJitan(m) {
         if (m.bonus) return;
         m.jitanLeft = m.spec.jitan.spins;
         m.jitanActive = true;
         if (!m.rush.active) {
-            m.rush = { active: true, hits: 1, startTime: m.time };
+            m.rush = { active: true, hits: 1, startTime: m.time, challenge: false };
             m.stats.rushes++;
         }
-        emit(m, 'jitanStart', { spins: m.jitanLeft, rushHits: m.rush.hits });
+        emit(m, 'jitanStart', { spins: m.jitanLeft, rushHits: m.rush.hits, challenge: false });
     }
 
     return { create, enter, update, aim, inJitan, debugHold, debugJitan };

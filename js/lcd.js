@@ -60,19 +60,19 @@ const Lcd = (() => {
             spinView = null;
             MachineButton.prompt(false);
         } else if (e.type === 'bonusStart') {
-            const size = e.rounds * CONFIG.machine.bonus.count * CONFIG.payout.attacker;
-            show(e.fromV ? `V入賞！ ${size}個` : `大当たり！ ${size}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
+            const head = e.entry ? 'RUSH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
+            show(`${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
         } else if (e.type === 'smallStart') {
             show('V を狙え！', '#ff6a8a', now, CONFIG.machine.small.open);
         } else if (e.type === 'roundStart') {
             Sound.play('round');
         } else if (e.type === 'jitanStart') {
-            show(e.rushHits === 1 ? 'RUSH 突入！' : `RUSH ${e.rushHits}連！`, '#7fd3f7', now, 2);
+            show(e.challenge ? '突破チャレンジ！' : `RUSH ${e.rushHits - 1}連！`, '#7fd3f7', now, 2);
         } else if (e.type === 'ending' && e.next === 'normal') {
             show('通常時へ', '#ffffff', now, CONFIG.machine.bonus.ending);
         } else if (e.type === 'rushEnd') {
-            summary = { hits: e.hits, balls: e.balls, until: now + 5 };
+            summary = { hits: e.hits - 1, balls: e.balls, failed: e.challengeFailed, until: now + 5 };
         }
     }
 
@@ -399,12 +399,11 @@ const Lcd = (() => {
     // ----- 大当たり中 -----
     function drawBonus(now, m) {
         const b = m.bonus;
-        const size = b.alloc.rounds * CONFIG.machine.bonus.count * CONFIG.payout.attacker;
         band(0, H, 0.45);
         Figures.draw(ctx, shown[0], 30, 50, 34, 40, { glow: 0.5 });
-        text(`${size}個 大当たり`, W / 2 + 14, 22, 16, '#ffe066');
+        text(`${b.alloc.label}個 大当たり`, W / 2 + 14, 22, 16, '#ffe066');
         text(`ROUND ${Math.max(1, b.round)} / ${b.alloc.rounds}`, W / 2 + 14, 58, 20, '#ffffff');
-        if (b.phase === 'open') text(`COUNT ${b.count} / ${CONFIG.machine.bonus.count}`, W / 2 + 14, 84, 13, '#7fd3f7');
+        if (b.phase === 'open') text(`COUNT ${b.count} / ${b.alloc.count || CONFIG.machine.bonus.count}`, W / 2 + 14, 84, 13, '#7fd3f7');
         text('右打ち →', W / 2, 110, 14, Math.floor(now * 3) % 2 ? '#ff6a8a' : '#ffffff');
     }
 
@@ -453,9 +452,9 @@ const Lcd = (() => {
                 text('リーチ！', W / 2, 114, 18, Math.floor(now * 6) % 2 ? '#ff6a8a' : '#ffe066');
             }
             if (state.aligned && plan && plan.win) text('大当たり！', W / 2, 18, 14, 'rainbow', 'center', now);
+            const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
             if (Machine.inJitan(m)) {
-                const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
-                text(`RUSH ${m.rush.hits}連  時短 残り ${left}回`, W / 2, 112, 11, '#7fd3f7');
+                text(m.rush.challenge ? `突破チャレンジ  残り ${left}回` : `RUSH ${m.rush.hits - 1}連  時短 残り ${left}回`, W / 2, 112, 11, '#7fd3f7');
             } else if (m.rush.active) text('残り保留で V を狙え', W / 2, 112, 11, '#7fd3f7');
         }
 
@@ -479,8 +478,12 @@ const Lcd = (() => {
         if (summary && now < summary.until) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(28, 34, W - 56, 64);
-            text('RUSH 終了', W / 2, 50, 14, '#ffffff');
-            text(`${summary.hits}連  ${summary.balls >= 0 ? '+' : ''}${summary.balls}玉`, W / 2, 76, 18, '#ffe066');
+            if (summary.failed) {
+                text('突破ならず…', W / 2, 66, 16, '#8aa4c0');
+            } else {
+                text('RUSH 終了', W / 2, 50, 14, '#ffffff');
+                text(`${summary.hits}連  ${summary.balls >= 0 ? '+' : ''}${summary.balls}玉`, W / 2, 76, 18, '#ffe066');
+            }
         }
         if (flash && now < flash.until) {
             const t = 1 - (flash.until - now) / flash.length;

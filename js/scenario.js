@@ -58,7 +58,7 @@ const Scenario = (() => {
     // ----- 図柄 -----
     function hitDigit(show, result, fig, rng) {
         const a = result.alloc;
-        const odd = a.rounds >= 10 || (fig === 1 && a.next === 'jitan');
+        const odd = a.label >= show.bigLabel || (fig === 1 && a.next === 'jitan');
         return pickFrom(show.hitFigures[odd ? 'odd' : 'even'], rng);
     }
 

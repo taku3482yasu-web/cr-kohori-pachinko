@@ -140,47 +140,52 @@ const CONFIG = {
         lend: 125            // 「玉貸し」1回で増える数 (500円分)
     },
 
-    // ----- スペック (ゲームを始める前に選ぶ。ユーザー指定 2026-10-19) -----
-    // 大当たりの振り分け: rounds (ラウンド数) と next (終わったあと。'normal' = 通常時 / 'jitan' = 時短 = RUSH)
-    //   1ラウンド = アタッカーに count 個 (賞球 15 → 150個)。2R = 300個 / 10R = 1500個
+    // ----- スペック (ゲームを始める前に選ぶ。ユーザー指定 2026-10-19、1/99・1/159 に変更) -----
+    // 大当たりの振り分け: label (表示する出玉) / rounds (ラウンド数) / count (1ラウンドに入る玉の数。省略は machine.bonus.count)
+    //   / next (終わったあと。'normal' = 通常時 / 'jitan' = 時短)。賞球 15 なので 1ラウンド 10カウント = 150個
+    //   200個 は 2R x 7C = 210個、1300個 は 9R x 10C = 1350個 にした (賞球 15 ではちょうどにならないため)
     // firstHit: 通常時の特図1 (ヘソ) で当たったとき / rushHit: 特図2 (電チュー) の大当たり・小当たりからの V 入賞
+    // 時短の流れ: 初当たりのあとの時短 = 突破チャレンジ (jitan.challengeSpins 回)。そこで当たれば RUSH 突入、
+    //   RUSH 中は大当たりのたびに時短 jitan.spins 回。小当たりの確率と回数で突破率・継続率が決まる
+    //   (時短が終わったあとの残り保留でも小当たりを引ける。tools/simulate.html で測って合わせる)
+    // payout: スペックごとの賞球 (config.payout より優先。書いた入賞口だけ変わる)
     // board: スペックごとの釘調整 (お店が機種ごとに釘を調整するのと同じ)。出玉率を 80〜95% に合わせる (ユーザー指定 2026-10-19)
     //   hesoWidth: ヘソの命釘のすき間 (玉の直径は 6。広いほど入りやすい)
     //   warpMinVx: ワープに入る速さ (大きいほど入りにくい = ステージ経由のヘソ入賞が減る)
-    // jitan.spins: 時短の回数 (特図を何回まわすか)。小当たりの確率と合わせて RUSH の継続率が決まる
-    //   (時短が終わったあとの残り保留でも小当たりを引ける。継続率は tools/simulate.html で測って合わせる)
     specs: {
-        s199: {
-            label: '1/199',
-            note: '甘めの確率。初当たりの半分が RUSH へ。RUSH は継続率 約85%、半分が 1500個',
-            hitRate: 1 / 199,
-            smallRate: 1 / 7,
+        s99: {
+            label: '1/99',
+            note: '甘い確率。初当たりの半分が突破チャレンジ (50%) へ。RUSH は継続率 約79%、半分が 900個',
+            hitRate: 1 / 99,
+            smallRate: 1 / 7.5,   // 継続率 79% に合わせて少し下げた (1/7 だと 81%)
             firstHit: [
-                { weight: 50, rounds: 2, next: 'normal' },   // 300個のみ
-                { weight: 50, rounds: 2, next: 'jitan' }     // 300個 + RUSH
+                { weight: 50, label: 200, rounds: 2, count: 7, next: 'normal' },   // 200個のみ
+                { weight: 50, label: 200, rounds: 2, count: 7, next: 'jitan' }     // 200個 + 突破チャレンジ
             ],
             rushHit: [
-                { weight: 50, rounds: 2, next: 'jitan' },    // 300個
-                { weight: 50, rounds: 10, next: 'jitan' }    // 1500個
+                { weight: 50, label: 200, rounds: 2, count: 7, next: 'jitan' },    // 200個
+                { weight: 50, label: 900, rounds: 6, next: 'jitan' }               // 900個
             ],
-            jitan: { spins: 8 },
-            board: { hesoWidth: 7.2, warpMinVx: 40 },
-            target: { rushEntry: 0.5, continuation: 0.85 }
+            jitan: { challengeSpins: 1, spins: 6 },
+            board: { hesoWidth: 8.8, warpMinVx: 15 },
+            payout: { heso: 2 },   // 賞球をこのスペックだけ変える (1/99 は当たりが小さいので、ヘソを 2 にして出玉率を上げた)
+            target: { challenge: 0.5, continuation: 0.79 }
         },
-        s319: {
-            label: '1/319',
-            note: '重い確率。初当たりはすべて RUSH へ挑戦。RUSH は継続率 約80%、すべて 1500個',
-            hitRate: 1 / 319,
-            smallRate: 1 / 7,
+        s159: {
+            label: '1/159',
+            note: '初当たりの 75% が突破チャレンジ (50%) へ。RUSH は継続率 約80%、すべて 1300個',
+            hitRate: 1 / 159,
+            smallRate: 1 / 7.2,   // 継続率 80% に合わせて少し下げた (1/7 だと 82%、1/7.5 だと 78%)
             firstHit: [
-                { weight: 100, rounds: 2, next: 'jitan' }    // 300個 + 時短 (RUSH への挑戦)
+                { weight: 25, label: 300, rounds: 2, next: 'normal' },   // 300個のみ
+                { weight: 75, label: 300, rounds: 2, next: 'jitan' }     // 300個 + 突破チャレンジ
             ],
             rushHit: [
-                { weight: 100, rounds: 10, next: 'jitan' }   // 1500個
+                { weight: 100, label: 1300, rounds: 9, next: 'jitan' }   // 1300個
             ],
-            jitan: { spins: 6 },
-            board: { hesoWidth: 6.3, warpMinVx: 40 },
-            target: { rushEntry: 0.8, continuation: 0.80 }
+            jitan: { challengeSpins: 1, spins: 6 },
+            board: { hesoWidth: 6.4, warpMinVx: 40 },
+            target: { challenge: 0.5, continuation: 0.80 }
         }
     },
 
@@ -217,7 +222,9 @@ const CONFIG = {
             7: { name: 'こおりくん', ids: ['koori'] }
         },
         figureColors: { odd: '#ff3a4a', even: '#3a8aff' },
-        // 大当たりでそろう図柄: RUSH へ行く大当たりと 1500個 は奇数 (赤)、それ以外 (RUSH へ行かない 300個・RUSH 中の 300個) は偶数 (青)
+        // 大当たりでそろう図柄: 時短 (突破チャレンジ) へ行く初当たりと、RUSH 中の大きい当たり (bigLabel 個以上) は奇数 (赤)、
+        // それ以外 (時短なしの初当たり・RUSH 中の 200個) は偶数 (青)
+        bigLabel: 900,
         hitFigures: { odd: [1, 3, 5, 7], even: [2, 4, 6] },
 
         // 保留の色 (こおりくんの体の形)。期待度は低い順に 白 → 青 → 緑 → 紫 → 赤 → 虹。虹は大当たり確定 (ユーザー指定)

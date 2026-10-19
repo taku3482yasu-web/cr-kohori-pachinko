@@ -5,7 +5,7 @@
 // 1/60 秒ごとに 物理 → 入賞を台 (Machine) に伝える → 台の時間をすすめる → 電チュー・アタッカーの開け閉めを盤面に反映。
 // 操作: ハンドルを押している間 (または Space) 発射。ハンドルを回す・← → キー・ホイールで強さ。
 // URL で (確認用):
-//   ?spec=s199             台選びを飛ばしてその台で始める
+//   ?spec=s99              台選びを飛ばしてその台で始める
 //   ?auto=1&strength=45    開いてすぐ自動で打ちはじめる (&aim=1 で台の状態に合わせて左打ち・右打ちを切り替える)
 //   &skip=30               開いた直後に 30 秒ぶん早送りする (ヘッドレスChromeでは時間が進まないため)
 //   &balls=99999           はじめの持ち玉
@@ -101,7 +101,7 @@
             game.balls++;   // ファールの玉は上皿に戻る
         } else if (e.type === 'pocket') {
             s[e.payout]++;
-            const pay = CONFIG.payout[e.payout] || 0;
+            const pay = { ...CONFIG.payout, ...game.machine.spec.payout }[e.payout] || 0;
             game.balls += pay;
             s.paid += pay;
             if (e.id === 'heso' || e.id === 'denchu' || e.id === 'attacker') Machine.enter(game.machine, e.id);
@@ -155,12 +155,13 @@
     function modeText(m) {
         if (m.bonus) {
             const b = m.bonus;
-            const size = b.alloc.rounds * CONFIG.machine.bonus.count * CONFIG.payout.attacker;
-            return `大当たり ${size}個  ${b.round}/${b.alloc.rounds}R`;
+            return `大当たり ${b.alloc.label}個  ${b.round}/${b.alloc.rounds}R`;
         }
         if (m.small) return '小当たり  V を狙え！';
-        if (Machine.inJitan(m)) return `RUSH ${m.rush.hits}連  時短 残り ${m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0)} 回`;
-        if (m.rush.active) return `RUSH ${m.rush.hits}連  残り保留`;
+        const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
+        if (m.rush.active && m.rush.challenge) return Machine.inJitan(m) ? `突破チャレンジ  残り ${left} 回` : '突破チャレンジ  残り保留';
+        if (Machine.inJitan(m)) return `RUSH ${m.rush.hits - 1}連  時短 残り ${left} 回`;
+        if (m.rush.active) return `RUSH ${m.rush.hits - 1}連  残り保留`;
         return '通常時';
     }
 
