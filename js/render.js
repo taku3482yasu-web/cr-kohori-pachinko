@@ -8,7 +8,7 @@
 
 const BoardView = (() => {
     const SCALE = 2;
-    const COLORS = {
+    const BASE_COLORS = {
         boardTop: '#0d2a4a', boardBottom: '#071528',
         snow: 'rgba(200, 235, 255, 0.35)',
         rail: '#c8d4e0', railShadow: '#56657a',
@@ -21,8 +21,14 @@ const BoardView = (() => {
         windmill: '#ff9eb5', windmillHub: '#ffffff',
         ball: '#e8edf2', ballShade: '#8a96a6', ballLight: '#ffffff'
     };
+    // いまの色 (カスタマイズの盤面の色・玉の色で上書きする)
+    const COLORS = { ...BASE_COLORS };
+    function applyColors() {
+        Object.assign(COLORS, BASE_COLORS, typeof Customize !== 'undefined' ? Customize.boardColors() : {});
+    }
 
     function create(canvas, board, config) {
+        applyColors();
         const b = board.config;
         canvas.width = b.width * SCALE;
         canvas.height = b.height * SCALE;
@@ -213,11 +219,20 @@ const BoardView = (() => {
         });
     }
 
+    // カスタマイズで色が変わったときに、動かない部分を描き直す
+    function redraw(view) {
+        applyColors();
+        const g = view.base.getContext('2d');
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.clearRect(0, 0, view.base.width, view.base.height);
+        drawStatic(g, view.board, view.config);
+    }
+
     // 画面上の位置 (CSS ピクセル) → 盤面の論理座標
     function toBoard(view, clientX, clientY) {
         const rect = view.canvas.getBoundingClientRect();
         return [(clientX - rect.left) / rect.width * view.board.config.width, (clientY - rect.top) / rect.height * view.board.config.height];
     }
 
-    return { create, draw, toBoard, SCALE };
+    return { create, draw, redraw, toBoard, SCALE };
 })();

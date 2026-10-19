@@ -29,7 +29,7 @@ const MachineButton = (() => {
         el.classList.add('fx-' + kind);
         until = now + CONFIG.show.button.time;
         if (kind === 'beep') Sound.play('button');
-        if (kind === 'shake' && navigator.vibrate) {
+        if (kind === 'shake' && navigator.vibrate && Customize.get('vibrate') === 'on') {
             try { navigator.vibrate([90, 40, 90, 40, 160]); } catch (e) { /* 振動できない環境 */ }
         }
     }

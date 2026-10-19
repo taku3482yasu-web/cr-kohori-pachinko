@@ -168,7 +168,7 @@ button:hover { border-color: var(--accent); }
     padding: 0;
     border-radius: 12px;
     border: 3px solid #1b3a6b;
-    background: linear-gradient(135deg, #ffffff 0%, #bff0ff 35%, #7fd3f7 100%);
+    background: var(--koori-button, linear-gradient(135deg, #ffffff 0%, #bff0ff 35%, #7fd3f7 100%));
     box-shadow: 0 4px 0 #1b3a6b;
     touch-action: none;
 }
@@ -225,6 +225,15 @@ button:hover { border-color: var(--accent); }
 .push-area .koori-button .kb-eye.kb-right { right: 22px; }
 .push-area .koori-button .kb-cheek { top: 43px; }
 
+/* カスタマイズ */
+.customize-group { margin: 12px 0 4px; font-size: 14px; color: var(--muted); }
+.customize-row { display: grid; grid-template-columns: 7.5em 1fr; gap: 6px; align-items: center; margin: 6px 0; }
+.customize-row .cz-label { font-size: 13px; }
+.customize-row .cz-choices { display: flex; flex-wrap: wrap; gap: 4px; }
+.customize-row button { padding: 5px 8px; font-size: 12px; }
+.customize-row button.selected { border-color: #ffe066; background: #1f3350; color: #ffe066; }
+.customize-note { grid-column: 2; font-size: 11px; color: var(--muted); margin: -2px 0 0; }
+
 /* 台の名前・状態 */
 .machine-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .spec-display { font-size: 15px; color: var(--accent); }
@@ -277,7 +286,9 @@ button:hover { border-color: var(--accent); }
 .spec-option { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 10px 12px; }
 .spec-label { font-size: 20px; color: #ffe066; }
 .spec-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
-.spec-option.selected { border-color: #ffe066; background: #1f3350; }
+.setting-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.setting-option { padding: 8px 4px; font-size: 13px; }
+.spec-option.selected, .setting-option.selected { border-color: #ffe066; background: #1f3350; }
 .picker-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .start-button { font-size: 16px; padding: 10px 16px; border-color: #ffe066; color: #ffe066; }
 .debug-board { align-self: center; color: #c8a0ff; margin-right: 6px; }

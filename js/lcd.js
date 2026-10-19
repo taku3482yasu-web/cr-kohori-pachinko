@@ -90,13 +90,14 @@ const Lcd = (() => {
     }
 
     function say(text, color, now) {
+        if (Customize.get('furukawa') === 'off') return;
         bubble = { text, color, until: now + CONFIG.show.furukawa.talkTime };
     }
 
     // 大当たり中のふるカワ (始め・ラウンド・終わり)。delay 秒あとから出す (大当たりの文字と重ならないように)
     let lastBonusLine = null;
     function bonusTalk(kind, now, delay = 0) {
-        if (Story.active()) return;
+        if (Story.active() || Customize.get('furukawa') === 'off') return;
         const f = CONFIG.show.furukawa;
         const list = f.bonusLines[kind].filter(line => line !== lastBonusLine);
         const line = list[Math.floor(Math.random() * list.length)] || f.bonusLines[kind][0];
@@ -106,12 +107,24 @@ const Lcd = (() => {
 
     // ----- 台のイベント -----
     function event(e, now) {
+        const senyomi = Customize.get('senyomi') === 'on';
         if (e.type === 'hold') {
             Sound.play('hold');
-            if (e.result.button) MachineButton.trigger(e.result.button, now);
+            if (e.result.button && senyomi) MachineButton.trigger(e.result.button, now);
         } else if (e.type === 'spinStart') {
             spinView = { plan: e.plan, gaugeStop: 0.55 + Math.random() * 0.35, pushedAt: null };
             if (e.plan.talk) say(e.plan.talk.text, e.plan.talk.color, now);
+            else if (Customize.get('furukawa') === 'often' && e.fig === 1 && e.plan.type === 'plain') {
+                // よくしゃべる: ふだんは黙っている変動でも、キャラクターの話か豆知識
+                const f = CONFIG.show.furukawa;
+                const list = Math.random() < f.hintRate ? f.hintLines : f.chatLines;
+                say(list[Math.floor(Math.random() * list.length)], 0, now);
+            }
+            // 先告知: 当たりの変動が始まった瞬間にボタンが虹色、「当たり確定！」
+            if (Customize.get('notice') === 'pre' && e.fig === 1 && e.result.kind === 'hit') {
+                MachineButton.trigger('rainbow', now);
+                show('当たり確定！', 'rainbow', now, 1.5);
+            }
         } else if (e.type === 'spinEnd') {
             if (spinView) shown = spinView.plan.digits.map(d => d === 'V' ? 'V' : d);
             spinView = null;
@@ -125,6 +138,7 @@ const Lcd = (() => {
             show(`${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
         } else if (e.type === 'stageChange') {
+            if (!senyomi && (e.stage.kind === 'hi' || e.stage.kind === 'back')) return;
             stageFx = { stage: e.stage, start: now };
             Sound.play(e.stage.kind === 'hi' ? 'reach' : 'challenge');
         } else if (e.type === 'smallStart') {
@@ -472,6 +486,7 @@ const Lcd = (() => {
 
     // ----- 保留 (こおりくんの体の形) -----
     function holdIcon(x, y, size, color, now, active = false) {
+        if (Customize.get('senyomi') === 'off') color = 'white';
         const fill = color === 'rainbow' ? rainbow(now, x * 3) : CONFIG.show.holdColors.colors[color] || '#e8f6ff';
         const s = size;
         if (active) {
@@ -562,7 +577,7 @@ const Lcd = (() => {
         }
         if (m.rush.active && rashMode === 'onioni' && !m.rush.challenge) return 'castleHall';
         if (Machine.inJitan(m) || m.rush.active) return 'seCastle';
-        return Scenario.stageMap(m.stage);
+        return Customize.get('senyomi') === 'on' ? Scenario.stageMap(m.stage) : m.stage.id;
     }
 
     function phaseSounds(plan, phase) {

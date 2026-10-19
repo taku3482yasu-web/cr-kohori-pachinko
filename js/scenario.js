@@ -175,7 +175,7 @@ const Scenario = (() => {
 
         const p = { fig, type, win: hit, talk: null };
         if (type === 'plain') {
-            const duration = spin.holdsLeft + 1 >= t.shortenAt ? t.missShort : t.miss;
+            const duration = t.miss[Math.min(t.miss.length, spin.holdsLeft + 1) - 1];
             p.phases = [{ name: 'roll', t: duration }];
             p.digits = missDigits(false, rng);
         } else {

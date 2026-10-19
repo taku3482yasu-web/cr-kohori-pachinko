@@ -1,12 +1,12 @@
 // =====================================================================
 // ゲームの進行
 // ---------------------------------------------------------------------
-// はじめに「台選び」でスペック (1/99・1/159) を選ぶ。スペックごとに釘 (命釘・ワープ) の調整が違う。
+// はじめに「台選び」でスペック (1/99・1/159) と設定 (おまかせ・1〜6) を選ぶ。設定ごとに釘 (命釘・ワープ) の調整が違う。
 // 「この台で遊ぶ」を押すとオープニングが流れる (液晶・台のボタン・Space で飛ばせる。流れているあいだは台が止まる)。
 // 1/60 秒ごとに 物理 → 入賞を台 (Machine) に伝える → 台の時間をすすめる → 電チュー・アタッカーの開け閉めを盤面に反映。
 // 操作: ハンドルを押している間 (または Space) 発射。ハンドルを回す・← → キー・ホイールで強さ。
 // URL で (確認用):
-//   ?spec=s99              台選びを飛ばしてその台で始める
+//   ?spec=s99&setting=6    台選びを飛ばしてその台で始める (setting を省くと設定1)
 //   ?auto=1&strength=45    開いてすぐ自動で打ちはじめる (&aim=1 で台の状態に合わせて左打ち・右打ちを切り替える)
 //   &skip=30               開いた直後に 30 秒ぶん早送りする (ヘッドレスChromeでは時間が進まないため)
 //   &balls=99999           はじめの持ち玉
@@ -19,6 +19,7 @@
     const params = new URLSearchParams(location.search);
     const $ = id => document.getElementById(id);
     const canvas = $('board');
+    Customize.load();
     Lcd.init();
 
     const game = {
@@ -57,17 +58,20 @@
     }
 
     // ----- 台を用意する -----
-    function startMachine(specId) {
+    // setting: 1〜6 / settingKnown: 自分で選んだか (おまかせのときは画面に出さない)
+    function startMachine(specId, setting, settingKnown) {
         const spec = CONFIG.specs[specId];
+        const board = CONFIG.settings[setting - 1];
+        game.setting = setting;
         game.machine = Machine.create(CONFIG, specId);
-        game.board = Board.build(CONFIG, spec.board);
+        game.board = Board.build(CONFIG, board);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
         game.stats = { launched: 0, launchedLeft: 0, foul: 0, heso: 0, gate: 0, denchu: 0, attacker: 0, general: 0, warp: 0, out: 0, paid: 0, firstHits: 0 };
         Lcd.reset(game.machine);
         MachineButton.prompt(false);
-        $('spec-display').textContent = spec.label;
-        $('debug-board').textContent = `命釘 ${spec.board.hesoWidth} / ワープ ${spec.board.warpMinVx}`;
+        $('spec-display').textContent = `${spec.label}${settingKnown ? ` / 設定${setting}` : ''}`;
+        $('debug-board').textContent = `設定${setting} (命釘 ${board.hesoWidth} / ワープ ${board.warpMinVx})`;
     }
 
     // ----- 1フレーム -----
@@ -281,10 +285,54 @@
         if (e.code === 'Digit2') { Machine.setRashMode(game.machine, 'onioni'); updateRashChoice(); }
     });
 
+    // ----- カスタマイズ -----
+    const customizePanel = $('customize-panel');
+    function renderCustomize() {
+        const box = $('customize-options');
+        box.innerHTML = '';
+        let group = null;
+        Object.entries(Customize.OPTIONS).forEach(([key, o]) => {
+            if (o.group !== group) {
+                group = o.group;
+                const h = document.createElement('h3');
+                h.className = 'customize-group';
+                h.textContent = group;
+                box.appendChild(h);
+            }
+            const row = document.createElement('div');
+            row.className = 'customize-row';
+            row.innerHTML = `<span class="cz-label">${o.label}</span><span class="cz-choices"></span>`;
+            Object.entries(o.choices).forEach(([value, name]) => {
+                const b = document.createElement('button');
+                b.textContent = name;
+                if (Customize.get(key) === value) b.className = 'selected';
+                b.addEventListener('click', () => { Customize.set(key, value); renderCustomize(); });
+                row.querySelector('.cz-choices').appendChild(b);
+            });
+            if (o.note) {
+                const note = document.createElement('p');
+                note.className = 'customize-note';
+                note.textContent = o.note;
+                row.appendChild(note);
+            }
+            box.appendChild(row);
+        });
+    }
+    $('customize-button').addEventListener('click', () => {
+        renderCustomize();
+        customizePanel.hidden = false;
+        game.paused = true;
+        game.firing = false;
+    });
+    $('customize-close').addEventListener('click', () => { customizePanel.hidden = true; game.paused = false; });
+    // 盤面の色・玉の色が変わったら、盤面を描き直す
+    Customize.onChange(key => { if ((key === 'theme' || key === 'ball') && game.view) BoardView.redraw(game.view); });
+
     // ----- 台選び -----
-    // スペックをボタンで選ぶ
+    // スペックと設定をボタンで選ぶ。設定の「おまかせ」は 1〜6 からランダム (画面に出さない)
     const picker = $('machine-picker');
     let chosenSpec = null;
+    let chosenSetting = 'random';
     function openPicker(canClose) {
         game.paused = true;
         game.firing = false;
@@ -303,10 +351,19 @@
             button.addEventListener('click', () => { chosenSpec = id; renderPicker(); });
             $('spec-options').appendChild(button);
         });
+        $('setting-options').innerHTML = '';
+        ['random', 1, 2, 3, 4, 5, 6].forEach(v => {
+            const button = document.createElement('button');
+            button.className = 'setting-option' + (v === chosenSetting ? ' selected' : '');
+            button.textContent = v === 'random' ? 'おまかせ' : `設定${v}`;
+            button.addEventListener('click', () => { chosenSetting = v; renderPicker(); });
+            $('setting-options').appendChild(button);
+        });
     }
     $('picker-start').addEventListener('click', () => {
         save('koori-pachinko-spec', chosenSpec);
-        startMachine(chosenSpec);
+        const setting = chosenSetting === 'random' ? 1 + Math.floor(Math.random() * 6) : chosenSetting;
+        startMachine(chosenSpec, setting, chosenSetting !== 'random');
         game.balls = CONFIG.balls.start;
         picker.hidden = true;
         game.paused = false;
@@ -356,7 +413,8 @@
 
     // はじめの台: URL で決まっていればそれ、なければ台選びを開く
     const firstSpec = CONFIG.specs[params.get('spec')] ? params.get('spec') : Object.keys(CONFIG.specs)[0];
-    startMachine(firstSpec);
+    const firstSetting = Math.min(6, Math.max(1, Number(params.get('setting')) || 1));
+    startMachine(firstSpec, firstSetting, params.has('setting'));
     if (!params.has('spec')) openPicker(false);
     if (params.has('balls')) game.balls = Number(params.get('balls'));
     const force = params.get('force');

@@ -101,5 +101,10 @@ const Figures = (() => {
         }
     }
 
-    return { draw, color, isOdd, COUNT: 7 };
+    // こおりくんの色を変えたときに、作っておいた絵を捨てる
+    function clearCache() {
+        Object.keys(cache).forEach(k => delete cache[k]);
+    }
+
+    return { draw, color, isOdd, clearCache, COUNT: 7 };
 })();

@@ -140,6 +140,21 @@ const CONFIG = {
         lend: 125            // 「玉貸し」1回で増える数 (500円分)
     },
 
+    // ----- 設定 1〜6 (ユーザー指定 2026-10-19。一度なくしたが、また作った) -----
+    // 設定ごとに釘を変える (釘調整)。回転率 (1000円 = 250発あたりの回転数) を 設定1 約12 〜 設定6 約40 の等間隔にする
+    // 出玉率は回転率しだい (設定1 は低く、設定6 は大きく勝てる。ユーザー指定)。両スペック共通
+    //   hesoWidth: ヘソの命釘のすき間 (玉の直径は 6。広いほど入りやすい)
+    //   warpMinVx: ワープに入る速さ (大きいほど入りにくい = ステージ経由のヘソ入賞が減る)
+    //   rotation: 回転率の目標 (tools/simulate.html で測って合わせる)
+    settings: [
+        { rotation: 12, hesoWidth: 6.5, warpMinVx: 40 },
+        { rotation: 17.6, hesoWidth: 8.0, warpMinVx: 15 },
+        { rotation: 23.2, hesoWidth: 9.9, warpMinVx: 15 },
+        { rotation: 28.8, hesoWidth: 12.2, warpMinVx: 15 },
+        { rotation: 34.4, hesoWidth: 15, warpMinVx: 15 },
+        { rotation: 40, hesoWidth: 19, warpMinVx: 15 }
+    ],
+
     // ----- スペック (ゲームを始める前に選ぶ。ユーザー指定 2026-10-19、1/99・1/159 に変更) -----
     // 大当たりの振り分け: label (表示する出玉) / rounds (ラウンド数) / count (1ラウンドに入る玉の数。省略は machine.bonus.count)
     //   / next (終わったあと。'normal' = 通常時 / 'jitan' = 時短)。賞球 15 なので 1ラウンド 10カウント = 150個
@@ -149,9 +164,6 @@ const CONFIG = {
     //   当たれば RASH 突入 (突破率は challengeSmallRate で合わせる)。RASH 中は大当たりのたびに時短 jitan.spins 回
     //   (時短が終わったあとの残り保留でも小当たりを引ける。tools/simulate.html で測って合わせる)
     // payout: スペックごとの賞球 (config.payout より優先。書いた入賞口だけ変わる)
-    // board: スペックごとの釘調整 (お店が機種ごとに釘を調整するのと同じ)。出玉率を 80〜95% に合わせる (ユーザー指定 2026-10-19)
-    //   hesoWidth: ヘソの命釘のすき間 (玉の直径は 6。広いほど入りやすい)
-    //   warpMinVx: ワープに入る速さ (大きいほど入りにくい = ステージ経由のヘソ入賞が減る)
     specs: {
         s99: {
             label: '1/99',
@@ -168,7 +180,6 @@ const CONFIG = {
             ],
             challengeSmallRate: 1 / 6.7,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/7 で 47〜48%)
             jitan: { challengeSpins: 1, spins: 6 },
-            board: { hesoWidth: 8.8, warpMinVx: 15 },
             payout: { heso: 2 },   // 賞球をこのスペックだけ変える (1/99 は当たりが小さいので、ヘソを 2 にして出玉率を上げた)
             target: { challenge: 0.5, continuation: 0.79 }
         },
@@ -186,7 +197,6 @@ const CONFIG = {
             ],
             challengeSmallRate: 1 / 6.7,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/7 で 47〜48%)
             jitan: { challengeSpins: 1, spins: 6 },
-            board: { hesoWidth: 6.6, warpMinVx: 40 },
             target: { challenge: 0.5, continuation: 0.80 }
         }
     },
@@ -334,10 +344,11 @@ const CONFIG = {
         },
 
         // 特図1 の変動の流れ (秒)
-        //   外れ: 図柄が回って止まる (miss。保留が shortenAt 個以上なら missShort)
+        //   外れ: 図柄が回って止まる (miss)
         //   チャレンジ: 図柄が回る (roll) → チャレンジ (challenge) → 失敗 (fail) / 成功ならリーチ (reach) → バトル (battle) → 結果 (result)
         //   チャレンジに成功するとリーチになり、バトルに勝つと図柄がそろう (ユーザー指定)。当たりは必ずチャレンジ → 成功 → 勝ち
-        timing: { miss: 7, missShort: 3.5, shortenAt: 3, roll: 3, challenge: 6, fail: 1.5, reach: 2.5, battle: 9, result: 3 },
+        // miss: 外れの変動時間を、保留の数 (変動中のものを含めて 1〜4) ごとに。保留がたまるほど速い (高い設定でもよく回るように)
+        timing: { miss: [6, 3.5, 2, 1], roll: 3, challenge: 6, fail: 1.5, reach: 2.5, battle: 9, result: 3 },
         // 外れのうちチャレンジが出る割合。リーチ (成功) になる外れの割合は、バトルの成功率から自動で決まる
         challengeRate: 0.07,
         // チャレンジの種類 (ユーザー指定)。hit / miss は当たり・外れのときに選ぶ重み (外れの重みが小さいほど熱い)

@@ -11,7 +11,7 @@
       2. 1 の入賞率で玉の行き先を決めながら、台の抽選 (js/machine.js) を長い時間まわす
          通常時は左打ち、時短・大当たり・小当たり・RUSH の残り保留のあいだは右打ち。
     ?hours=200 で1台あたりの時間、?balls=3000 で 1 の玉の数、?spec=s99 でスペックをしぼる、?seed=1、?cs=1&rs=6 で突破チャレンジ・RUSH の時短の回数を変える (調整用)
-    ?widths=6.2,6.6,7.0 で、スペックの命釘の代わりにこのすき間を順に測る (調整用。ワープはスペックの値)
+    ?settings=1,6 で測る設定をしぼる。?widths=6.2,6.6,7.0&warp=15 で、設定の代わりにこの命釘のすき間を順に測る (調整用)
     ヘッドレスChromeで: sh tools/run-sim.sh "hours=200"
 -->
 <style>body { font: 13px monospace; background: #111; color: #ddd; }</style>
@@ -70,12 +70,16 @@
     }
 
     const presets = CONFIG.launch.presets;
-    // 測る釘の調整: スペックの値 (?widths= があれば、命釘だけそれに変えて順に)
+    // 測る釘の調整: 設定1〜6 (?settings=1,6 でしぼる。?widths= があれば設定1 のワープで命釘だけ変えて順に)
     const boardsFor = specId => {
-        const b = CONFIG.specs[specId].board;
-        return params.get('widths') ? params.get('widths').split(',').map(w => ({ ...b, hesoWidth: Number(w) })) : [b];
+        if (params.get('widths')) {
+            const warp = Number(params.get('warp') || CONFIG.settings[0].warpMinVx);
+            return params.get('widths').split(',').map(w => ({ hesoWidth: Number(w), warpMinVx: warp }));
+        }
+        const pick = params.get('settings') ? params.get('settings').split(',').map(Number) : [1, 2, 3, 4, 5, 6];
+        return pick.map(i => ({ ...CONFIG.settings[i - 1], setting: i }));
     };
-    const keyOf = b => `命釘 ${b.hesoWidth.toFixed(2)} / ワープ ${b.warpMinVx}`;
+    const keyOf = b => `${b.setting ? `設定${b.setting} ` : ''}命釘 ${b.hesoWidth.toFixed(1)} / ワープ ${b.warpMinVx}`;
     const specIds = Object.keys(CONFIG.specs).filter(id => !params.get('spec') || params.get('spec') === id);
     const leftByBoard = {};
     specIds.forEach(id => boardsFor(id).forEach(b => {
