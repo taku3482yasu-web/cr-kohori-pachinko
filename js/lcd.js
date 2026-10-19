@@ -44,6 +44,27 @@ const Lcd = (() => {
         choosing = on;
     }
     let rashCount = null;   // 大当たりの終わりの「〇回目」→「〇〇RASH」 { count, start }
+    let stageFx = null;     // ステージが変わったところ { stage: { id, kind }, start }
+
+    // ステージが変わった: 白い光が横切って、ステージの名前 (高確率ステージは「チャンス！」)
+    function drawStageFx(now) {
+        if (!stageFx) return;
+        const t = now - stageFx.start;
+        if (t > 2) { stageFx = null; return; }
+        if (t < 0.35) {
+            const x = (t / 0.35) * (W + 60) - 60;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.fillRect(x, 0, 60, H);
+        }
+        const st = CONFIG.show.stages;
+        const kind = stageFx.stage.kind;
+        const name = st.names[stageFx.stage.id] || '';
+        if (t > 0.2 && t < 1.8) {
+            band(4, 22, 0.55);
+            if (kind === 'hi') text(`チャンス！ ${name}`, W / 2, 15, 14, Math.floor(now * 6) % 2 ? '#ff3a3a' : '#ffe066');
+            else if (kind !== 'back') text(`ステージ: ${name}`, W / 2, 15, 12, '#ffffff');
+        }
+    }
 
     function drawRashCount(now) {
         if (!rashCount) return;
@@ -61,7 +82,7 @@ const Lcd = (() => {
     }
 
     function reset() {
-        flash = summary = aimNotice = bubble = spinView = null;
+        flash = summary = aimNotice = bubble = spinView = stageFx = null;
     }
 
     function show(text, color, now, seconds = 1.2) {
@@ -103,6 +124,9 @@ const Lcd = (() => {
             const head = e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
             show(`${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
+        } else if (e.type === 'stageChange') {
+            stageFx = { stage: e.stage, start: now };
+            Sound.play(e.stage.kind === 'hi' ? 'reach' : 'challenge');
         } else if (e.type === 'smallStart') {
             show('V を狙え！', '#ff6a8a', now, CONFIG.machine.small.open);
         } else if (e.type === 'roundStart') {
@@ -283,6 +307,36 @@ const Lcd = (() => {
                     ctx.fillRect(x - 8, 60, 16, 44);
                 }
             });
+        } else if (plan.challenge === 'music') {
+            // おかがっぱの DJ に合わせてこおりくんが踊る。音符が流れる
+            Characters.drawEnemy(ctx, 'okagappa', 196, 122, { scale: 1.6, frame });
+            ctx.fillStyle = '#2a2a3a';
+            ctx.fillRect(168, 104, 56, 18);
+            ctx.fillStyle = '#4fe0ff';
+            ctx.fillRect(174, 108, 12, 4);
+            ctx.fillStyle = '#ff4fa0';
+            ctx.fillRect(194, 108, 12, 4);
+            const dance = Math.floor(now * 6) % 2;
+            drawSprite(ctx, SPRITES.koori, dance ? 'walk1' : 'walk2', 60 + (dance ? 3 : -3), 92 - Math.abs(Math.sin(now * 6)) * 6, 2);
+            for (let i = 0; i < 4; i++) {
+                const x = (now * 50 + i * 60) % 200 + 20;
+                text('♪', x, 70 + Math.sin(now * 4 + i) * 6, 12, reveal && !success ? '#5a5a6a' : ['#ffe066', '#4fe0ff', '#ff4fa0', '#7aff6a'][i]);
+            }
+        } else if (plan.challenge === 'wrestling') {
+            // シバターとプロレス: リングのロープ、組み合う
+            ctx.fillStyle = '#c8c0d8';
+            ctx.fillRect(10, 128, W - 20, 6);
+            ['#ff4a4a', '#ffffff', '#4a8aff'].forEach((c, i) => {
+                ctx.fillStyle = c;
+                ctx.fillRect(10, 96 + i * 9, W - 20, 2);
+            });
+            ctx.fillStyle = '#8a8a96';
+            ctx.fillRect(8, 92, 4, 42);
+            ctx.fillRect(W - 12, 92, 4, 42);
+            const grapple = Math.sin(now * 5) * 6;
+            Characters.drawEnemy(ctx, 'shibata', 150 - grapple, 128, { scale: 1.6, frame });
+            drawSprite(ctx, SPRITES.koori, frame ? 'walk1' : 'walk2', 96 + grapple, 96, 2);
+            if (reveal && success) text('1, 2, 3！', W / 2, 90, 12, '#ffe066');
         } else if (plan.challenge === 'training') {
             // おにおにの前で腕立て (上下に弾む)
             Characters.drawEnemy(ctx, 'onioni', 196, 124, { scale: 1.6, frame });
@@ -311,13 +365,16 @@ const Lcd = (() => {
 
         // 題名とゲージ
         band(30, 18, 0.55);
-        text(c.name, W / 2 + 30, 39, 11, '#ffe066');
+        text(c.name, W / 2 + 24, 39, c.name.length > 14 ? 10 : 11, '#ffe066');
         ctx.fillStyle = '#10182a';
         ctx.fillRect(86, 54, 160, 8);
         ctx.fillStyle = success && reveal ? rainbow(now) : '#7fd3f7';
         ctx.fillRect(87, 55, Math.round(158 * gauge), 6);
         if (reveal) {
-            const word = { treasure: ['お宝発見！', 'からっぽ…'], training: ['特訓成功！', 'ヘトヘト…'], bento: ['お弁当完成！', 'こげちゃった…'] }[plan.challenge];
+            const word = {
+                treasure: ['お宝発見！', 'からっぽ…'], music: ['ノリノリ！', '音ズレ…'], wrestling: ['3カウント！', '場外負け…'],
+                training: ['特訓成功！', 'ヘトヘト…'], bento: ['お弁当完成！', 'こげちゃった…']
+            }[plan.challenge];
             band(66, 26, 0.5);
             text(success ? word[0] : word[1], W / 2, 79, 18, success ? '#ffe066' : '#8aa4c0');
         }
@@ -504,7 +561,8 @@ const Lcd = (() => {
             if (phase.name === 'reach' || phase.name === 'battle' || phase.name === 'result') return CONFIG.show.battles[plan.enemy].map;
         }
         if (m.rush.active && rashMode === 'onioni' && !m.rush.challenge) return 'castleHall';
-        return Machine.inJitan(m) || m.rush.active ? 'seCastle' : 'tsugakuro';
+        if (Machine.inJitan(m) || m.rush.active) return 'seCastle';
+        return Scenario.stageMap(m.stage);
     }
 
     function phaseSounds(plan, phase) {
@@ -615,6 +673,7 @@ const Lcd = (() => {
             bubble.key = spinKey;
         }
         drawRashCount(now);
+        if (!m.bonus && !(plan && plan.fig === 1 && phase && phase.name !== 'roll')) drawStageFx(now);
         drawHolds(now, m);
         drawFurukawa(now);
 

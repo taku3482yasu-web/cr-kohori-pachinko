@@ -123,7 +123,7 @@
         let rushStartPaid = 0, rushStartShot = 0;
         // 演出の集計 (特図1): バトルの相手・チャレンジ・ボタン・保留の色ごとに、出た回数と当たった回数
         const showStats = { enemy: {}, challenge: {}, button: [0, 0], color: {}, reach: 0, spins: 0,
-            weapon: {}, rashEnemy: {}, rashButton: [0, 0], rashButtonOnHit: [0, 0], rashSpins: 0, rashBattles: 0 };
+            weapon: {}, rashEnemy: {}, rashButton: [0, 0], rashButtonOnHit: [0, 0], rashSpins: 0, rashBattles: 0, stage: {} };
         const tally = (table, key, hit) => {
             table[key] = table[key] || [0, 0];
             table[key][0]++;
@@ -174,6 +174,11 @@
                     const hit = e.result.kind === 'hit';
                     tally(showStats.color, e.result.holdColor, hit);
                     if (e.result.button) { showStats.button[0]++; if (hit) showStats.button[1]++; }
+                }
+                if (e.type === 'spinStart' && e.fig === 1 && e.plan.stage) {
+                    // ステージの変わり方: その変動から4回転以内に当たりがあるか (いまの保留に当たりがあるか) で数える
+                    const hitSoon = e.result.kind === 'hit' || m.holds[1].some(h => h.kind === 'hit');
+                    tally(showStats.stage, e.plan.stage.kind, hitSoon);
                 }
                 if (e.type === 'spinStart' && e.fig === 1) {
                     const p = e.plan;
@@ -236,6 +241,8 @@
             const enames = CONFIG.show.kooriRash.enemies;
             lines.push(`      こおりRASH (特図2 ${st.rashSpins} 回転、バトル ${pct(st.rashBattles / Math.max(1, st.rashSpins))}) のバトルの成功率: `
                 + Object.keys(enames).map(id => `${enames[id].name} ${rate(st.rashEnemy[id] || [0, 0])}`).join(' / '));
+            const sname = { regular: 'ふつう', quick: 'すぐ変わる', hi: '高確率ステージへ' };
+            lines.push('      ステージの変わり方 (保留に当たりがある割合): ' + Object.keys(sname).map(k => `${sname[k]} ${rate(st.stage[k] || [0, 0])}`).join(' / '));
             lines.push(`      RASH 中のボタン: 起きたら当たり ${rate(st.rashButton)} / 当たりのときに起きる ${rate(st.rashButtonOnHit)}`);
         });
     });

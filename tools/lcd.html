@@ -14,7 +14,7 @@
     ?force=koori&hit=3&fast=1  こおりRASH で特図2 の大当たり (3連目) → 大当たり → 「〇回目」→「〇〇RASH」
     &t=12 その秒数まで早送りした画面で止める (ヘッドレスChromeで画像にするとき)。t がなければふつうに動く
     &ts=2,6,12 その秒数ごとの画面を並べる (1回の変動を何枚かで見る)
-    &holds=3 ほかの保留の数 / &color=rainbow はじめの保留の色
+    &holds=3 ほかの保留の数 / &color=rainbow はじめの保留の色 / &challenge=music チャレンジの種類
 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
 <style>
@@ -52,7 +52,7 @@
     const m = Machine.create(CONFIG, params.get('spec') || 's99');
     const lcd = Lcd.init();
     const force = params.get('force') || 'hit';
-    const options = { enemy: params.get('enemy') || undefined, holdColor: params.get('color') || undefined };
+    const options = { enemy: params.get('enemy') || undefined, holdColor: params.get('color') || undefined, challenge: params.get('challenge') || undefined };
     if (!['challenge', 'koori', 'onioni', 'blackout'].includes(params.get('force'))) {
         for (let i = 0; i < Number(params.get('holds') || 2); i++) Machine.debugHold(m, 1, 'miss', null);
     }

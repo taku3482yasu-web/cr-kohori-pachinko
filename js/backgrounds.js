@@ -494,7 +494,204 @@ const Backgrounds = (() => {
         };
     }
 
+    // ----- 小倉駅: 駅ビルにモノレールが入っていく (パチンコ版で追加) -----
+    function buildKokuraStation() {
+        const rng = seeded(31);
+        return {
+            groundY: 120,
+            layers: [
+                layer(0, p => p.bands(0, 110, ['#6ab0e8', '#7cbcee', '#90c8f2', '#a8d6f6', '#c4e4fa'])),
+                layer(0.08, p => {
+                    p.cloud(30, 14, 1);
+                    p.cloud(150, 6, 1);
+                    p.cloud(210, 26, 1);
+                }),
+                // 遠くのビル
+                layer(0.25, p => {
+                    for (let x = 0; x < W;) {
+                        const w = 16 + Math.floor(rng() * 16);
+                        const h = 30 + Math.floor(rng() * 34);
+                        p.rect(x, 100 - h, w - 2, h, '#8aa2bc');
+                        for (let wy = 100 - h + 4; wy < 96; wy += 6) {
+                            for (let wx = x + 2; wx < x + w - 4; wx += 4) p.rect(wx, wy, 2, 3, '#b8cce0');
+                        }
+                        x += w;
+                    }
+                }),
+                // 駅ビル・モノレール
+                layer(0.55, p => {
+                    // 駅ビル (横に長いガラスの建物)
+                    p.rect(40, 40, 176, 64, '#d8dce4');
+                    p.rect(40, 38, 176, 3, '#8a929e');
+                    for (let row = 0; row < 4; row++) {
+                        for (let col = 0; col < 21; col++) p.rect(44 + col * 8, 46 + row * 9, 6, 6, '#7fb0d8');
+                    }
+                    // 「小倉駅」の看板
+                    p.rect(104, 30, 48, 10, '#1b3a6b');
+                    p.rect(108, 33, 40, 4, '#ffffff');
+                    // モノレールの軌道 (駅ビルの真ん中に吸い込まれる)
+                    p.rect(0, 70, 120, 5, '#b0b4ba');
+                    p.rect(0, 75, 120, 2, '#7a7e86');
+                    for (let x = 6; x < 120; x += 28) p.rect(x, 77, 5, 27, '#9a9ea6');
+                    p.rect(96, 62, 28, 10, '#f4f4f4');
+                    p.rect(96, 62, 28, 2, '#e05050');
+                    p.rect(100, 65, 4, 3, '#3a5a8a');
+                    p.rect(108, 65, 4, 3, '#3a5a8a');
+                    p.rect(116, 65, 4, 3, '#3a5a8a');
+                    // 入口
+                    p.rect(112, 88, 32, 16, '#3a4a5a');
+                    p.rect(114, 90, 28, 14, '#5a7a9a');
+                }),
+                // 駅前の広場
+                layer(1, p => {
+                    p.rect(0, 104, W, 40, '#c8c0b0');
+                    for (let x = 0; x < W; x += 12) p.rect(x, 104, 1, 40, '#b0a898');
+                    for (let y = 112; y < H; y += 8) p.rect(0, y, W, 1, '#b0a898');
+                    [20, 236].forEach(x => {
+                        p.rect(x, 90, 3, 14, '#4a4a4a');
+                        p.rect(x - 3, 86, 9, 4, '#5aa848');
+                    });
+                })
+            ]
+        };
+    }
+
+    // ----- ゲームセンター: 夜のネオン街 (パチンコ版で追加) -----
+    function buildGameCenter() {
+        return {
+            groundY: 120,
+            layers: [
+                layer(0, p => p.bands(0, 110, ['#0c0820', '#140c30', '#1c1040', '#24144c'])),
+                // 奥のビルの灯り
+                layer(0.2, p => {
+                    const rng = seeded(41);
+                    for (let x = 0; x < W;) {
+                        const w = 18 + Math.floor(rng() * 14);
+                        const h = 40 + Math.floor(rng() * 30);
+                        p.rect(x, 100 - h, w - 2, h, '#1a1430');
+                        for (let wy = 100 - h + 4; wy < 96; wy += 6) {
+                            for (let wx = x + 2; wx < x + w - 4; wx += 5) if (rng() < 0.5) p.rect(wx, wy, 2, 2, '#ffd27a');
+                        }
+                        x += w;
+                    }
+                }),
+                // ゲームセンターの店先
+                layer(0.6, p => {
+                    p.rect(30, 34, 196, 70, '#2a1a40');
+                    // ネオン看板「GAME」
+                    p.rect(70, 38, 116, 18, '#120a20');
+                    const neon = ['#ff4fa0', '#4fe0ff', '#ffe04f', '#7aff6a'];
+                    for (let i = 0; i < 4; i++) {
+                        p.rect(78 + i * 26, 41, 18, 12, neon[i]);
+                        p.rect(81 + i * 26, 44, 12, 6, '#120a20');
+                    }
+                    p.rect(66, 36, 124, 1, '#ff4fa0');
+                    p.rect(66, 57, 124, 1, '#4fe0ff');
+                    // UFO キャッチャー (ガラスのケース)
+                    [40, 92, 144, 196].forEach((x, i) => {
+                        p.rect(x, 64, 22, 40, '#3a2a5a');
+                        p.rect(x + 2, 66, 18, 22, '#9adcff');
+                        p.rect(x + 4, 80, 4, 4, neon[i]);
+                        p.rect(x + 12, 82, 4, 4, neon[(i + 2) % 4]);
+                        p.rect(x + 9, 66, 2, 6, '#e0e0e0');
+                        p.rect(x + 7, 72, 6, 2, '#e0e0e0');
+                        p.rect(x + 4, 92, 14, 8, neon[(i + 1) % 4]);
+                    });
+                }),
+                // 歩道 (ネオンが映る)
+                layer(1, p => {
+                    p.rect(0, 104, W, 40, '#2a2238');
+                    for (let x = 0; x < W; x += 16) p.rect(x, 104, 1, 40, '#3a3050');
+                    p.rect(70, 108, 116, 2, '#5a2a5a');
+                    p.rect(70, 112, 116, 1, '#2a4a5a');
+                })
+            ]
+        };
+    }
+
+    // ----- 石の川: 大きな石がごろごろした川原 (パチンコ版で追加) -----
+    function buildIshinokawa() {
+        const rng = seeded(51);
+        return {
+            groundY: 120,
+            layers: [
+                layer(0, p => p.bands(0, 100, ['#8ac8f0', '#9cd2f2', '#b0dcf4', '#c8e6f6'])),
+                layer(0.1, p => {
+                    p.cloud(40, 16, 1);
+                    p.cloud(180, 10, 1);
+                }),
+                // 山
+                layer(0.2, p => p.ridge(70, 10, [[1, 8], [3, 4]], '#6a9a6a')),
+                layer(0.35, p => p.ridge(84, 6, [[2, 6], [5, 3]], '#4f8a4f', 1.5)),
+                // 川と石
+                layer(0.7, p => {
+                    p.rect(0, 92, W, 16, '#5aa0d8');
+                    for (let x = 0; x < W; x += 9) p.rect(x + Math.floor(rng() * 4), 96 + Math.floor(rng() * 8), 5, 1, '#c8e8ff');
+                    for (let i = 0; i < 14; i++) {
+                        const x = Math.floor(rng() * W), w = 10 + Math.floor(rng() * 14), h = 5 + Math.floor(rng() * 5);
+                        const y = 90 + Math.floor(rng() * 14);
+                        p.rect(x, y - h, w, h, '#8a8a90');
+                        p.rect(x + 1, y - h, w - 2, 2, '#b0b0b8');
+                        p.rect(x, y - 1, w, 1, '#5a5a60');
+                    }
+                }),
+                // 手前の川原 (小石)
+                layer(1, p => {
+                    p.rect(0, 108, W, 36, '#b8b0a0');
+                    for (let i = 0; i < 120; i++) {
+                        const shade = ['#9a9488', '#d0c8b8', '#8a8478', '#c0b8a8'][i % 4];
+                        p.rect(Math.floor(rng() * W), 108 + Math.floor(rng() * 36), 3 + (i % 3), 2, shade);
+                    }
+                })
+            ]
+        };
+    }
+
+    // ----- 満月: 大きな満月とすすき (高確率ステージ。パチンコ版で追加) -----
+    function buildFullMoon() {
+        return {
+            groundY: 120,
+            layers: [
+                layer(0, p => {
+                    p.bands(0, 110, ['#05061a', '#0a0c26', '#101434', '#161a40', '#1c2248']);
+                    const rng = seeded(61);
+                    for (let i = 0; i < 60; i++) p.rect(Math.floor(rng() * W), Math.floor(rng() * 90), 1, 1, i % 5 ? '#c8d0ff' : '#ffffff');
+                    // 満月 (光の輪つき)
+                    const cx = 128, cy = 46;
+                    [[40, 'rgba(255,240,180,0.08)'], [32, 'rgba(255,240,180,0.15)'], [26, '#fff4c8']].forEach(([r, c]) => {
+                        for (let dy = -r; dy <= r; dy++) {
+                            const half = Math.round(Math.sqrt(r * r - dy * dy));
+                            p.rect(cx - half, cy + dy, half * 2, 1, c);
+                        }
+                    });
+                    p.rect(118, 38, 6, 4, '#ece0b0');
+                    p.rect(134, 50, 8, 5, '#ece0b0');
+                    p.rect(126, 58, 4, 3, '#ece0b0');
+                }),
+                // 丘のシルエット
+                layer(0.3, p => p.ridge(96, 6, [[1, 5], [4, 2]], '#0a0c1c')),
+                // すすき
+                layer(0.8, p => {
+                    const rng = seeded(71);
+                    for (let x = 0; x < W; x += 5) {
+                        const h = 16 + Math.floor(rng() * 14);
+                        p.rect(x, 108 - h, 1, h, '#3a3a2a');
+                        p.rect(x - 1, 108 - h, 3, 4, '#d8c890');
+                    }
+                }),
+                layer(1, p => {
+                    p.rect(0, 108, W, 36, '#141810');
+                    for (let x = 0; x < W; x += 7) p.rect(x, 108, 3, 2, '#2a3020');
+                })
+            ]
+        };
+    }
+
     const BUILDERS = {
+        kokuraStation: buildKokuraStation,
+        gameCenter: buildGameCenter,
+        ishinokawa: buildIshinokawa,
+        fullMoon: buildFullMoon,
         danceHall: buildDanceHall,
         tsugakuro: buildTsugakuro,
         ongagawa: buildOngagawa,

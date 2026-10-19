@@ -40,8 +40,58 @@ const Scenario = (() => {
         // 虹色は当たりのときだけ
         const kinds = hit ? { ...show.button.kinds, ...show.button.hitOnlyKinds } : show.button.kinds;
         const button = rng() < rate ? weighted(kinds, rng) : null;
-        return { holdColor, button };
+        // 高確率ステージ (SE城前・満月) に移るきっかけになる保留か
+        const hi = show.stages.hi;
+        const hiRate = hit ? hi.hitRate : hi.hitRate * spec.hitRate * (1 - hi.reliability) / hi.reliability / (1 - spec.hitRate);
+        return { holdColor, button, hiStage: rng() < hiRate };
     }
+
+    // ----- 通常時のステージ (背景) -----
+    // 特図1 の変動が始まるときに呼ぶ。state (m.stage) を書きかえて、変わったら { id, kind } を返す (kind: 'regular' / 'quick' / 'hi' / 'back')
+    //   result: この変動の保留 / holds: 残りの保留
+    function newStage() {
+        return { id: 'tsugakuro', index: 0, since: 0, rolled: false, hi: null };
+    }
+
+    function stepStage(config, state, result, holds, rng) {
+        const st = config.show.stages;
+        const all = [result, ...holds];
+        state.since++;
+        const goNext = kind => {
+            state.index = (state.index + 1) % st.cycle.length;
+            state.id = st.cycle[state.index];
+            state.since = 0;
+            state.rolled = false;
+            return { id: state.id, kind };
+        };
+        // 高確率ステージ中: きっかけの保留まではそのまま
+        if (state.hi) return null;
+        // 高確率ステージへ (外れの保留は、ステージが変わってすぐの間は移らない)
+        const trigger = all.find(h => h.hiStage && (h.kind === 'hit' || state.since > st.quick.window));
+        if (trigger) {
+            state.hi = { target: trigger, id: st.hi.ids[Math.floor(rng() * st.hi.ids.length)] };
+            return { id: state.hi.id, kind: 'hi' };
+        }
+        // すぐ変わる (当たり濃厚): ステージが変わってから window 回転以内に当たりの保留があれば、1回だけ抽選
+        if (state.since <= st.quick.window && !state.rolled && all.some(h => h.kind === 'hit')) {
+            state.rolled = true;
+            if (rng() < st.quick.rate) return goNext('quick');
+        }
+        if (state.since >= st.interval) return goNext('regular');
+        return null;
+    }
+
+    // 変動が終わったとき: 高確率ステージのきっかけの保留を消化したら元のステージに戻る
+    function endStage(state, result) {
+        if (state.hi && state.hi.target === result) {
+            state.hi = null;
+            return { id: state.id, kind: 'back' };
+        }
+        return null;
+    }
+
+    // いまの背景
+    const stageMap = state => state.hi ? state.hi.id : state.id;
 
     // ----- 保留 (玉が電チューに入ったとき) -----
     // RASH 中・突破チャレンジ中: 当たりの保留の rashButton.hitRate でボタン (外れでは起きない)。突破チャレンジ中は武器も決める
@@ -130,7 +180,7 @@ const Scenario = (() => {
             p.digits = missDigits(false, rng);
         } else {
             const pick = id => show.challenges[id][hit ? 'hit' : 'miss'];
-            p.challenge = weighted(Object.fromEntries(Object.keys(show.challenges).map(id => [id, pick(id)])), rng);
+            p.challenge = result.forceChallenge || weighted(Object.fromEntries(Object.keys(show.challenges).map(id => [id, pick(id)])), rng);
             if (type === 'fail') {
                 p.phases = [{ name: 'roll', t: t.roll }, { name: 'challenge', t: t.challenge }, { name: 'fail', t: t.fail }];
                 p.digits = missDigits(false, rng);
@@ -263,6 +313,7 @@ const Scenario = (() => {
         let list;
         if (color >= 4) list = f.chanceLines[Math.min(color, 6)];
         else if (color >= 2 && rng() < 0.5) list = f.expectLines;
+        else if (color < 2 && rng() < f.hintRate) list = f.hintLines;   // 豆知識
         else list = f.chatLines;
         const candidates = list.length > 1 ? list.filter(line => line !== lastLine) : list;
         const text = pickFrom(candidates, rng);
@@ -270,5 +321,5 @@ const Scenario = (() => {
         return { text, color };
     }
 
-    return { hold, hold2, challengePlan, plan, buttonMissRate, reachMissRate, missBattleMass };
+    return { hold, hold2, challengePlan, plan, buttonMissRate, reachMissRate, missBattleMass, newStage, stepStage, endStage, stageMap };
 })();

@@ -38,6 +38,7 @@ const Machine = (() => {
             challengeRun: null,       // 突破チャレンジのバトル中 (Scenario.challengePlan の結果 + 何ラウンド目か index)
             gatherTime: 0,            // 突破チャレンジで保留がたまるのを待っている秒
             rashMode: config.show.rash.defaultMode,
+            stage: Scenario.newStage(),   // 通常時のステージ (背景)
             holds: { 1: [], 2: [] },  // 保留 (それぞれの結果)
             spin: null,               // 変動中の特図 { fig, result, duration, elapsed }
             small: null,              // 小当たりでアタッカーが開いている { timer, alloc }
@@ -137,16 +138,23 @@ const Machine = (() => {
                 isLast: fig === 2 && m.rush.active && !m.rush.challenge && m.jitanLeft - (jitanSpin ? 1 : 0) <= 0 && m.holds[2].length === 0
             }, m.rng);
             if (run) run.index++;
+            // 通常時の特図1: ステージを進める (変わったら plan.stage)
+            if (fig === 1 && !m.rush.active && !inJitan(m)) plan.stage = Scenario.stepStage(m.config, m.stage, result, m.holds[1], m.rng);
             m.spin = { fig, result, plan, duration: plan.duration, elapsed: 0, jitan: jitanSpin };
             m.stats[fig === 1 ? 'spins1' : 'spins2']++;
             if (m.spin.jitan) m.jitanLeft--;
             emit(m, 'spinStart', { fig, result, plan, duration: plan.duration, jitanLeft: m.jitanLeft });
+            if (plan.stage) emit(m, 'stageChange', { stage: plan.stage });
             return;
         }
         m.spin.elapsed += dt;
         if (m.spin.elapsed < m.spin.duration) return;
         const { fig, result, plan } = m.spin;
         m.spin = null;
+        if (fig === 1) {
+            const back = Scenario.endStage(m.stage, result);
+            if (back) emit(m, 'stageChange', { stage: back });
+        }
         // 突破チャレンジのバトルは、決着のラウンドで終わり
         if (plan.kind === 'challenge' && plan.final) m.challengeRun = null;
         emit(m, 'spinEnd', { fig, result, plan });
@@ -312,6 +320,7 @@ const Machine = (() => {
         if (options.holdColor) result.holdColor = options.holdColor;
         if (options.button) result.button = options.button;
         if (options.pattern) result.forcePattern = options.pattern;
+        if (options.challenge) result.forceChallenge = options.challenge;
         m.holds[fig].unshift(result);
         if (m.holds[fig].length > m.config.machine.holdMax) m.holds[fig].pop();
         emit(m, 'hold', { fig, result, count: m.holds[fig].length });
