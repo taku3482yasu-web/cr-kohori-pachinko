@@ -2,7 +2,7 @@
 // カスタマイズ (演出・盤面の見た目。ユーザー指定 2026-10-19)
 // ---------------------------------------------------------------------
 // 遊ぶ人が選べる。当たりやすさ・出玉には関係しない (見た目と演出だけ)。選んだ内容はこのブラウザに保存する。
-//   演出: senyomi (先読みの量: なし / チャンス / おすすめ / 熱) / notice (告知: ふつう / 先告知) / furukawa (よくしゃべる / ふつう / しゃべらない) / vibrate (ボタンの振動)
+//   演出: senyomi (先読みの量: なし / チャンス / おすすめ / 熱) / notice (告知: ふつう / 先告知) / furukawa (よくしゃべる / ふつう / しゃべらない) / vibrate (ボタンの振動) / bgm (BGM)
 //   見た目: theme (盤面の色) / ball (玉の色) / koori (こおりくんの色)
 // Customize.get('theme') で読む。Customize.onChange(fn) で変わったときに呼ばれる。
 // =====================================================================
@@ -17,6 +17,8 @@ const Customize = (() => {
         furukawa: { label: 'ふるカワ', group: '演出', note: '',
             choices: { often: 'よくしゃべる', normal: 'ふつう', off: 'しゃべらない' }, default: 'normal' },
         vibrate: { label: 'ボタンの振動', group: '演出', note: 'スマホの本体の振動',
+            choices: { on: 'ON', off: 'OFF' }, default: 'on' },
+        bgm: { label: 'BGM', group: '演出', note: '通常時・突破チャレンジ・RASH・大当たり中で曲が変わる (「音: OFF」のときは鳴らない)',
             choices: { on: 'ON', off: 'OFF' }, default: 'on' },
         theme: { label: '盤面の色', group: '見た目', note: '',
             choices: { ice: '氷', sunset: '夕焼け', sakura: '夜桜', gold: '黄金' }, default: 'ice' },

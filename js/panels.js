@@ -2,7 +2,7 @@
 // 画面の窓: データカウンター・図鑑・アップデート情報・実績のお知らせ (2026-10-19 ユーザー指定)
 // ---------------------------------------------------------------------
 // 記録そのものは js/records.js。ここは表示だけ。
-//   Panels.init({ context, pause })   context(): { counter, machine, balls, launched } / pause(on): 台を止める・動かす
+//   Panels.init({ context, pause })   context(): { counter, machine, balls, launched, setting (選んだ設定。おまかせは null) } / pause(on): 台を止める・動かす
 //   Panels.toast(achievements)        実績を解除したお知らせ (順番に出す)
 //   Panels.showUpdates(list)          アップデート情報を出す
 // 窓を開いているあいだは台を止める (カスタマイズと同じ)。
@@ -85,8 +85,25 @@ const Panels = (() => {
             ? t.map(([level, n]) => `<span class="dc-hint">${trophyChip(level)} ×${n}</span>`).join('')
                 + l.map(([short, n]) => `<span class="dc-hint">ふるカワ「${short}」 ×${n}</span>`).join('')
             : '<span class="picker-note">まだありません（RASH・突破チャレンジのあとのトロフィー、ふるカワのひとこと）</span>';
+        renderEstimate();
         hover = null;
         drawGraph();
+    }
+
+    // 設定推測: 設定1〜6 の確率の横棒 (いちばん高い設定を目立たせる)
+    function renderEstimate() {
+        const { counter: c, setting } = ctx();
+        const probs = SettingEstimate.probabilities(c, CONFIG);
+        const best = Math.max(...Object.values(probs));
+        $('dc-estimate').innerHTML = Object.entries(probs).map(([s, p]) => {
+            const label = p >= 0.999 ? '99.9%+' : p < 0.001 ? '0.1%未満' : `${(p * 100).toFixed(1)}%`;
+            return `<div class="dc-est-row${p === best ? ' dc-est-best' : ''}"><span class="dc-est-name">設定${s}</span>`
+                + `<span class="dc-est-track"><i style="width:${Math.max(p > 0 ? 1 : 0, p * 100)}%"></i></span><span class="dc-est-value">${label}</span></div>`;
+        }).join('');
+        const rot = SettingEstimate.rotation(c);
+        $('dc-estimate-note').textContent = (setting ? `この台は 設定${setting} を選んだ台です。` : '')
+            + (rot === null ? 'まだ左打ちの玉がありません。' : `回転率 ${rot.toFixed(1)} /1k（左打ち ${fmt(c.shotsLeft)}発で ${fmt(c.spins || 0)}回転。保留がいっぱいのときの入賞は数えない）`)
+            + '・トロフィー・ふるカワのセリフから計算。回転率は「← 左打ち」の強さで打ったときの目安と比べます';
     }
 
     function resultText(h) {

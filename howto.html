@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
-    <link rel="stylesheet" href="css/style.css?v=e7908ac6">
+    <link rel="stylesheet" href="css/style.css?v=efa065dd">
     <!--
     =====================================================================
     遊び方ページ (2026-10-19 ユーザー指定)
@@ -146,12 +146,14 @@
         <p>突破チャレンジ・RASH が終わったとき、<span id="trophy-rate"></span> の確率で液晶の左下に<b>トロフィー</b>が落ちてきます。色は「設定○以上」を表します。</p>
         <div class="table-wrap"><table id="trophy-table"></table></div>
         <p>通常時、ふるカワが<b>台の設定をほのめかす</b>ことがあります（「この台、あったかい気がする♪」など）。見た設定示唆は「データ」にまとまります。</p>
+        <p>「データ」の<b>設定推測</b>は、回転率（左打ちの玉あたりの回転数）・トロフィー・ふるカワのセリフから、設定1〜6 の確率を計算します。回転率は「← 左打ち」の強さで打ったときの目安と比べるので、ほかの強さで打つと低く出ることがあります。</p>
 
         <h2 id="menu">データ・図鑑・カスタマイズ</h2>
         <ul>
-            <li><b>データ</b>: この台の総回転数・大当たり履歴・大当たりまでの回転数のグラフ・出玉の推移・見た設定示唆</li>
+            <li><b>データ</b>: この台の総回転数・大当たり履歴・大当たりまでの回転数のグラフ・出玉の推移・設定推測・見た設定示唆</li>
             <li><b>図鑑</b>: これまでの記録・見た演出・実績（<span id="achievement-count"></span> 個）。台を選び直しても、新しく始めても残ります</li>
-            <li><b>カスタマイズ</b>: 先読みの量・先告知・ふるカワのおしゃべり・盤面や玉やこおりくんの色。当たりやすさ・出玉は変わりません</li>
+            <li><b>カスタマイズ</b>: 先読みの量・先告知・ふるカワのおしゃべり・BGM・盤面や玉やこおりくんの色。当たりやすさ・出玉は変わりません</li>
+            <li><b>BGM</b>: 通常時・SE城前や満月・突破チャレンジ・こおりRASH・おにおにRASH・大当たり中で曲が変わります（「音: OFF」でも消えます）</li>
             <li><b>ホーム画面に追加</b>: スマホのブラウザのメニューから「ホーム画面に追加」すると、アプリのように開けます（https で公開しているとき）</li>
         </ul>
 
@@ -162,7 +164,7 @@
     </main>
 
     <script src="js/config.js?v=d8238ba5"></script>
-    <script src="js/updates.js?v=cfa3d154"></script>
+    <script src="js/updates.js?v=01cf45a7"></script>
     <script>
         (() => {
             const $ = id => document.getElementById(id);

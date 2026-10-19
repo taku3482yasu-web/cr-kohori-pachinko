@@ -85,5 +85,5 @@ const Sound = (() => {
         try { localStorage.setItem('koori-pachinko-muted', value ? '1' : '0'); } catch (e) { /* 無視 */ }
     }
 
-    return { unlock, play, playVoice, setMuted, get muted() { return muted; }, get voiceReady() { return Boolean(voiceBuffer); } };
+    return { unlock, play, playVoice, setMuted, get muted() { return muted; }, get voiceReady() { return Boolean(voiceBuffer); }, get context() { return ctx; } };
 })();

@@ -1,8 +1,18 @@
 #!/bin/sh
 # コミットのたびに、HTML が読み込む js / css の版番号 (?v=) を付け直してコミットに含める
 # (ブラウザに古いファイルを使わせないため。tools/bump-version.py)
+# そのまえに自動テスト (tools/test.js、約15秒) を走らせ、失敗したらコミットしない
+# (テストは作業中のファイルで動く。急ぎのときは git commit --no-verify で飛ばせる)
 # 有効にするには、このフォルダで一度だけ: git config core.hooksPath .githooks
 # python の出力は Windows では改行が \r\n なので、\r を取りのぞいてから git add する
+echo "自動テストを実行中… (git commit --no-verify で飛ばせます)"
+if ! result=$(node tools/test.js 2>&1); then
+    echo "$result" | grep -A1 "✘"
+    echo "$result" | tail -1
+    echo "自動テストが失敗したので、コミットを中止しました"
+    exit 1
+fi
+echo "$result" | tail -1
 changed=$(python tools/bump-version.py | tr -d '\r') || exit 1
 for file in $changed; do
     git add "$file"

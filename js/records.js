@@ -5,6 +5,7 @@
 //   SettingHint   設定示唆: RASH が終わったときのトロフィーの色・ふるカワの設定示唆のセリフを、台の設定から選ぶ
 //   Collection    図鑑と実績。台を選び直しても、新しく始めても残る (このブラウザに保存する)
 //   DataCounter   データカウンター (台ごと)。大当たり履歴・出玉の推移・設定示唆。前回の続きと一緒に保存する (js/save.js)
+//   SettingEstimate 設定推測: データカウンターの回転率・トロフィー・ふるカワのセリフから、設定1〜6 の確率を出す
 // 数値と実績の一覧は config.show.settingHint / config.dataCounter / config.collection。
 // =====================================================================
 
@@ -188,9 +189,15 @@ const DataCounter = (() => {
             history: [],           // 大当たり履歴 (新しい順) { no, spins, label, kind, streak, startBalls, balls, trophy, active }
             graph: [[0, 0]],       // 出玉の推移 [打った玉, 差玉]
             graphTime: 0,
-            hints: { trophy: {}, line: {} }   // この台で見た設定示唆 (トロフィーの色・ふるカワのセリフの short)
+            hints: { trophy: {}, line: {} },  // この台で見た設定示唆 (トロフィーの色・ふるカワのセリフの short)
+            // 設定推測の回転率: 左打ちの玉 (ファールを除く) と特図1 の回転数 (表示の回転率と違って数え直さない)。
+            // config.settings の rotation は回転数で測った値なので、ヘソ入賞ではなく回転数で数える (保留がいっぱいのときの入賞は回らない)
+            shotsLeft: 0, spins: 0
         };
     }
+
+    // 左打ちの玉 (ファールで戻った玉は shot(c, -1) で取り消す)
+    function shot(c, n = 1) { c.shotsLeft = (c.shotsLeft || 0) + n; }
 
     // 玉貸し
     function lend(c, amount) {
@@ -201,6 +208,7 @@ const DataCounter = (() => {
     // ctx: { balls (いまの持ち玉), launched (打った玉), spins1 (特図1 の回転数) }
     function note(c, e, ctx, config) {
         const active = c.history.find(h => h.active);
+        if (e.type === 'spinStart' && e.fig === 1) c.spins = (c.spins || 0) + 1;
         if (e.type === 'bonusStart' && !e.rush) {
             // 初当たり
             if (active) finish(active, ctx);
@@ -255,5 +263,50 @@ const DataCounter = (() => {
         }
     }
 
-    return { create, lend, note, tick, liveBalls };
+    return { create, lend, note, tick, liveBalls, shot };
+})();
+
+const SettingEstimate = (() => {
+    // 設定ごとの対数尤度を足して、確率 { 1: p, ..., 6: p } にする (はじめはどの設定も同じ。おまかせは 1〜6 から同じ確率で選ぶため)
+    //   回転率: 左打ち n 発で k 回転。設定 s の回転率の目安 r_s (config.settings) から、k はおよそポアソン分布 (平均 n × r_s / 250)
+    //   トロフィー: 出た色ごとに、設定 s のときにその色が出る割合 (出なかった回数はどの設定も同じなので数えない)
+    //   ふるカワのセリフ: 言ったセリフごとに、設定 s のときにそのセリフを選ぶ割合 (重み 0 の設定はありえない)
+    function logLikelihoods(c, config) {
+        const settings = config.settings.map((st, i) => i + 1);
+        const t = config.show.settingHint.trophy;
+        const lines = config.show.settingHint.lines;
+        const share = (weights, key) => {
+            const total = Object.values(weights).reduce((a, w) => a + w, 0);
+            return (weights[key] || 0) / total;
+        };
+        return settings.map(s => {
+            let ll = 0;
+            const n = c.shotsLeft || 0;
+            if (n > 0) {
+                const lambda = n * config.settings[s - 1].rotation / 250;
+                ll += (c.spins || 0) * Math.log(lambda) - lambda;
+            }
+            Object.entries(c.hints.trophy).forEach(([level, k]) => { ll += k * Math.log(share(t.weights[s], level)); });
+            Object.entries(c.hints.line).forEach(([short, k]) => {
+                const line = lines.find(l => l.short === short);
+                if (line) ll += k * Math.log(share(line.weights, s));
+            });
+            return ll;
+        });
+    }
+
+    function probabilities(c, config) {
+        const ll = logLikelihoods(c, config);
+        const max = Math.max(...ll.filter(Number.isFinite));
+        const w = ll.map(x => (Number.isFinite(x) ? Math.exp(x - max) : 0));
+        const total = w.reduce((a, x) => a + x, 0);
+        return Object.fromEntries(w.map((x, i) => [i + 1, x / total]));
+    }
+
+    // いまの回転率 (1000円 = 250発あたり)。左打ちの玉がなければ null
+    function rotation(c) {
+        return c.shotsLeft > 0 ? (c.spins || 0) / c.shotsLeft * 250 : null;
+    }
+
+    return { probabilities, rotation };
 })();

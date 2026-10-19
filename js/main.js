@@ -101,7 +101,10 @@
             Physics.launch(game.world, game.strength, CONFIG);
             game.balls--;
             game.stats.launched++;
-            if (aim === 'left') game.stats.launchedLeft++;
+            if (aim === 'left') {
+                game.stats.launchedLeft++;
+                DataCounter.shot(game.counter);
+            }
             game.nextShot = time + CONFIG.launch.interval;
         }
         Physics.step(game.world, dt, CONFIG);
@@ -121,7 +124,10 @@
         const s = game.stats;
         if (e.type === 'foul') {
             s.foul++;
-            if (game.lastAim === 'left') s.foulLeft++;
+            if (game.lastAim === 'left') {
+                s.foulLeft++;
+                DataCounter.shot(game.counter, -1);
+            }
             game.balls++;   // ファールの玉は上皿に戻る
         } else if (e.type === 'pocket') {
             s[e.payout]++;
@@ -270,6 +276,9 @@
             }
         } else acc = 0;
         BoardView.draw(game.view, game.world, Lcd.draw(time, game.machine));
+        // BGM: 台の状態で曲を変える。消音・BGM OFF・窓を開いているあいだは止める
+        Bgm.play(Bgm.trackFor(game.machine, Lcd.storyPlaying()));
+        Bgm.setPaused(Sound.muted || Customize.get('bgm') === 'off' || game.paused);
         saveTimer += 1;
         if (saveTimer >= 180 && !game.paused) { saveTimer = 0; saveNow(); }   // 約3秒ごと
         MachineButton.update(time);
@@ -301,7 +310,10 @@
     [canvas, $('handle'), $('koori-button')].forEach(el => el.addEventListener('contextmenu', e => e.preventDefault()));
 
     // 音は画面をさわる・キーを押すまで出せない
-    ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => Sound.unlock()));
+    ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => {
+        Sound.unlock();
+        Bgm.init(Sound.context);
+    }));
     MachineButton.init($('koori-button'), pressButton);
     const updateSoundButton = () => { $('sound-button').textContent = `音: ${Sound.muted ? 'OFF' : 'ON'}`; };
     $('sound-button').addEventListener('click', () => { Sound.setMuted(!Sound.muted); updateSoundButton(); });
@@ -331,7 +343,8 @@
         game.paused = on || [...document.querySelectorAll('.picker')].some(p => !p.hidden);
     }
     Panels.init({
-        context: () => ({ counter: game.counter, machine: game.machine, balls: game.balls, launched: game.stats.launched }),
+        context: () => ({ counter: game.counter, machine: game.machine, balls: game.balls, launched: game.stats.launched,
+            setting: game.settingKnown ? game.setting : null }),
         pause: pauseFor
     });
 

@@ -385,6 +385,13 @@ button:hover { border-color: var(--accent); }
 .dc-live { color: #ffe066; }
 .dc-hints { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; }
 .dc-hint { display: inline-flex; align-items: center; gap: 4px; }
+.dc-estimate { display: grid; gap: 3px; }
+.dc-est-row { display: grid; grid-template-columns: 44px 1fr 64px; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.dc-est-track { height: 10px; background: var(--bg); border-radius: 2px; overflow: hidden; }
+.dc-est-track i { display: block; height: 100%; background: #3f8cff; border-radius: 0 4px 4px 0; }
+.dc-est-value { text-align: right; font-variant-numeric: tabular-nums; }
+.dc-est-best { color: #ffe066; }
+.dc-est-best .dc-est-track i { background: #ffe066; }
 .trophy-chip { display: inline-block; width: 10px; height: 12px; margin-right: 3px; border-radius: 2px 2px 4px 4px; vertical-align: -1px; }
 .trophy-rainbow { background: linear-gradient(135deg, #ff3a3a, #ffe066, #3fcf5f, #3f8cff, #a860ff); }
 
