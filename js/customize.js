@@ -20,6 +20,8 @@ const Customize = (() => {
             choices: { on: 'ON', off: 'OFF' }, default: 'on' },
         bgm: { label: 'BGM', group: '演出', note: '通常時・突破チャレンジ・RASH・大当たり中で曲が変わる (「音: OFF」のときは鳴らない)',
             choices: { on: 'ON', off: 'OFF' }, default: 'on' },
+        autoAim: { label: '打ち分け', group: '操作', note: '自動: 台の状態に合わせて、強さを左打ち・右打ちに自動で合わせる',
+            choices: { off: '手動', on: '自動' }, default: 'off' },
         theme: { label: '盤面の色', group: '見た目', note: '',
             choices: { ice: '氷', sunset: '夕焼け', sakura: '夜桜', gold: '黄金' }, default: 'ice' },
         ball: { label: '玉の色', group: '見た目', note: '',

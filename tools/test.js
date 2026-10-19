@@ -174,6 +174,7 @@ function run(game, specId, setting, hours, mode = 'koori') {
                 if (e.plan.extra) log.extraRounds++;
             }
             if (e.type === 'spinStart' && e.plan.kind === 'rashBattle') {
+                if (e.plan.digits[0] !== e.plan.digits[2]) log.notReach = (log.notReach || 0) + 1;
                 const key = e.plan.enemyKey;
                 const b = log.kooriBattles[key] || (log.kooriBattles[key] = [0, 0]);
                 b[0]++;
@@ -213,6 +214,19 @@ function run(game, specId, setting, hours, mode = 'koori') {
                     const want = (CONFIG.show.onioniRash.patterns[e.plan.pattern].labels || {})[specId];
                     if (want && (!e.result.alloc || e.result.alloc.label !== want)) o.wrongLabel++;
                 }
+            }
+            // V への昇格: 小当たりの V入賞の大当たりのうち、V 以外の図柄でそろえたもの
+            if (e.type === 'spinStart' && e.result.kind === 'small') {
+                const v = log.vPromote || (log.vPromote = { smalls: 0, promoted: 0, wrongDigits: 0, bonuses: 0, bonusPromoted: 0, hidden: 0 });
+                v.smalls++;
+                const allV = e.plan.digits.every(d => d === 'V');
+                if (e.plan.promoteV) { v.promoted++; if (allV || e.plan.digits.some(d => d !== e.plan.digits[0])) v.wrongDigits++; }
+                else if (!allV) v.wrongDigits++;
+            }
+            if (e.type === 'bonusStart' && e.fromV && log.vPromote) {
+                log.vPromote.bonuses++;
+                if (e.promoteV) log.vPromote.bonusPromoted++;
+                if (e.promoteV && e.promote) log.vPromote.hidden++;
             }
             if (e.type === 'renchan') {
                 log.renchan++;
@@ -343,7 +357,7 @@ test('突破チャレンジ: 変動はすべて突破チャレンジの演出で
     void Scenario;
 });
 
-test('こおりRASH: 相手と怪の状態がすべて出て、勝つ割合が config の成功率に近い。アルアルは連チャンしてから', () => {
+test('こおりRASH: 相手と怪の状態がすべて出て、勝つ割合が config の成功率に近い。アルアルは連チャンしてから。バトルは必ずリーチの図柄', () => {
     const { Scenario, Characters } = base;
     const table = Scenario.kooriEnemies(CONFIG);
     const total = {};
@@ -354,6 +368,7 @@ test('こおりRASH: 相手と怪の状態がすべて出て、勝つ割合が c
             t[1] += w;
         }
         assertEqual(log.earlyStreak, 0, '連チャン数が足りないのに出た相手 (アルアル)');
+        assertEqual(log.notReach || 0, 0, 'リーチの図柄でないバトル');
     }
     for (const [key, e] of Object.entries(table)) {
         const [n, w] = total[key] || [0, 0];
@@ -457,6 +472,18 @@ test('ラウンド中の紹介: キャラ紹介・ゲームの説明・舞台設
         }
     }
     assert(RoundInfo.SECONDS >= 3, 'カードを出す秒が短すぎる');
+});
+
+test('V への昇格: 小当たりの約半分は V 以外の図柄でそろい、その大当たりは V に昇格する (出玉は隠さない)', () => {
+    for (const { specId, log } of runs) {
+        const v = log.vPromote;
+        assert(v && v.smalls > 300, `${specId} の小当たりが少ない`);
+        const rate = CONFIG.show.promote.vRate;
+        assertBetween(v.promoted / v.smalls, rate - 0.06, rate + 0.06, `${specId} の V 以外でそろう割合`);
+        assertEqual(v.wrongDigits, 0, `${specId} の小当たりの図柄 (V 以外は3つ同じ図柄、それ以外は V V V)`);
+        assert(v.bonusPromoted > 0, `${specId} で V に昇格する大当たりがない`);
+        assertEqual(v.hidden, 0, `${specId} で V への昇格なのに出玉を隠した`);
+    }
 });
 
 test('〇G連確定: 〇 は残り保留の当たりの数 (このあと確定している連チャンの数)', () => {

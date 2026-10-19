@@ -78,7 +78,7 @@ const Lcd = (() => {
             ctx.fillStyle = `rgba(255, 255, 255, ${(flip + 0.3 - t) * 3})`;
             ctx.fillRect(0, 0, W, H);
         }
-        if (t >= flip) text('昇格！', W / 2, 112, 22, 'rainbow', 'center', now);
+        if (t >= flip) text(promoteFx.to === 'V' ? 'V 昇格！' : '昇格！', W / 2, 112, 22, 'rainbow', 'center', now);
         else if (t > 0.5) text('…！？', W / 2, 112, 16, '#ffffff');
     }
 
@@ -236,7 +236,8 @@ const Lcd = (() => {
             if (e.round === 1) anomalyTalk = null;
             // 昇格: 1ラウンド目の途中で図柄が現れて奇数に変わる
             if (e.round === 1 && machineRef && machineRef.bonus && machineRef.bonus.promote) {
-                promoteFx = { start: now + CONFIG.show.promote.delay, from: shown[0], to: machineRef.bonus.promote.to, bonus: machineRef.bonus };
+                const pr = machineRef.bonus.promote;
+                promoteFx = { start: now + (pr.toV ? CONFIG.show.promote.vDelay : CONFIG.show.promote.delay), from: shown[0], to: pr.to, bonus: machineRef.bonus };
             }
             const f = CONFIG.show.furukawa;
             if (e.round === e.rounds && e.rounds > 1) bonusTalk('lastRound', now);
@@ -751,7 +752,7 @@ const Lcd = (() => {
         const b = m.bonus;
         band(0, H, 0.45);
         Figures.draw(ctx, shown[0], 22, 30, 26, 30, { glow: 0.5 });
-        const hidden = b.promote && !b.promote.done;
+        const hidden = b.promote && !b.promote.done && !b.promote.toV;   // V への昇格は出玉を隠さない
         text(hidden ? '大当たり' : `${b.alloc.label}個 大当たり`, W / 2 + 14, 13, 14, '#ffe066');
         // ROUND と COUNT は1行に (下に紹介のカードを出すため)
         text(hidden ? `ROUND ${Math.max(1, b.round)}` : `ROUND ${Math.max(1, b.round)} / ${b.alloc.rounds}`, W / 2 - 6, 31, 15, '#ffffff');

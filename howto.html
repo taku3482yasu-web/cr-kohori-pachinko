@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
-    <link rel="stylesheet" href="css/style.css?v=9b185907">
+    <link rel="stylesheet" href="css/style.css?v=616d7184">
     <!--
     =====================================================================
     遊び方ページ (2026-10-19 ユーザー指定)
@@ -69,8 +69,9 @@
 
         <h2 id="controls">操作</h2>
         <ul>
-            <li><b>ハンドル</b>を押している間、玉を発射します（パソコンは <b>Space</b> でも）。押したまま回す・<b>← →</b> キー・ホイールで強さを変えます（Shift+← → で 10 ずつ）</li>
-            <li>「← 左打ち」「右打ち →」のボタンで、それぞれに向いた強さ（<span id="preset-left"></span> / <span id="preset-right"></span>）に合わせます</li>
+            <li><b>発射ボタン</b>をタップすると玉を打ちはじめ、もう一度タップで止まります（指を置いたままにしなくて大丈夫）。パソコンはハンドルを押している間・<b>Space</b> でも発射します</li>
+            <li>強さは<b>ゲージ</b>で見て変えられます（左打ち・右打ちに向いた強さに印があります）。ハンドルは押したまま回したぶんだけ、<b>← →</b> キー・ホイールでも変わります（Shift+← → で 10 ずつ）。スマホではハンドルの代わりに発射ボタンが出ます</li>
+            <li>「← 左打ち」「右打ち →」のボタンで、それぞれに向いた強さ（<span id="preset-left"></span> / <span id="preset-right"></span>）に合わせます。いまの強さに合っているほうのボタンが光ります。「カスタマイズ」の<b>打ち分け: 自動</b>にすると、台の状態に合わせて自動で切り替わります</li>
             <li>通常時は<b>左打ち</b>でヘソを狙います。大当たり・時短・小当たりのあいだは画面に「右打ち →」が出るので<b>右打ち</b>にします</li>
             <li><b>こおりくんのボタン</b>（B キーでも）: バトルの「PUSH!」で押します。RASH の2回目からの大当たり中は、押すたびに こおりRASH ⇔ おにおにRASH が切り替わります</li>
             <li>持ち玉がなくなったら「玉貸し」（+<span id="lend"></span>発）</li>
@@ -119,7 +120,7 @@
             <li>ステージが変わってすぐ（<span id="quick-window"></span> 回転以内）にまた変わったら、当たり濃厚</li>
         </ul>
         <h3>図柄と昇格</h3>
-        <p>図柄は 1〜7。奇数（赤）でそろうと突破チャレンジ・大きい出玉、偶数（青）は出玉だけ。偶数でそろっても、ラウンド中に奇数へ<b>昇格</b>することがあります。</p>
+        <p>図柄は 1〜7。奇数（赤）でそろうと突破チャレンジ・大きい出玉、偶数（青）は出玉だけ。偶数でそろっても、ラウンド中に奇数へ<b>昇格</b>することがあります。RASH の小当たり（V入賞）は V でそろうほか、ふつうの図柄でそろって、ラウンドの始めに <b>V に昇格</b>することもあります。こおりRASH のバトルでは、図柄はいつもリーチになっています。</p>
 
         <h2 id="challenge">突破チャレンジ</h2>
         <p>おにおにとのバトル。たまった保留1つが1ラウンドで、保留ごとにこおりくんの武器が変わります。武器が強いほど突破のチャンス。</p>
@@ -168,8 +169,8 @@
         <p style="margin-top: 32px;"><a href="index.html" class="small-button link-button">← 台にもどる</a></p>
     </main>
 
-    <script src="js/config.js?v=e9d2e848"></script>
-    <script src="js/updates.js?v=6671ae7c"></script>
+    <script src="js/config.js?v=43444093"></script>
+    <script src="js/updates.js?v=e73eea72"></script>
     <script>
         (() => {
             const $ = id => document.getElementById(id);

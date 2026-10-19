@@ -4,7 +4,7 @@
 // はじめに「台選び」でスペック (1/99・1/159) と設定 (おまかせ・1〜6) を選ぶ。設定ごとに釘 (命釘・ワープ) の調整が違う。
 // 「この台で遊ぶ」を押すとオープニングが流れる (液晶・台のボタン・Space で飛ばせる。流れているあいだは台が止まる)。
 // 1/60 秒ごとに 物理 → 入賞を台 (Machine) に伝える → 台の時間をすすめる → 電チュー・アタッカーの開け閉めを盤面に反映。
-// 操作: ハンドルを押している間 (または Space) 発射。ハンドルを回す・← → キー・ホイールで強さ。
+// 操作: 発射ボタン (タップで発射 / 停止)・ハンドルを押している間・Space で発射。強さはゲージ・ハンドルを回す・← → キー・ホイールで。
 // URL で (確認用):
 //   ?spec=s99&setting=6    台選びを飛ばしてその台で始める (setting を省くと設定1)
 //   ?auto=1&strength=45    開いてすぐ自動で打ちはじめる (&aim=1 で台の状態に合わせて左打ち・右打ちを切り替える)
@@ -28,6 +28,7 @@
         balls: CONFIG.balls.start,
         strength: loadNumber('koori-pachinko-strength', CONFIG.launch.defaultStrength),
         firing: false,      // ハンドルを握っている / Space を押している
+        fireOn: false,      // 発射ボタンで発射中 (タップで切り替え)
         auto: params.get('auto') === '1',
         autoAim: params.get('aim') === '1',
         nextShot: 0,
@@ -97,7 +98,7 @@
         const m = game.machine;
         const aim = Machine.aim(m);
         if (game.auto && game.autoAim) game.strength = CONFIG.launch.presets[aim];
-        if ((game.firing || game.auto) && time >= game.nextShot && game.balls > 0 && game.world.balls.length < CONFIG.ball.maxBalls) {
+        if ((game.firing || game.fireOn || game.auto) && time >= game.nextShot && game.balls > 0 && game.world.balls.length < CONFIG.ball.maxBalls) {
             Physics.launch(game.world, game.strength, CONFIG);
             game.balls--;
             game.stats.launched++;
@@ -117,6 +118,8 @@
         if (aim !== game.lastAim) {
             game.lastAim = aim;
             Lcd.aim(aim, time);
+            // カスタマイズの「打ち分け: 自動」: 左打ち・右打ちに向いた強さに自動で合わせる
+            if (Customize.get('autoAim') === 'on') setStrength(CONFIG.launch.presets[aim]);
         }
     }
 
@@ -238,9 +241,27 @@
         return '通常時';
     }
 
+    // 強さの表示: ハンドル・ゲージ・数字・左打ち/右打ちのボタン (いまの強さに近いほうを光らせる)
     function updateHandle() {
         $('handle-knob').style.transform = `rotate(${-120 + game.strength * 2.4}deg)`;
         $('strength').textContent = game.strength;
+        $('strength-value').textContent = game.strength;
+        $('strength-slider').value = game.strength;
+        const presets = CONFIG.launch.presets;
+        const near = Object.keys(presets).find(k => Math.abs(presets[k] - game.strength) <= 3);
+        $('left-button').classList.toggle('active', near === 'left');
+        $('right-button').classList.toggle('active', near === 'right');
+        const label = $('strength-aim');
+        label.textContent = near === 'left' ? '左打ち' : near === 'right' ? '右打ち' : '';
+        label.className = 'strength-aim' + (near ? ` aim-${near}` : '');
+    }
+
+    function updateFireButton() {
+        const b = $('fire-button');
+        b.classList.toggle('firing', game.fireOn);
+        b.setAttribute('aria-pressed', String(game.fireOn));
+        b.querySelector('.fire-icon').textContent = game.fireOn ? '■' : '▶';
+        b.querySelector('.fire-word').textContent = game.fireOn ? '停止' : '発射';
     }
 
     // ----- 前回の続きの保存 (数秒ごと・ページを閉じるとき) -----
@@ -287,19 +308,40 @@
     }
 
     // ----- 操作 -----
+    // ハンドル: 押している間発射。触っただけでは強さを変えず、押したまま回したぶんだけ変える
+    // (前は触った場所の角度で強さが決まり、左打ち・右打ちのボタンで合わせた強さが押した瞬間に変わっていた。2026-10-20)
     const handle = $('handle');
-    function strengthFromPointer(e) {
+    let turn = null;   // { deg: 前の角度, strength }
+    function pointerDeg(e) {
         const r = handle.getBoundingClientRect();
-        const deg = Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180 / Math.PI;
-        if (deg >= -130 && deg <= 130) setStrength((deg + 120) / 2.4);
+        return Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180 / Math.PI;
     }
     handle.addEventListener('pointerdown', e => {
         handle.setPointerCapture(e.pointerId);
         game.firing = true;
-        strengthFromPointer(e);
+        turn = { deg: pointerDeg(e), strength: game.strength };
     });
-    handle.addEventListener('pointermove', e => { if (game.firing) strengthFromPointer(e); });
-    ['pointerup', 'pointercancel'].forEach(t => handle.addEventListener(t, () => { game.firing = false; }));
+    handle.addEventListener('pointermove', e => {
+        if (!game.firing || !turn) return;
+        let d = pointerDeg(e) - turn.deg;
+        if (d > 180) d -= 360;
+        if (d < -180) d += 360;
+        turn.deg += d;
+        turn.strength += d / 2.4;
+        setStrength(turn.strength);
+    });
+    ['pointerup', 'pointercancel'].forEach(t => handle.addEventListener(t, () => { game.firing = false; turn = null; }));
+
+    // 発射ボタン: タップで発射をはじめる・もう一度で止める
+    $('fire-button').addEventListener('click', () => {
+        game.fireOn = !game.fireOn;
+        updateFireButton();
+    });
+    // 強さのゲージ
+    $('strength-slider').addEventListener('input', e => setStrength(Number(e.target.value)));
+    // ゲージの左打ち・右打ちの印の位置
+    $('tick-left').style.left = `${CONFIG.launch.presets.left}%`;
+    $('tick-right').style.left = `${CONFIG.launch.presets.right}%`;
     handle.addEventListener('wheel', e => {
         e.preventDefault();
         setStrength(game.strength + (e.deltaY < 0 ? 1 : -1));
@@ -307,7 +349,7 @@
 
     canvas.addEventListener('pointerdown', () => { if (Lcd.storyPlaying() === 'opening') Lcd.skipStory(); });
     // スマホで長押ししてもメニューが出ないように
-    [canvas, $('handle'), $('koori-button')].forEach(el => el.addEventListener('contextmenu', e => e.preventDefault()));
+    [canvas, $('handle'), $('koori-button'), $('fire-button')].forEach(el => el.addEventListener('contextmenu', e => e.preventDefault()));
 
     // 音は画面をさわる・キーを押すまで出せない
     ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => {
@@ -340,6 +382,7 @@
     // 窓を閉じたとき、ほかの窓 (台選びなど) が開いていれば止めたまま
     function pauseFor(on) {
         game.firing = false;
+        if (on) { game.fireOn = false; updateFireButton(); }
         game.paused = on || [...document.querySelectorAll('.picker')].some(p => !p.hidden);
     }
     Panels.init({
@@ -568,6 +611,7 @@
     if (params.get('mode')) Machine.setRashMode(game.machine, params.get('mode'));
     if (params.get('story')) Lcd.playStory(params.get('story'), time);
     updateHandle();
+    updateFireButton();
     for (let i = 0; i < Number(params.get('skip') || 0) * 60; i++) tick(1 / 60);
     requestAnimationFrame(frame);
 

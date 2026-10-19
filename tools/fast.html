@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
-    <link rel="stylesheet" href="../css/style.css?v=9b185907">
+    <link rel="stylesheet" href="../css/style.css?v=616d7184">
 </head>
 <body>
     <main class="machine">
@@ -45,6 +45,15 @@
                 <div class="status-item"><span class="label">回転率 /1k</span><span id="rate" class="value">-</span></div>
             </div>
 
+            <!-- 強さのゲージ: いまの強さと、左打ち・右打ちに向いた強さの印。動かして変えられる (2026-10-20 ユーザー指定) -->
+            <div class="strength-row">
+                <span class="strength-label">強さ <b id="strength-value">0</b> <span id="strength-aim" class="strength-aim"></span></span>
+                <div class="strength-track">
+                    <input id="strength-slider" class="strength-slider" type="range" min="0" max="100" step="1" aria-label="発射の強さ">
+                    <span id="tick-left" class="strength-tick tick-left">左</span>
+                    <span id="tick-right" class="strength-tick tick-right">右</span>
+                </div>
+            </div>
             <div class="handle-area">
                 <button id="left-button" class="small-button aim-button">← <span class="aim-word">左打ち</span></button>
                 <!-- 押している間発射。押したまま回すと強さが変わる -->
@@ -52,6 +61,8 @@
                     <div id="handle-knob" class="handle-knob"><span></span></div>
                     <div class="handle-center"><span id="strength">0</span></div>
                 </div>
+                <!-- 発射ボタン: タップで発射をはじめる・もう一度タップで止める (スマホではハンドルの代わり) -->
+                <button id="fire-button" class="fire-button" aria-pressed="false"><span class="fire-icon">▶</span><span class="fire-word">発射</span></button>
                 <div class="push-area">
                     <!-- 台のボタン (こおりくんの体の形)。先読みで光る・震える・鳴る。バトルの「PUSH!」で押す (B キーでも) -->
                     <button id="koori-button" class="koori-button" aria-label="台のボタン">
@@ -63,7 +74,7 @@
                 </div>
                 <button id="right-button" class="small-button aim-button"><span class="aim-word">右打ち</span> →</button>
             </div>
-            <p class="hint">ハンドルを押している間発射（Space でも）。押したまま回す・← → キー・ホイールで強さを変える。こおりくんのボタンは B キーでも押せる</p>
+            <p class="hint">「発射」をタップすると打ちはじめ、もう一度タップで止まる（ハンドルを押している間・Space でも発射）。強さはゲージ・ハンドルを回す・← → キー・ホイールで変える。こおりくんのボタンは B キーでも押せる</p>
             <div class="menu-row">
                 <button id="lend-button" class="lend-button">玉貸し（+125発）</button>
                 <button id="data-button" class="small-button">データ</button>
@@ -220,7 +231,7 @@
 </script>
 
 
-    <script src="../js/config.js?v=e9d2e848"></script>
+    <script src="../js/config.js?v=43444093"></script>
     <script src="../js/sprites.js?v=9fb9b0ca"></script>
     <script src="../js/characters.js?v=378f88c3"></script>
     <script src="../js/backgrounds.js?v=4050fde0"></script>
@@ -229,20 +240,20 @@
     <script src="../js/sound-heso.js?v=ea2eb22a"></script>
     <script src="../js/audio.js?v=b343e7c7"></script>
     <script src="../js/bgm.js?v=5f2c7f73"></script>
-    <script src="../js/scenario.js?v=76b6e5da"></script>
-    <script src="../js/machine.js?v=c5d59b79"></script>
+    <script src="../js/scenario.js?v=16d3c188"></script>
+    <script src="../js/machine.js?v=f7812079"></script>
     <script src="../js/render.js?v=7ee56641"></script>
     <script src="../js/figures.js?v=7b763032"></script>
     <script src="../js/button.js?v=a4501027"></script>
     <script src="../js/lcd-rash.js?v=419eeead"></script>
     <script src="../js/round-info.js?v=f6f95292"></script>
     <script src="../js/lcd-story.js?v=e954a3ad"></script>
-    <script src="../js/lcd.js?v=52e3c654"></script>
+    <script src="../js/lcd.js?v=9f7a5d49"></script>
     <script src="../js/save.js?v=8ec28e8e"></script>
-    <script src="../js/customize.js?v=d35db2bf"></script>
+    <script src="../js/customize.js?v=1f8bba7d"></script>
     <script src="../js/records.js?v=b62166ca"></script>
-    <script src="../js/updates.js?v=6671ae7c"></script>
+    <script src="../js/updates.js?v=e73eea72"></script>
     <script src="../js/panels.js?v=f1b8d5c3"></script>
-    <script src="../js/main.js?v=05c4fae8"></script>
+    <script src="../js/main.js?v=7edee73a"></script>
 </body>
 </html>

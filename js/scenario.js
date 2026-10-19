@@ -312,7 +312,11 @@ const Scenario = (() => {
         const kind = result.kind;
         const win = kind !== 'miss';
         const p = { fig: 2, win, talk: null };
-        const digits = kind === 'hit' ? Array(3).fill(shownHitDigit(show, result, 2, rng, p)) : kind === 'small' ? ['V', 'V', 'V'] : missDigits(false, rng);
+        // 小当たりも V 以外の図柄でそろえることがある (ラウンドの始めに V に昇格。出玉の振り分けから奇数・偶数を選ぶ)
+        const vPromote = kind === 'small' && result.alloc && rng() < show.promote.vRate;
+        if (vPromote) p.promoteV = true;
+        const digits = kind === 'hit' ? Array(3).fill(shownHitDigit(show, result, 2, rng, p))
+            : kind === 'small' ? (vPromote ? Array(3).fill(hitDigit(show, result, 2, rng)) : ['V', 'V', 'V']) : missDigits(false, rng);
         p.digits = digits;
         const plain = kind === 'hit' ? f2.hit : kind === 'small' ? f2.small : f2.miss;
 
@@ -361,6 +365,8 @@ const Scenario = (() => {
                 p.kind = 'rashBattle';
                 p.type = 'reach';
                 p.smallReels = true;
+                // バトルのときは必ずリーチの図柄 (外れも左右をそろえる。2026-10-20 ユーザー指定)。当たりは 3つそろう
+                if (!win) p.digits = missDigits(true, rng);
                 // 強制の相手 (確認用) は、出られない相手 (アルアル) でも出す
                 const all = kooriEnemies(config);
                 p.enemyKey = result.forceEnemy && all[result.forceEnemy] ? result.forceEnemy

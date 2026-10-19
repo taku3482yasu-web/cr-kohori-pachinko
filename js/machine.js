@@ -90,7 +90,7 @@ const Machine = (() => {
                 m.small.v = true;
                 m.stats.vHits++;
                 emit(m, 'v');
-                startBonus(m, m.small.alloc || weightedPick(m.spec.rushHit, m.rng), true);
+                startBonus(m, m.small.alloc || weightedPick(m.spec.rushHit, m.rng), true, m.small.promote);
             }
         } else if (id === 'gate') {
             if (m.futsu.holds < m.config.machine.futsu.holdMax) m.futsu.holds++;
@@ -176,7 +176,8 @@ const Machine = (() => {
             startBonus(m, result.alloc, false, plan.promote);
         } else if (result.kind === 'small') {
             m.stats.smalls++;
-            m.small = { timer: m.config.machine.small.open, v: false, alloc: result.alloc };   // V に入ったらすぐ大当たり (startBonus が閉じる)
+            // V に入ったらすぐ大当たり (startBonus が閉じる)。V 以外の図柄でそろえた小当たりは、ラウンドの始めに V に昇格する
+            m.small = { timer: m.config.machine.small.open, v: false, alloc: result.alloc, promote: plan.promoteV ? { to: 'V', toV: true } : null };
             emit(m, 'smallStart');
         }
     }
@@ -243,7 +244,9 @@ const Machine = (() => {
                 entry = true;
             }
         }
-        emit(m, 'bonusStart', { rounds: alloc.rounds, label: alloc.label, next: alloc.next, fromV, rush: m.rush.active, rushHits: m.rush.hits, entry, promote: Boolean(promote) });
+        // promote: 出玉を隠す昇格 (奇数への昇格)。V への昇格 (toV) は出玉が変わらないので隠さない
+        emit(m, 'bonusStart', { rounds: alloc.rounds, label: alloc.label, next: alloc.next, fromV, rush: m.rush.active, rushHits: m.rush.hits, entry,
+            promote: Boolean(promote && !promote.toV), promoteV: Boolean(promote && promote.toV) });
     }
 
     function updateBonus(m, dt) {
