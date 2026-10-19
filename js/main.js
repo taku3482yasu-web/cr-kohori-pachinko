@@ -9,8 +9,8 @@
 //   ?auto=1&strength=45    開いてすぐ自動で打ちはじめる (&aim=1 で台の状態に合わせて左打ち・右打ちを切り替える)
 //   &skip=30               開いた直後に 30 秒ぶん早送りする (ヘッドレスChromeでは時間が進まないため)
 //   &balls=99999           はじめの持ち玉
-//   &force=rush            はじめの保留を決める (hit: 大当たり / rush: RUSH へ行く大当たり / small: 小当たり / jitan: 時短から
-//                          / reach: リーチ外れ / fail: チャレンジ失敗)。&enemy=onioni でバトルの相手
+//   &force=rush            はじめの保留を決める (hit: 大当たり / rush: 突破チャレンジへ行く大当たり / small: 小当たり / jitan: RASH の時短から
+//                          / reach: リーチ外れ / fail: チャレンジ失敗)。&enemy=onioni でバトルの相手、&mode=onioni で RASH のモード
 // =====================================================================
 
 (() => {
@@ -120,6 +120,9 @@
         if (e.type === 'bonusStart' && !e.rush) game.stats.firstHits++;
         if (e.type === 'jitanStart' && e.rushHits === 1) game.rushStartBalls = game.balls;
         if (e.type === 'rushEnd') e.balls = game.balls - game.rushStartBalls;
+        // RASH 突入の大当たり中に、こおりRASH / おにおにRASH を選ぶ
+        if (e.type === 'bonusStart' && e.entry) openRashChoice();
+        if (e.type === 'bonusEnd') closeRashChoice();
         Lcd.event(e, time);
     }
 
@@ -139,7 +142,7 @@
         if (CONFIG.debug) {
             $('debug-stats').textContent = `ファール ${s.foul} / ゲート ${s.gate} / 電チュー ${s.denchu} / アタッカー ${s.attacker}`
                 + ` / 一般 ${s.general} / ワープ ${s.warp} / アウト ${s.out} / 払い出し ${s.paid} / 盤面の玉 ${game.world.balls.length}`
-                + ` / 初当たり ${s.firstHits} / 小当たり ${m.stats.smalls} (V ${m.stats.vHits}) / RUSH ${m.stats.rushes} 回`
+                + ` / 初当たり ${s.firstHits} / 小当たり ${m.stats.smalls} (V ${m.stats.vHits}) / 突破チャレンジ ${m.stats.rushes} 回 (突破 ${m.stats.rushEntries})`
                 + ` / 保留 ${m.holds[1].length}+${m.holds[2].length} / 普図保留 ${m.futsu.holds}`;
         }
     }
@@ -159,9 +162,10 @@
         }
         if (m.small) return '小当たり  V を狙え！';
         const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
-        if (m.rush.active && m.rush.challenge) return Machine.inJitan(m) ? `突破チャレンジ  残り ${left} 回` : '突破チャレンジ  残り保留';
-        if (Machine.inJitan(m)) return `RUSH ${m.rush.hits - 1}連  時短 残り ${left} 回`;
-        if (m.rush.active) return `RUSH ${m.rush.hits - 1}連  残り保留`;
+        if (m.rush.active && m.rush.challenge) return m.challengeRun ? `突破チャレンジ  おにおにと勝負！` : '突破チャレンジ  保留をためろ！';
+        const name = CONFIG.show.rash.modes[m.rashMode].name;
+        if (Machine.inJitan(m)) return `${name} ${m.rush.hits - 1}連  時短 残り ${left} 回`;
+        if (m.rush.active) return `${name} ${m.rush.hits - 1}連  残り保留`;
         return '通常時';
     }
 
@@ -228,6 +232,33 @@
     $('right-button').addEventListener('click', () => setStrength(CONFIG.launch.presets.right));
     $('lend-button').addEventListener('click', () => { game.balls += CONFIG.balls.lend; });
 
+    // ----- RASH の選択 -----
+    const rashChoice = $('rash-choice');
+    function openRashChoice() {
+        rashChoice.hidden = false;
+        Lcd.setChoosing(true);
+        updateRashChoice();
+    }
+    function closeRashChoice() {
+        if (rashChoice.hidden) return;
+        rashChoice.hidden = true;
+        Lcd.setChoosing(false);
+        Lcd.show(`${CONFIG.show.rash.modes[game.machine.rashMode].name}！`, game.machine.rashMode === 'onioni' ? '#ff6a6a' : '#7fd3f7', time, 2);
+    }
+    function updateRashChoice() {
+        rashChoice.querySelectorAll('button').forEach(b => b.classList.toggle('selected', b.dataset.mode === game.machine.rashMode));
+    }
+    rashChoice.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+        Machine.setRashMode(game.machine, b.dataset.mode);
+        Sound.play('push');
+        updateRashChoice();
+    }));
+    document.addEventListener('keydown', e => {
+        if (rashChoice.hidden) return;
+        if (e.code === 'Digit1') { Machine.setRashMode(game.machine, 'koori'); updateRashChoice(); }
+        if (e.code === 'Digit2') { Machine.setRashMode(game.machine, 'onioni'); updateRashChoice(); }
+    });
+
     // ----- 台選び -----
     // スペックをボタンで選ぶ
     const picker = $('machine-picker');
@@ -279,6 +310,11 @@
         $('debug-fail').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'fail', null));
         $('debug-button').addEventListener('click', () => MachineButton.trigger(['red', 'shake', 'beep'][Math.floor(Math.random() * 3)], time));
         $('debug-rainbow').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'hit', null, { holdColor: 'rainbow', enemy: enemy() }));
+        $('debug-rash-mode').addEventListener('click', () => {
+            Machine.setRashMode(game.machine, game.machine.rashMode === 'koori' ? 'onioni' : 'koori');
+            $('debug-rash-mode').textContent = `RASH: ${CONFIG.show.rash.modes[game.machine.rashMode].name}`;
+        });
+        $('debug-rash-mode').textContent = `RASH: ${CONFIG.show.rash.modes[CONFIG.show.rash.defaultMode].name}`;
         $('debug-jitan').addEventListener('click', () => Machine.debugJitan(game.machine));
         $('debug-auto').addEventListener('click', () => {
             game.auto = !game.auto;
@@ -304,6 +340,7 @@
     if (force === 'reach' || force === 'fail') Machine.debugHold(game.machine, 1, force, null, { enemy: forceEnemy });
     if (force === 'small') Machine.debugHold(game.machine, 2, 'small', null);
     if (force === 'jitan') Machine.debugJitan(game.machine);
+    if (params.get('mode')) Machine.setRashMode(game.machine, params.get('mode'));
     updateHandle();
     for (let i = 0; i < Number(params.get('skip') || 0) * 60; i++) tick(1 / 60);
     requestAnimationFrame(frame);

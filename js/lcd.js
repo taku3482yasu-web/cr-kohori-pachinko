@@ -8,7 +8,8 @@
 //   reach     チャレンジ成功 → 左右がそろってリーチ。バトルの相手が出てくる
 //   battle    バトル。最後に「PUSH!」(台のボタン)
 //   result    撃破なら図柄がそろう (大当たり)、負けなら中の図柄がずれて止まる
-// 保留 (こおりくんの体の形。色つき)・ふるカワの吹き出し・大当たり・RUSH の表示もここ。
+// 保留 (こおりくんの体の形。色つき)・ふるカワの吹き出し・大当たり・RASH の表示もここ。
+// 特図2 (突破チャレンジ・こおりRASH・おにおにRASH) は plan.kind で分ける。突破チャレンジとおにおにRASH は js/lcd-rash.js
 // Lcd.event(e) で台 (Machine) のイベントを受け取り、Lcd.draw(now, machine) で描く。
 // =====================================================================
 
@@ -22,7 +23,7 @@ const Lcd = (() => {
     let flash = null;       // 画面の真ん中に一瞬出す文字 { text, color, until, length }
     let shown = [7, 1, 3];  // 止まっている図柄
     let aimNotice = null;   // { aim, until }
-    let summary = null;     // RUSH が終わったときの結果 { hits, balls, until }
+    let summary = null;     // RASH が終わったときの結果 { hits, balls, until }
     let bubble = null;      // ふるカワの吹き出し { text, color, until }
     let spinView = null;    // いまの変動の見た目の情報 { plan, gaugeStop, pushedAt }
     let lastPhase = null;   // 効果音を鳴らすための、前のフレームの場面
@@ -32,7 +33,14 @@ const Lcd = (() => {
         canvas.width = W;
         canvas.height = H;
         ctx = canvas.getContext('2d');
+        RashView.init({ ctx, W, H, text, band, rainbow });
         return canvas;
+    }
+
+    // RASH のモードを選んでいるところ (RASH 突入の大当たり中。main.js が出し入れする)
+    let choosing = false;
+    function setChoosing(on) {
+        choosing = on;
     }
 
     function reset() {
@@ -56,11 +64,11 @@ const Lcd = (() => {
             spinView = { plan: e.plan, gaugeStop: 0.55 + Math.random() * 0.35, pushedAt: null };
             if (e.plan.talk) say(e.plan.talk.text, e.plan.talk.color, now);
         } else if (e.type === 'spinEnd') {
-            if (spinView) shown = spinView.plan.digits;
+            if (spinView) shown = spinView.plan.digits.map(d => d === 'V' ? 'V' : d);
             spinView = null;
             MachineButton.prompt(false);
         } else if (e.type === 'bonusStart') {
-            const head = e.entry ? 'RUSH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
+            const head = e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
             show(`${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
         } else if (e.type === 'smallStart') {
@@ -68,7 +76,8 @@ const Lcd = (() => {
         } else if (e.type === 'roundStart') {
             Sound.play('round');
         } else if (e.type === 'jitanStart') {
-            show(e.challenge ? '突破チャレンジ！' : `RUSH ${e.rushHits - 1}連！`, '#7fd3f7', now, 2);
+            show(e.challenge ? '突破チャレンジ！' : `${rashName()} ${e.rushHits - 1}連！`, '#7fd3f7', now, 2);
+
         } else if (e.type === 'ending' && e.next === 'normal') {
             show('通常時へ', '#ffffff', now, CONFIG.machine.bonus.ending);
         } else if (e.type === 'rushEnd') {
@@ -80,9 +89,12 @@ const Lcd = (() => {
         aimNotice = { aim: direction, until: now + (direction === 'left' ? 4 : 2.5) };
     }
 
+    let rashMode = null;
+    const rashName = () => CONFIG.show.rash.modes[rashMode || CONFIG.show.rash.defaultMode].name;
+
     // 台のボタンが押された (バトルの PUSH)
     function push(now) {
-        if (spinView && currentPhase && currentPhase.name === 'battle' && currentPhase.pushing && spinView.pushedAt === null) {
+        if (spinView && currentPhase && currentPhase.pushing && spinView.pushedAt === null) {
             spinView.pushedAt = now;
             Sound.play('attack');
         }
@@ -129,6 +141,19 @@ const Lcd = (() => {
         let big = true;
         const n = phase.name;
         const local = phase.local;
+        const last = phase.index === plan.phases.length - 1;
+        if (plan.kind === 'rashBattle') {
+            // こおりRASH のバトル: いつも小さく。バトルで左右、結果で中が止まる
+            big = n === 'result' && local >= 0.6;
+            stop[0] = stop[2] = n !== 'roll';
+            stop[1] = n === 'result' && local >= 0.6;
+            return { stop, big };
+        }
+        if (plan.kind === 'challenge' || (plan.kind === 'onioni' && plan.pattern)) {
+            // 突破チャレンジ・おにおにRASH の当たり: 図柄は左上に小さく、最後に止まる
+            const done = last && local >= phase.t - 0.5;
+            return { stop: [done, done, done], big: false };
+        }
         if (plan.type === undefined || plan.type === 'plain') {
             // 外れ・特図2: 左 45% → 右 70% → 中 100%
             const r = local / phase.t;
@@ -270,14 +295,16 @@ const Lcd = (() => {
 
     // phase.name が 'reach' (相手が出てくる) / 'battle' / 'result'
     function drawBattle(now, plan, phase) {
-        const b = CONFIG.show.battles[plan.enemy];
+        const b = plan.enemyInfo || CONFIG.show.battles[plan.enemy];
         const frame = Math.floor(now * 4) % 2;
         const ground = 128;
         const scale = enemyScale(plan.enemy, 70);
         let ex = 196, kx = 50, enemyHurt = false, kooriHurt = false, enemyAlpha = 1, kooriDown = false;
         let enemyHp = 1, kooriHp = 1;
 
-        if (phase.name === 'reach') {
+        if (phase.name === 'roll') {
+            ex = 196 + Math.max(0, 1 - phase.local / 0.8) * 90;           // こおりRASH: 右から入ってくる
+        } else if (phase.name === 'reach') {
             ex = 196 + Math.max(0, 1 - (phase.local - 1.4) / 0.8) * 90;   // リーチのあと、右から入ってくる
         } else if (phase.name === 'battle') {
             // 1.2秒ごとに攻撃しあう (偶数回目はこおりくん、奇数回目は相手)
@@ -322,7 +349,7 @@ const Lcd = (() => {
 
         // 名前と体力
         band(30, 20, 0.5);
-        const titleColor = plan.enemy === 'naitei' ? 'rainbow' : plan.enemy === 'onioni' ? '#ff3a3a' : '#ffffff';
+        const titleColor = plan.enemy === 'naitei' || plan.enemy === 'goldDog' ? 'rainbow' : plan.enemy === 'onioni' ? '#ff3a3a' : '#ffffff';
         text(`VS ${b.name}`, W / 2 + 34, 40, plan.enemy === 'naitei' ? 10 : 12, titleColor, 'center', now);
         hpBar(90, 54, 70, kooriHp, '#7fd3f7');
         hpBar(176, 54, 70, enemyHp, '#ff6a8a');
@@ -365,6 +392,11 @@ const Lcd = (() => {
     }
 
     function drawHolds(now, m) {
+        if (m.rush.challenge) {
+            m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, h.holdColor, now));
+            RashView.drawChallengeHolds(now, m);
+            return;
+        }
         m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, h.holdColor, now));
         for (let i = m.holds[1].length; i < CONFIG.machine.holdMax; i++) {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
@@ -405,15 +437,26 @@ const Lcd = (() => {
         text(`ROUND ${Math.max(1, b.round)} / ${b.alloc.rounds}`, W / 2 + 14, 58, 20, '#ffffff');
         if (b.phase === 'open') text(`COUNT ${b.count} / ${b.alloc.count || CONFIG.machine.bonus.count}`, W / 2 + 14, 84, 13, '#7fd3f7');
         text('右打ち →', W / 2, 110, 14, Math.floor(now * 3) % 2 ? '#ff6a8a' : '#ffffff');
+        if (choosing) {
+            band(90, 36, 0.75);
+            text('どっちの RASH にする？', W / 2, 99, 11, '#ffffff');
+            const modes = CONFIG.show.rash.modes;
+            text(modes.koori.name, W / 2 - 52, 116, 13, m.rashMode === 'koori' ? '#ffe066' : '#8aa4c0');
+            text(modes.onioni.name, W / 2 + 52, 116, 13, m.rashMode === 'onioni' ? '#ff6a6a' : '#8aa4c0');
+        }
     }
 
     // ----- 1フレーム -----
     function background(m, plan, phase) {
         if (m.bonus) return 'goldHall';
         if (plan && phase) {
+            if (plan.kind === 'challenge') return CONFIG.show.challengeBattle.map;
+            if (plan.kind === 'onioni') return 'castleHall';
+            if (plan.kind === 'rashBattle') return plan.enemyInfo.map;
             if (phase.name === 'challenge') return CONFIG.show.challenges[plan.challenge].map;
             if (phase.name === 'reach' || phase.name === 'battle' || phase.name === 'result') return CONFIG.show.battles[plan.enemy].map;
         }
+        if (m.rush.active && rashMode === 'onioni' && !m.rush.challenge) return 'castleHall';
         return Machine.inJitan(m) || m.rush.active ? 'seCastle' : 'tsugakuro';
     }
 
@@ -425,27 +468,73 @@ const Lcd = (() => {
         if (phase.name === 'challenge') Sound.play('challenge');
         if (phase.name === 'fail') Sound.play('fail');
         if (phase.name === 'reach') Sound.play('reach');
-        if (phase.name === 'result') Sound.play(plan.win ? 'win' : 'lose');
+        if (phase.name === 'result' || phase.name === 'cresult') Sound.play(plan.win ? 'win' : 'lose');
+        if (phase.name === 'cintro' || phase.name === 'cfinal') Sound.play('reach');
+        if (phase.name === 'cround') Sound.play('attack');
+        if (phase.name === 'anomaly') Sound.play('challenge');
+        if (phase.name === 'open') Sound.play('win');
+    }
+
+    // おにおにRASH の違和感: 画面の上下反転・白黒
+    let effectCanvas = null;
+    function applyEffect(fx) {
+        if (!fx) return;
+        if (!effectCanvas) {
+            effectCanvas = document.createElement('canvas');
+            effectCanvas.width = W;
+            effectCanvas.height = H;
+        }
+        const g = effectCanvas.getContext('2d');
+        g.clearRect(0, 0, W, H);
+        g.drawImage(canvas, 0, 0);
+        ctx.save();
+        ctx.clearRect(0, 0, W, H);
+        if (fx === 'flip') {
+            ctx.translate(W, H);
+            ctx.scale(-1, -1);
+        } else if (fx === 'mono') {
+            ctx.filter = 'grayscale(1) contrast(1.2)';
+        }
+        ctx.drawImage(effectCanvas, 0, 0);
+        ctx.restore();
     }
 
     function draw(now, m) {
         ctx.imageSmoothingEnabled = false;
         const plan = m && m.spin && spinView ? spinView.plan : null;
         const phase = plan ? phaseAt(plan, m.spin.elapsed) : null;
-        if (phase && phase.name === 'battle') phase.pushing = phase.local >= phase.t - CONFIG.show.pushTime;
+        if (phase && (phase.name === 'battle' || phase.name === 'cfinal')) phase.pushing = phase.local >= phase.t - CONFIG.show.pushTime;
         currentPhase = phase;
+        if (m) rashMode = m.rashMode;
         const rushing = m && (Machine.inJitan(m) || m.rush.active);
         Backgrounds.draw(ctx, m ? background(m, plan, phase) : 'tsugakuro', now * (rushing ? 40 : 18));
         if (!m) return canvas;
         phaseSounds(plan, phase);
 
         // バトル中は PUSH の案内を台のボタンにも出す
-        MachineButton.prompt(Boolean(phase && phase.name === 'battle' && phase.pushing && spinView.pushedAt === null));
+        MachineButton.prompt(Boolean(phase && phase.pushing && spinView.pushedAt === null));
 
         if (m.bonus) drawBonus(now, m);
         else {
+            if (plan && plan.kind === 'challenge' && phase.name !== 'roll') RashView.drawChallenge(now, plan, phase, m, spinView);
+            else if (plan && plan.kind === 'onioni' && plan.pattern) RashView.drawOnioniRash(now, plan, phase);
+            else if (m.rush.active && !m.rush.challenge && rashMode === 'onioni' && (!plan || plan.kind !== 'rashBattle')) {
+                // おにおにRASH の外れ: 眠っているおにおに
+                RashView.drawOnioniRash(now, { pattern: null }, { name: 'roll', local: 0, t: 1 });
+            }
             if (phase && phase.name === 'challenge') drawChallenge(now, plan, phase);
-            if (phase && ((phase.name === 'reach' && phase.local >= 1.4) || phase.name === 'battle' || (phase.name === 'result' && phase.local < 0.6))) drawBattle(now, plan, phase);
+            if (phase && (plan.kind === 'rashBattle' || (phase.name === 'reach' && phase.local >= 1.4) || phase.name === 'battle' || (phase.name === 'result' && phase.local < 0.6))) {
+                if (plan.kind !== 'rashBattle' || !(phase.name === 'result' && phase.local >= 0.6)) drawBattle(now, plan, phase);
+            }
+            // 突破チャレンジで保留をためているところ
+            if (m.rush.challenge && !m.challengeRun && !m.spin && Machine.inJitan(m)) {
+                band(60, 34, 0.55);
+                text('突破チャレンジ！ 保留をためろ！', W / 2, 70, 13, '#ff6a6a');
+                for (let i = 0; i < CONFIG.machine.holdMax; i++) {
+                    ctx.fillStyle = i < m.holds[2].length ? '#ffe066' : 'rgba(255,255,255,0.25)';
+                    ctx.fillRect(W / 2 - 30 + i * 16, 82, 10, 8);
+                }
+            }
             const state = drawReels(now, plan, phase);
             if (phase && phase.name === 'reach' && phase.local >= 0.6 && phase.local < 1.4) {
                 band(104, 20, 0.6);
@@ -453,9 +542,9 @@ const Lcd = (() => {
             }
             if (state.aligned && plan && plan.win) text('大当たり！', W / 2, 18, 14, 'rainbow', 'center', now);
             const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
-            if (Machine.inJitan(m)) {
-                text(m.rush.challenge ? `突破チャレンジ  残り ${left}回` : `RUSH ${m.rush.hits - 1}連  時短 残り ${left}回`, W / 2, 112, 11, '#7fd3f7');
-            } else if (m.rush.active) text('残り保留で V を狙え', W / 2, 112, 11, '#7fd3f7');
+            if (m.rush.active && !m.rush.challenge && !(plan && plan.kind !== 'plain' && plan.fig === 2)) {
+                text(Machine.inJitan(m) ? `${rashName()} ${m.rush.hits - 1}連  時短 残り ${left}回` : `${rashName()} ${m.rush.hits - 1}連  残り保留`, W / 2, 112, 11, '#7fd3f7');
+            }
         }
 
         // ふるカワのバトルの返事・撃破のひとこと
@@ -481,7 +570,7 @@ const Lcd = (() => {
             if (summary.failed) {
                 text('突破ならず…', W / 2, 66, 16, '#8aa4c0');
             } else {
-                text('RUSH 終了', W / 2, 50, 14, '#ffffff');
+                text(`${rashName()} 終了`, W / 2, 50, 14, '#ffffff');
                 text(`${summary.hits}連  ${summary.balls >= 0 ? '+' : ''}${summary.balls}玉`, W / 2, 76, 18, '#ffe066');
             }
         }
@@ -490,8 +579,9 @@ const Lcd = (() => {
             band(44, 44, 0.45);
             text(flash.text, W / 2, 66, 20 + Math.round(Math.sin(Math.min(1, t * 4) * Math.PI / 2) * 4), flash.color);
         }
+        applyEffect(RashView.postEffect(plan, phase));
         return canvas;
     }
 
-    return { init, reset, draw, event, aim, show, push, W, H };
+    return { init, reset, draw, event, aim, show, push, setChoosing, W, H };
 })();

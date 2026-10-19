@@ -191,6 +191,33 @@ button:hover { border-color: var(--accent); }
 .koori-button.fx-beep { animation: beep-ring 0.3s ease-out infinite; }
 @keyframes beep-ring { from { box-shadow: 0 4px 0 #1b3a6b, 0 0 0 0 rgba(255, 255, 255, 0.9); } to { box-shadow: 0 4px 0 #1b3a6b, 0 0 0 18px rgba(255, 255, 255, 0); } }
 .bar-buttons { display: flex; gap: 6px; }
+.koori-button.fx-rainbow { animation: rainbow-glow 0.5s linear infinite; background: linear-gradient(135deg, #ff6a6a, #ffe066, #6aff8a, #6ab8ff, #c06aff); }
+@keyframes rainbow-glow {
+    0% { box-shadow: 0 4px 0 #1b3a6b, 0 0 24px 8px #ff4a4a; }
+    25% { box-shadow: 0 4px 0 #1b3a6b, 0 0 24px 8px #ffe04a; }
+    50% { box-shadow: 0 4px 0 #1b3a6b, 0 0 24px 8px #4aff7a; }
+    75% { box-shadow: 0 4px 0 #1b3a6b, 0 0 24px 8px #4a9aff; }
+    100% { box-shadow: 0 4px 0 #1b3a6b, 0 0 24px 8px #c04aff; }
+}
+
+/* RASH の選択 */
+.rash-choice {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px;
+    border: 2px solid #ffe066;
+    border-radius: 10px;
+    background: #1a1430;
+}
+.rash-choice[hidden] { display: none; }
+.rash-choice p { grid-column: 1 / -1; margin: 0; text-align: center; color: #ffe066; }
+.rash-choice button { display: flex; flex-direction: column; gap: 4px; padding: 10px 6px; }
+.rash-choice button.selected { border-color: #ffe066; background: #2a2450; }
+.rash-choice .rc-name { font-size: 16px; }
+.rash-choice button[data-mode="koori"] .rc-name { color: #7fd3f7; }
+.rash-choice button[data-mode="onioni"] .rc-name { color: #ff6a6a; }
+.rash-choice .rc-note { font-size: 11px; color: var(--muted); }
 .push-area { display: flex; justify-content: center; padding-bottom: 18px; }
 .push-area .koori-button { width: 76px; height: 76px; }
 .push-area .koori-button .kb-eye { top: 26px; width: 7px; height: 13px; }

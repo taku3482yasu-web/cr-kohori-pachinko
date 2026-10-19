@@ -5,7 +5,9 @@
 //   特図1 (ヘソ): 大当たり hitRate → firstHit の振り分け
 //   特図2 (電チュー): 大当たり hitRate → rushHit / 小当たり smallRate → アタッカーが短く開き、V 入賞で大当たり (rushHit)
 //   時短: まわすあいだ電サポ (普図が当たりやすく電チューがよく開く)。終われば通常時
-//     初当たりのあとの時短は突破チャレンジ (jitan.challengeSpins 回)。そこで当たれば RUSH 突入。RUSH 中は jitan.spins 回
+//     初当たりのあとの時短は突破チャレンジ: 電チューの保留がたまったら (challengeBattle.gatherTimeout 秒でも) おにおにとのバトル。
+//     その保留のどれかで当たれば RASH 突入。RASH 中は大当たりのたびに時短 jitan.spins 回
+//   RASH のモード (こおりRASH / おにおにRASH) は m.rashMode。Machine.setRashMode で変える (演出だけが変わる)
 //   保留は特図2 を先に消化する。結果は玉が入ったときに決める (先読みに使える)。
 //   保留の色・ボタン・変動の流れと時間は Scenario (js/scenario.js) が決める。
 //
@@ -33,6 +35,9 @@ const Machine = (() => {
             time: 0,
             jitanLeft: 0,             // 時短の残り回数 (0 なら通常時)
             jitanActive: false,       // 時短に入っている (終わったときに jitanEnd を出すため)
+            challengeRun: null,       // 突破チャレンジのバトル中 (Scenario.challengePlan の結果 + 何ラウンド目か index)
+            gatherTime: 0,            // 突破チャレンジで保留がたまるのを待っている秒
+            rashMode: config.show.rash.defaultMode,
             holds: { 1: [], 2: [] },  // 保留 (それぞれの結果)
             spin: null,               // 変動中の特図 { fig, result, duration, elapsed }
             small: null,              // 小当たりでアタッカーが開いている { timer, alloc }
@@ -55,7 +60,8 @@ const Machine = (() => {
         if (r < m.spec.hitRate) {
             return { kind: 'hit', alloc: weightedPick(fig === 1 ? m.spec.firstHit : m.spec.rushHit, m.rng) };
         }
-        if (fig === 2 && r < m.spec.hitRate + m.spec.smallRate) return { kind: 'small' };
+        const smallRate = m.rush.challenge && m.spec.challengeSmallRate ? m.spec.challengeSmallRate : m.spec.smallRate;
+        if (fig === 2 && r < m.spec.hitRate + smallRate) return { kind: 'small' };
         return { kind: 'miss' };
     }
 
@@ -102,15 +108,36 @@ const Machine = (() => {
         m.parts.denchu = Boolean(m.futsu.opening && m.futsu.opening.open);
     }
 
+    // 突破チャレンジ: 保留がたまるのを待つ (待っているあいだは変動しない)。たまったらバトルを始める
+    function gatherChallenge(m, dt) {
+        if (!m.rush.challenge || m.challengeRun || m.jitanLeft <= 0) return false;
+        const cfg = m.config.show.challengeBattle;
+        m.gatherTime += dt;
+        const holds = m.holds[2];
+        if (holds.length < m.config.machine.holdMax && !(m.gatherTime >= cfg.gatherTimeout && holds.length > 0)) return true;
+        m.challengeRun = { ...Scenario.challengePlan(m.config, holds.slice()), index: 0 };
+        m.jitanLeft = 0;   // バトルが始まったら電サポは終わり (たまった保留で勝負)
+        emit(m, 'challengeStart', { run: m.challengeRun });
+        return false;
+    }
+
     function updateSpin(m, dt) {
         if (!m.spin) {
+            if (gatherChallenge(m, dt)) return;
             const fig = m.holds[2].length ? 2 : m.holds[1].length ? 1 : 0;
             if (!fig) return;
             const result = m.holds[fig].shift();
+            const run = fig === 2 ? m.challengeRun : null;
+            const jitanSpin = m.jitanLeft > 0;
             const plan = Scenario.plan(m.config, m.spec, {
-                fig, result, holdsLeft: m.holds[fig].length, rush: m.rush.active || inJitan(m), holdColor: result.holdColor
+                fig, result, holdsLeft: m.holds[fig].length, rush: m.rush.active || inJitan(m), holdColor: result.holdColor,
+                challenge: run ? { run, index: run.index } : null,
+                rashMode: m.rashMode,
+                // RASH の最後の変動 (このあと時短も保留もない)
+                isLast: fig === 2 && m.rush.active && !m.rush.challenge && m.jitanLeft - (jitanSpin ? 1 : 0) <= 0 && m.holds[2].length === 0
             }, m.rng);
-            m.spin = { fig, result, plan, duration: plan.duration, elapsed: 0, jitan: m.jitanLeft > 0 };
+            if (run) run.index++;
+            m.spin = { fig, result, plan, duration: plan.duration, elapsed: 0, jitan: jitanSpin };
             m.stats[fig === 1 ? 'spins1' : 'spins2']++;
             if (m.spin.jitan) m.jitanLeft--;
             emit(m, 'spinStart', { fig, result, plan, duration: plan.duration, jitanLeft: m.jitanLeft });
@@ -118,9 +145,11 @@ const Machine = (() => {
         }
         m.spin.elapsed += dt;
         if (m.spin.elapsed < m.spin.duration) return;
-        const { fig, result } = m.spin;
+        const { fig, result, plan } = m.spin;
         m.spin = null;
-        emit(m, 'spinEnd', { fig, result });
+        // 突破チャレンジのバトルは、決着のラウンドで終わり
+        if (plan.kind === 'challenge' && plan.final) m.challengeRun = null;
+        emit(m, 'spinEnd', { fig, result, plan });
         if (result.kind === 'hit') {
             m.stats[fig === 1 ? 'hits1' : 'hits2']++;
             startBonus(m, result.alloc, false);
@@ -131,10 +160,14 @@ const Machine = (() => {
         }
     }
 
-    // 保留の色とボタン (特図1 だけ。特図2 の保留はいつも白)
+    // 保留の色・ボタン・突破チャレンジの武器 (特図2 の保留の色はいつも白)
     function addExtras(m, fig, result) {
         if (fig === 1) Object.assign(result, Scenario.hold(m.config, m.spec, result, m.rng));
-        else Object.assign(result, { holdColor: 'white', button: null });
+        else Object.assign(result, Scenario.hold2(m.config, result, { challenge: m.rush.challenge, rash: m.rush.active }, m.rng));
+    }
+
+    function setRashMode(m, mode) {
+        if (m.config.show.rash.modes[mode]) m.rashMode = mode;
     }
 
     function updateSmall(m, dt) {
@@ -149,6 +182,7 @@ const Machine = (() => {
         const cfg = m.config.machine.bonus;
         m.small = null;
         m.spin = null;
+        m.challengeRun = null;
         m.jitanLeft = 0;
         m.jitanActive = false;
         m.bonus = { alloc, fromV, round: 0, count: 0, phase: 'opening', timer: cfg.opening };
@@ -201,6 +235,8 @@ const Machine = (() => {
                 }
                 m.jitanLeft = m.rush.challenge ? m.spec.jitan.challengeSpins : m.spec.jitan.spins;
                 m.jitanActive = true;
+                m.gatherTime = 0;
+                m.challengeRun = null;
                 emit(m, 'jitanStart', { spins: m.jitanLeft, rushHits: m.rush.hits, challenge: m.rush.challenge });
             }
             emit(m, 'bonusEnd', { next: b.alloc.next });
@@ -212,6 +248,7 @@ const Machine = (() => {
         if (!m.rush.active || inJitan(m) || m.bonus || m.small) return;
         if (m.holds[2].length || (m.spin && m.spin.fig === 2)) return;
         emit(m, 'rushEnd', { hits: m.rush.hits, time: m.time - m.rush.startTime, challengeFailed: m.rush.challenge });
+        m.challengeRun = null;
         m.rush = { active: false, hits: 0, startTime: 0, challenge: false };
     }
 
@@ -274,6 +311,7 @@ const Machine = (() => {
         if (options.enemy) result.forceEnemy = options.enemy;
         if (options.holdColor) result.holdColor = options.holdColor;
         if (options.button) result.button = options.button;
+        if (options.pattern) result.forcePattern = options.pattern;
         m.holds[fig].unshift(result);
         if (m.holds[fig].length > m.config.machine.holdMax) m.holds[fig].pop();
         emit(m, 'hold', { fig, result, count: m.holds[fig].length });
@@ -285,11 +323,29 @@ const Machine = (() => {
         m.jitanLeft = m.spec.jitan.spins;
         m.jitanActive = true;
         if (!m.rush.active) {
-            m.rush = { active: true, hits: 1, startTime: m.time, challenge: false };
+            m.rush = { active: true, hits: 2, startTime: m.time, challenge: false };   // 突破したあとと同じ (1連目)
             m.stats.rushes++;
         }
         emit(m, 'jitanStart', { spins: m.jitanLeft, rushHits: m.rush.hits, challenge: false });
     }
 
-    return { create, enter, update, aim, inJitan, debugHold, debugJitan };
+    // いきなり突破チャレンジにして、保留を count 個入れる (winIndex 番目だけ小当たり。-1 ならぜんぶ外れ)
+    function debugChallenge(m, count = 4, winIndex = -1) {
+        if (m.bonus) return;
+        m.rush = { active: true, hits: 1, startTime: m.time, challenge: true };
+        m.stats.rushes++;
+        m.jitanLeft = m.spec.jitan.challengeSpins;
+        m.jitanActive = true;
+        m.gatherTime = 0;
+        m.challengeRun = null;
+        emit(m, 'jitanStart', { spins: m.jitanLeft, rushHits: 1, challenge: true });
+        for (let i = 0; i < count; i++) {
+            const result = { kind: i === winIndex ? 'small' : 'miss' };
+            addExtras(m, 2, result);
+            m.holds[2].push(result);
+            emit(m, 'hold', { fig: 2, result, count: m.holds[2].length });
+        }
+    }
+
+    return { create, enter, update, aim, inJitan, setRashMode, debugHold, debugJitan, debugChallenge };
 })();

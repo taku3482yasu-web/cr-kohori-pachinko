@@ -111,6 +111,7 @@
 
     function run(specId, board) {
         const m = Machine.create(CONFIG, specId, rng);
+        Machine.setRashMode(m, params.get('mode') || 'koori');
         const DT = 0.2;
         const end = HOURS * 3600;
         const flying = [];      // 打った玉 { at: 届く時刻, aim }
@@ -121,7 +122,8 @@
         let rushPaid = 0;
         let rushStartPaid = 0, rushStartShot = 0;
         // 演出の集計 (特図1): バトルの相手・チャレンジ・ボタン・保留の色ごとに、出た回数と当たった回数
-        const showStats = { enemy: {}, challenge: {}, button: [0, 0], color: {}, reach: 0, spins: 0 };
+        const showStats = { enemy: {}, challenge: {}, button: [0, 0], color: {}, reach: 0, spins: 0,
+            weapon: {}, rashEnemy: {}, rashButton: [0, 0], rashButtonOnHit: [0, 0], rashSpins: 0, rashBattles: 0 };
         const tally = (table, key, hit) => {
             table[key] = table[key] || [0, 0];
             table[key][0]++;
@@ -158,6 +160,16 @@
             Machine.update(m, DT);
             inJitanNow = Machine.inJitan(m);
             m.events.splice(0).forEach(e => {
+                if (e.type === 'hold' && e.fig === 2) {
+                    const win = e.result.kind !== 'miss';
+                    if (e.result.weapon) tally(showStats.weapon, e.result.weapon, win);
+                    if (e.result.button) { showStats.rashButton[0]++; if (win) showStats.rashButton[1]++; }
+                    if (win && m.rush.active) { showStats.rashButtonOnHit[0]++; if (e.result.button) showStats.rashButtonOnHit[1]++; }
+                }
+                if (e.type === 'spinStart' && e.fig === 2 && !m.rush.challenge && m.rush.active) {
+                    showStats.rashSpins++;
+                    if (e.plan.kind === 'rashBattle') { showStats.rashBattles++; tally(showStats.rashEnemy, e.plan.enemy, e.plan.win); }
+                }
                 if (e.type === 'hold' && e.fig === 1) {
                     const hit = e.result.kind === 'hit';
                     tally(showStats.color, e.result.holdColor, hit);
@@ -219,6 +231,12 @@
             lines.push('      チャレンジの成功率: ' + Object.keys(CONFIG.show.challenges).map(id => `${names[id]} ${rate(st.challenge[id] || [0, 0])}`).join(' / '));
             lines.push(`      ボタン先読みの当たり: ${rate(st.button)}`);
             lines.push('      保留の色の当たり: ' + CONFIG.show.holdColors.order.map(c => `${c} ${rate(st.color[c] || [0, 0])}`).join(' / '));
+            const wnames = CONFIG.show.challengeBattle.weapons;
+            lines.push('      突破チャレンジの武器の当たり: ' + Object.keys(wnames).map(id => `${wnames[id].name} ${rate(st.weapon[id] || [0, 0])}`).join(' / '));
+            const enames = CONFIG.show.kooriRash.enemies;
+            lines.push(`      こおりRASH (特図2 ${st.rashSpins} 回転、バトル ${pct(st.rashBattles / Math.max(1, st.rashSpins))}) のバトルの成功率: `
+                + Object.keys(enames).map(id => `${enames[id].name} ${rate(st.rashEnemy[id] || [0, 0])}`).join(' / '));
+            lines.push(`      RASH 中のボタン: 起きたら当たり ${rate(st.rashButton)} / 当たりのときに起きる ${rate(st.rashButtonOnHit)}`);
         });
     });
     lines.push(`\n(${((performance.now() - started) / 1000).toFixed(1)} 秒)`);

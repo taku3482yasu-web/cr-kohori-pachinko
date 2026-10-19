@@ -145,8 +145,8 @@ const CONFIG = {
     //   / next (終わったあと。'normal' = 通常時 / 'jitan' = 時短)。賞球 15 なので 1ラウンド 10カウント = 150個
     //   200個 は 2R x 7C = 210個、1300個 は 9R x 10C = 1350個 にした (賞球 15 ではちょうどにならないため)
     // firstHit: 通常時の特図1 (ヘソ) で当たったとき / rushHit: 特図2 (電チュー) の大当たり・小当たりからの V 入賞
-    // 時短の流れ: 初当たりのあとの時短 = 突破チャレンジ (jitan.challengeSpins 回)。そこで当たれば RUSH 突入、
-    //   RUSH 中は大当たりのたびに時短 jitan.spins 回。小当たりの確率と回数で突破率・継続率が決まる
+    // 時短の流れ: 初当たりのあとの時短 = 突破チャレンジ。電チューの保留がたまったらバトルにして、その保留 (最大4つ) のどれかで
+    //   当たれば RASH 突入 (突破率は challengeSmallRate で合わせる)。RASH 中は大当たりのたびに時短 jitan.spins 回
     //   (時短が終わったあとの残り保留でも小当たりを引ける。tools/simulate.html で測って合わせる)
     // payout: スペックごとの賞球 (config.payout より優先。書いた入賞口だけ変わる)
     // board: スペックごとの釘調整 (お店が機種ごとに釘を調整するのと同じ)。出玉率を 80〜95% に合わせる (ユーザー指定 2026-10-19)
@@ -166,6 +166,7 @@ const CONFIG = {
                 { weight: 50, label: 200, rounds: 2, count: 7, next: 'jitan' },    // 200個
                 { weight: 50, label: 900, rounds: 6, next: 'jitan' }               // 900個
             ],
+            challengeSmallRate: 1 / 6.5,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/6.3 で 53%、1/6.8 で 48%)
             jitan: { challengeSpins: 1, spins: 6 },
             board: { hesoWidth: 8.8, warpMinVx: 15 },
             payout: { heso: 2 },   // 賞球をこのスペックだけ変える (1/99 は当たりが小さいので、ヘソを 2 にして出玉率を上げた)
@@ -183,6 +184,7 @@ const CONFIG = {
             rushHit: [
                 { weight: 100, label: 1300, rounds: 9, next: 'jitan' }   // 1300個
             ],
+            challengeSmallRate: 1 / 6.5,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/6.3 で 53%、1/6.8 で 48%)
             jitan: { challengeSpins: 1, spins: 6 },
             board: { hesoWidth: 6.4, warpMinVx: 40 },
             target: { challenge: 0.5, continuation: 0.80 }
@@ -242,7 +244,63 @@ const CONFIG = {
             hitRate: 0.3,            // 当たりの保留で起きる確率
             reliability: 0.6,        // 起きたときに当たっている確率 (ユーザー指定)
             kinds: { red: 40, shake: 30, beep: 30 },
+            hitOnlyKinds: { rainbow: 20 },   // 当たりのときだけ選ぶ種類 (虹色は確定)
             time: 1.2                // 光る・震える・鳴る時間 (秒)
+        },
+        // RASH 中・突破チャレンジ中のボタン (ユーザー指定): 当たりの保留の hitRate (60%) で震える・赤くなる・虹色になる。外れでは起きない
+        rashButton: {
+            hitRate: 0.6,
+            kinds: { shake: 35, red: 35, rainbow: 30 }
+        },
+
+        // ----- 突破チャレンジ (段階4。ユーザー指定 2026-10-19) -----
+        // おにおにとのバトル。電チューの保留が holdMax 個たまる (または gatherTimeout 秒たつ) と始まり、保留1つが1ラウンド。
+        // どれかの保留で当たれば突破。保留ごとにこおりくんの武器が変わる (期待度の低い順。おにおに絶対殺す剣は確定)
+        //   hit / miss: 当たり・外れの保留で選ぶ重み
+        challengeBattle: {
+            gatherTimeout: 15,
+            weapons: {
+                fist: { name: '素手', hit: 10, miss: 80 },
+                sword: { name: 'ハルキソード', hit: 25, miss: 15 },
+                hammer: { name: 'ハルキハンマー', hit: 40, miss: 5 },
+                oniKiller: { name: 'おにおに絶対殺す剣', hit: 25, miss: 0 }
+            },
+            // 1ラウンド目の前の登場 (intro)、途中のラウンド (round)、最後のラウンド (final) と結果 (result) の秒
+            timing: { intro: 3, round: 3.5, final: 5, result: 2.5 },
+            map: 'castleHall'
+        },
+
+        // ----- RASH (段階4。ユーザー指定) -----
+        // RASH 突入の大当たり中に、こおりRASH / おにおにRASH を選ぶ (選ばなければ defaultMode)
+        rash: {
+            defaultMode: 'koori',
+            modes: {
+                koori: { name: 'こおりRASH', note: 'バトルで勝てば当たり' },
+                onioni: { name: 'おにおにRASH', note: 'おにおにが開眼すれば当たり' }
+            }
+        },
+        // こおりRASH: 当たりの保留と、最後の保留 (このあと時短も保留もない) は必ずバトル。外れでもときどきバトル (成功率から自動で計算)
+        //   相手 (成功率の低い順。ゴールド金面犬は確定)。hit: 当たりのときの重み / win: 成功率 (Claude が決めた。金面犬の確定はユーザー指定)
+        kooriRash: {
+            timing: { roll: 1, battle: 5, result: 2 },
+            enemies: {
+                shibata: { name: 'シバター', hit: 15, win: 0.15, map: 'ebisucho' },
+                sasaki: { name: 'Mr.SASAKI', hit: 25, win: 0.35, map: 'tsugakuro' },
+                onioni: { name: 'おにおに', hit: 40, win: 0.7, map: 'castleHall' },
+                goldDog: { name: 'ゴールド金面犬', hit: 20, win: 1, map: 'goldHall' }
+            }
+        },
+        // おにおにRASH: 真ん中でおにおにが椅子に座っている。当たりのときだけ違和感が起きて開眼する (外れでは何も起きない)
+        //   wait → anomaly (違和感) → open (開眼) の秒。patterns は当たりのときに選ぶ重み
+        onioniRash: {
+            timing: { wait: 1.5, anomaly: 3, open: 2 },
+            patterns: {
+                open: { name: 'そのまま開眼', weight: 30 },
+                rainbow: { name: 'おにおにが虹色', weight: 20 },
+                flip: { name: '画面が反転', weight: 15 },
+                mono: { name: '白黒', weight: 15 },
+                zoom: { name: '顔がドアップ', weight: 20 }
+            }
         },
 
         // 特図1 の変動の流れ (秒)
@@ -305,14 +363,23 @@ const CONFIG = {
                 okagappa: ['まだ何も始まってないよ…？', 'ノリで来たでしょ、ぜったい…'],
                 hibikimakuri: ['…うん、響いてるね', '自己紹介、それだけ…？'],
                 onioni: ['来ちゃった…！ お金はあとで返すから！', 'こわい…でも負けないよ！'],
-                naitei: ['こおりくん、内定のチャンスだよ！']
+                naitei: ['こおりくん、内定のチャンスだよ！'],
+                shibata: ['ぶんぶん…？ おはしばたじゃないの？', 'ぶんぶんって、なに…？'],
+                sasaki: ['自分で言っちゃうんだ…', 'しご出来なのに、目の下にクマが…'],
+                goldDog: ['かわいい…けど、さわっちゃダメ！', 'すっごく自信ありげ…！']
             },
             defeatLines: {
                 okagappa: ['おかがっぱ、川にお帰り〜！', 'お皿、割れてないといいね♪'],
                 hibikimakuri: ['やっと静かになった…！', '最後まで響いてたね…'],
                 onioni: ['おにおにを倒した！ すごいよ！', 'お金のことは…また今度ね！'],
-                naitei: ['こおりくん、内定おめでとう！', 'これで内定持ちだね…ふーん♪']
-            }
+                naitei: ['こおりくん、内定おめでとう！', 'これで内定持ちだね…ふーん♪'],
+                shibata: ['シバター、バーイ！', 'いまの、動画にしないでね！'],
+                sasaki: ['SASAKIさん、ゆっくり休んでね…', 'すごいです。やばいです。…うつっちゃった'],
+                goldDog: ['ワンちゃん、金庫にお帰り〜！', '黄金にならなくてよかった…！']
+            },
+            // 突破チャレンジが始まるとき・突破したとき
+            challengeLines: ['おにおにとの勝負だよ！ がんばって！', '保留がそろった…いくよ！'],
+            challengeWinLines: ['おにおにを突破した！ RASH だよ！', 'やったー！ 突破！！']
         }
     }
 };

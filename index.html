@@ -25,6 +25,12 @@
             </div>
             <div id="mode-display" class="mode-display"></div>
             <div id="aim-display" class="aim-display" hidden>右打ち →</div>
+            <!-- RASH 突入の大当たり中に、RASH のモードを選ぶ (1 / 2 キーでも) -->
+            <div id="rash-choice" class="rash-choice" hidden>
+                <p>どっちの RASH にする？</p>
+                <button data-mode="koori"><span class="rc-name">こおりRASH！</span><span class="rc-note">バトルで勝てば当たり</span></button>
+                <button data-mode="onioni"><span class="rc-name">おにおにRASH！</span><span class="rc-note">おにおにが開眼すれば当たり</span></button>
+            </div>
             <div class="status">
                 <div class="status-item"><span class="label">持ち玉</span><span id="balls" class="value">0</span></div>
                 <div class="status-item"><span class="label">発射</span><span id="launched" class="value">0</span></div>
@@ -71,6 +77,7 @@
                 </select>
                 <button id="debug-button">ボタン先読み</button>
                 <button id="debug-rainbow">虹保留の当たり</button>
+                <button id="debug-rash-mode">RASH: こおりRASH</button>
                 <button id="debug-jitan">時短に入る</button>
                 <button id="debug-auto">オート発射: OFF</button>
                 <button id="debug-aim">オートで打ち分け: OFF</button>
@@ -105,6 +112,7 @@
     <script src="js/render.js"></script>
     <script src="js/figures.js"></script>
     <script src="js/button.js"></script>
+    <script src="js/lcd-rash.js"></script>
     <script src="js/lcd.js"></script>
     <script src="js/main.js"></script>
 </body>

@@ -3,8 +3,12 @@
 // ---------------------------------------------------------------------
 // 画面には触らない (台の Machine とシミュレーターからも使う)。決め方の数値は config.show。
 //   Scenario.hold(config, spec, result, rng)   玉がヘソに入ったとき: { holdColor, button }
-//   Scenario.plan(config, spec, spin, rng)     変動が始まるとき: { duration, phases, digits, challenge, enemy, win, talk, ... }
-// phases は [{ name, t }] の並び (roll → challenge → fail / reach → battle → result)。液晶はこれを時間どおりに描く。
+//   Scenario.hold2(config, result, ctx, rng)   玉が電チューに入ったとき: { holdColor, button, weapon }
+//   Scenario.challengePlan(config, holds)      突破チャレンジのバトルが始まるとき: 保留ごとの武器・決着のラウンド・時間
+//   Scenario.plan(config, spec, spin, rng)     変動が始まるとき: { kind, duration, phases, digits, enemy, win, talk, ... }
+// phases は [{ name, t }] の並び。液晶はこれを時間どおりに描く。kind (特図2):
+//   'challenge' 突破チャレンジのバトルの1ラウンド (cintro → cround / cfinal → cresult)
+//   'rashBattle' こおりRASH のバトル (roll → battle → result) / 'onioni' おにおにRASH (wait → anomaly → open、外れは roll だけ)
 // =====================================================================
 
 const Scenario = (() => {
@@ -33,18 +37,43 @@ const Scenario = (() => {
         const hit = result.kind === 'hit';
         const holdColor = weighted(show.holdColors[hit ? 'hit' : 'miss'], rng);
         const rate = hit ? show.button.hitRate : buttonMissRate(show, spec);
-        const button = rng() < rate ? weighted(show.button.kinds, rng) : null;
+        // 虹色は当たりのときだけ
+        const kinds = hit ? { ...show.button.kinds, ...show.button.hitOnlyKinds } : show.button.kinds;
+        const button = rng() < rate ? weighted(kinds, rng) : null;
         return { holdColor, button };
+    }
+
+    // ----- 保留 (玉が電チューに入ったとき) -----
+    // RASH 中・突破チャレンジ中: 当たりの保留の rashButton.hitRate でボタン (外れでは起きない)。突破チャレンジ中は武器も決める
+    function hold2(config, result, ctx, rng) {
+        const show = config.show;
+        const win = result.kind !== 'miss';
+        const button = ctx.rash && win && rng() < show.rashButton.hitRate ? weighted(show.rashButton.kinds, rng) : null;
+        let weapon = null;
+        if (ctx.challenge) {
+            const weapons = show.challengeBattle.weapons;
+            weapon = weighted(Object.fromEntries(Object.entries(weapons).map(([id, w]) => [id, win ? w.hit : w.miss])), rng);
+        }
+        return { holdColor: 'white', button, weapon };
+    }
+
+    // ----- 突破チャレンジのバトル -----
+    // holds: たまった保留。最初に当たる保留のラウンドで勝ち、どれも外れなら最後のラウンドで負け
+    function challengePlan(config, holds) {
+        const t = config.show.challengeBattle.timing;
+        const winIndex = holds.findIndex(h => h.kind !== 'miss');
+        const final = winIndex >= 0 ? winIndex : holds.length - 1;
+        return { weapons: holds.map(h => h.weapon || 'fist'), winIndex, final, count: holds.length, timing: t };
     }
 
     // ----- バトル: 外れのときの相手の重み -----
     // 相手 i の成功率 win_i を守るには、外れでその相手が出る量 = 当たりで出る量 × (1 - win_i) / win_i
-    function missBattleMass(show, spec) {
-        const battles = show.battles;
+    // battles: 相手の表 (show.battles / show.kooriRash.enemies)、hitRate: 1回の変動で当たる確率
+    function missBattleMass(show, spec, battles = show.battles, hitRate = spec.hitRate) {
         const totalHit = Object.values(battles).reduce((a, b) => a + b.hit, 0);
         const mass = {};
         Object.entries(battles).forEach(([id, b]) => {
-            mass[id] = b.win >= 1 ? 0 : spec.hitRate * (b.hit / totalHit) * (1 - b.win) / b.win;
+            mass[id] = b.win >= 1 ? 0 : hitRate * (b.hit / totalHit) * (1 - b.win) / b.win;
         });
         return mass;
     }
@@ -82,13 +111,7 @@ const Scenario = (() => {
         const t = show.timing;
         const { fig, result } = spin;
 
-        if (fig === 2) {
-            const f2 = config.machine.spin.fig2;
-            const kind = result.kind;
-            const digits = kind === 'hit' ? Array(3).fill(hitDigit(show, result, fig, rng)) : kind === 'small' ? ['V', 'V', 'V'] : missDigits(false, rng);
-            const duration = kind === 'hit' ? f2.hit : kind === 'small' ? f2.small : f2.miss;
-            return { fig, duration, phases: [{ name: 'roll', t: duration }], digits, talk: null };
-        }
+        if (fig === 2) return plan2(config, spec, spin, rng);
 
         const hit = result.kind === 'hit';
         let type;   // 'plain' / 'fail' / 'reach'
@@ -131,6 +154,73 @@ const Scenario = (() => {
         return p;
     }
 
+    // ----- 特図2 の変動 (突破チャレンジ・RASH) -----
+    function plan2(config, spec, spin, rng) {
+        const show = config.show;
+        const f2 = config.machine.spin.fig2;
+        const { result } = spin;
+        const kind = result.kind;
+        const win = kind !== 'miss';
+        const digits = kind === 'hit' ? Array(3).fill(hitDigit(show, result, 2, rng)) : kind === 'small' ? ['V', 'V', 'V'] : missDigits(false, rng);
+        const plain = kind === 'hit' ? f2.hit : kind === 'small' ? f2.small : f2.miss;
+        const p = { fig: 2, win, digits, talk: null };
+
+        if (spin.challenge) {
+            // 突破チャレンジ: 1ラウンド目の前に登場、決着のラウンドは長く
+            const { run, index } = spin.challenge;
+            const t = run.timing;
+            p.kind = 'challenge';
+            p.round = index;
+            p.weapon = run.weapons[index] || 'fist';
+            p.final = index === run.final;
+            p.win = p.final && run.winIndex >= 0;
+            p.phases = index === 0 ? [{ name: 'cintro', t: t.intro }] : [];
+            if (index < run.final) p.phases.push({ name: 'cround', t: t.round });
+            else if (p.final) p.phases.push({ name: 'cfinal', t: t.final }, { name: 'cresult', t: t.result });
+            else p.phases.push({ name: 'roll', t: plain });
+            if (index === 0) p.reply = pickFrom(show.furukawa.challengeLines, rng);
+            if (p.win) p.defeatLine = pickFrom(show.furukawa.challengeWinLines, rng);
+        } else if (spin.rush && spin.rashMode === 'koori') {
+            // こおりRASH: 当たり・最後の保留は必ずバトル。外れでもときどき (成功率を守る割合で) バトル
+            const enemies = show.kooriRash.enemies;
+            const h2 = spec.hitRate + spec.smallRate;
+            const mass = missBattleMass(show, spec, enemies, h2);
+            const fakeRate = Math.min(1, Object.values(mass).reduce((a, x) => a + x, 0) / (1 - h2));
+            if (win || spin.isLast || result.force === 'reach' || rng() < fakeRate) {
+                const t = show.kooriRash.timing;
+                p.kind = 'rashBattle';
+                p.type = 'reach';
+                p.smallReels = true;
+                p.enemy = result.forceEnemy && enemies[result.forceEnemy] ? result.forceEnemy
+                    : weighted(win ? Object.fromEntries(Object.entries(enemies).map(([id, e]) => [id, e.hit])) : mass, rng);
+                p.enemyInfo = enemies[p.enemy];
+                p.phases = [{ name: 'roll', t: t.roll }, { name: 'battle', t: t.battle }, { name: 'result', t: t.result }];
+                const f = show.furukawa;
+                p.reply = f.replies[p.enemy] ? pickFrom(f.replies[p.enemy], rng) : null;
+                p.defeatLine = win && f.defeatLines[p.enemy] ? pickFrom(f.defeatLines[p.enemy], rng) : null;
+            } else {
+                p.kind = 'plain';
+                p.phases = [{ name: 'roll', t: plain }];
+            }
+        } else if (spin.rush && spin.rashMode === 'onioni') {
+            // おにおにRASH: 当たりのときだけ違和感 → 開眼
+            p.kind = 'onioni';
+            if (win) {
+                const t = show.onioniRash.timing;
+                p.pattern = result.forcePattern || weighted(Object.fromEntries(Object.entries(show.onioniRash.patterns).map(([id, x]) => [id, x.weight])), rng);
+                p.phases = [{ name: 'wait', t: t.wait }, { name: 'anomaly', t: t.anomaly }, { name: 'open', t: t.open }];
+            } else {
+                p.pattern = null;
+                p.phases = [{ name: 'roll', t: plain }];
+            }
+        } else {
+            p.kind = 'plain';
+            p.phases = [{ name: 'roll', t: plain }];
+        }
+        p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
+        return p;
+    }
+
     // ----- ふるカワ -----
     let lastLine = null;
     function talk(show, p, spin, rng) {
@@ -148,5 +238,5 @@ const Scenario = (() => {
         return { text, color };
     }
 
-    return { hold, plan, buttonMissRate, reachMissRate, missBattleMass };
+    return { hold, hold2, challengePlan, plan, buttonMissRate, reachMissRate, missBattleMass };
 })();
