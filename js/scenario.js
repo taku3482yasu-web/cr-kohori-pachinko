@@ -127,12 +127,14 @@ const Scenario = (() => {
         const show = config.show;
         const win = result.kind !== 'miss';
         const button = ctx.rash && win && rng() < show.rashButton.hitRate ? weighted(show.rashButton.kinds, rng) : null;
+        // 入賞時の音 + 赤いボタン (ユーザー指定 2026-10-19): RASH 中・突破チャレンジ中も、当たりの保留の voice.hitRate (60%)。外れでは鳴らない
+        const voice = ctx.rash && win && rng() < show.voice.hitRate;
         let weapon = null;
         if (ctx.challenge) {
             const weapons = show.challengeBattle.weapons;
             weapon = weighted(Object.fromEntries(Object.entries(weapons).map(([id, w]) => [id, win ? w.hit : w.miss])), rng);
         }
-        return { holdColor: 'white', button, weapon };
+        return { holdColor: 'white', button, weapon, voice };
     }
 
     // ----- 突破チャレンジのバトル -----

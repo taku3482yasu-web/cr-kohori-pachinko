@@ -60,19 +60,26 @@
 
     // ----- 台を用意する -----
     // setting: 1〜6 / settingKnown: 自分で選んだか (おまかせのときは画面に出さない)
-    function startMachine(specId, setting, settingKnown) {
+    // saved: 前回の続きのデータ (SaveData.load)。あれば台の中身・持ち玉・集計をそこから戻す
+    function startMachine(specId, setting, settingKnown, saved = null) {
         const spec = CONFIG.specs[specId];
         const board = CONFIG.settings[setting - 1];
         game.setting = setting;
-        game.machine = Machine.create(CONFIG, specId);
+        game.settingKnown = settingKnown;
+        game.specId = specId;
+        game.machine = saved ? Machine.restore(CONFIG, saved.machine) : Machine.create(CONFIG, specId);
         Machine.setSenyomi(game.machine, Customize.get('senyomi'));
         game.board = Board.build(CONFIG, board);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
-        game.spinsBase = 0;
-        game.stats = { launched: 0, launchedLeft: 0, foul: 0, foulLeft: 0, heso: 0, gate: 0, denchu: 0, attacker: 0, general: 0, warp: 0, out: 0, paid: 0, firstHits: 0 };
+        game.spinsBase = saved ? saved.spinsBase : 0;
+        game.stats = saved ? { ...saved.stats } : { launched: 0, launchedLeft: 0, foul: 0, foulLeft: 0, heso: 0, gate: 0, denchu: 0, attacker: 0, general: 0, warp: 0, out: 0, paid: 0, firstHits: 0 };
         Lcd.reset(game.machine);
         MachineButton.prompt(false);
+        if (saved) {
+            game.balls = saved.balls;
+            game.rushStartBalls = saved.rushStartBalls || 0;
+        }
         $('spec-display').textContent = `${spec.label}${settingKnown ? ` / 設定${setting}` : ''}`;
         $('debug-board').textContent = `設定${setting} (命釘 ${board.hesoWidth} / ワープ ${board.warpMinVx})`;
     }
@@ -192,6 +199,20 @@
         $('strength').textContent = game.strength;
     }
 
+    // ----- 前回の続きの保存 (数秒ごと・ページを閉じるとき) -----
+    let saveTimer = 0;
+    function saveNow() {
+        if (!game.machine || game.noSave) return;
+        SaveData.save({
+            specId: game.specId, setting: game.setting, settingKnown: game.settingKnown,
+            balls: game.balls + game.world.balls.length,   // 飛んでいる途中の玉は持ち玉に戻す
+            stats: game.stats, spinsBase: game.spinsBase, rushStartBalls: game.rushStartBalls,
+            machine: Machine.snapshot(game.machine)
+        });
+    }
+    window.addEventListener('pagehide', saveNow);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveNow(); });
+
     let last = null;
     let acc = 0;
     function frame(ts) {
@@ -210,6 +231,8 @@
             }
         } else acc = 0;
         BoardView.draw(game.view, game.world, Lcd.draw(time, game.machine));
+        saveTimer += 1;
+        if (saveTimer >= 180 && !game.paused) { saveTimer = 0; saveNow(); }   // 約3秒ごと
         MachineButton.update(time);
         updateStatus();
         requestAnimationFrame(frame);
@@ -345,6 +368,32 @@
         if (key === 'senyomi' && game.machine) Machine.setSenyomi(game.machine, value);
     });
 
+    // ----- 前回から続ける / 新しく始める -----
+    function openContinue(saved) {
+        game.paused = true;
+        const spec = CONFIG.specs[saved.specId];
+        const when = new Date(saved.savedAt);
+        const pad = n => String(n).padStart(2, '0');
+        const mode = saved.machine.rush && saved.machine.rush.active
+            ? (saved.machine.rush.challenge ? '突破チャレンジ中' : `${CONFIG.show.rash.modes[saved.machine.rashMode].name} 中`)
+            : saved.machine.bonus ? '大当たり中' : '通常時';
+        $('continue-summary').innerHTML = `${spec.label}${saved.settingKnown ? ` / 設定${saved.setting}` : ''}<br>`
+            + `持ち玉 ${saved.balls}発 / ${mode}<br>`
+            + `<span class="continue-when">${when.getMonth() + 1}/${when.getDate()} ${pad(when.getHours())}:${pad(when.getMinutes())} に保存</span>`;
+        $('continue-panel').hidden = false;
+        $('continue-yes').onclick = () => {
+            $('continue-panel').hidden = true;
+            startMachine(saved.specId, saved.setting, saved.settingKnown, saved);
+            game.paused = false;
+            Lcd.show('CONTINUE!', '#7fd3f7', time, 2);
+        };
+        $('continue-no').onclick = () => {
+            $('continue-panel').hidden = true;
+            SaveData.clear();
+            openPicker(false);
+        };
+    }
+
     // ----- 台選び -----
     // スペックと設定をボタンで選ぶ。設定の「おまかせ」は 1〜6 からランダム (画面に出さない)
     const picker = $('machine-picker');
@@ -432,7 +481,11 @@
     const firstSpec = CONFIG.specs[params.get('spec')] ? params.get('spec') : Object.keys(CONFIG.specs)[0];
     const firstSetting = Math.min(6, Math.max(1, Number(params.get('setting')) || 1));
     startMachine(firstSpec, firstSetting, params.has('setting'));
-    if (!params.has('spec')) openPicker(false);
+    // URL で台を決めたとき (確認用) は保存しない・続きも聞かない
+    game.noSave = params.has('spec');
+    const saved = game.noSave ? null : SaveData.load();
+    if (saved) openContinue(saved);
+    else if (!params.has('spec')) openPicker(false);
     if (params.has('balls')) game.balls = Number(params.get('balls'));
     const force = params.get('force');
     const forceEnemy = params.get('enemy') || undefined;

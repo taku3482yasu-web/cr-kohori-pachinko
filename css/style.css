@@ -229,6 +229,11 @@ button:hover { border-color: var(--accent); }
 .push-area .koori-button .kb-eye.kb-right { right: 22px; }
 .push-area .koori-button .kb-cheek { top: 43px; }
 
+/* 前回の続き */
+.continue-summary { text-align: center; line-height: 1.8; font-size: 15px; margin: 8px 0; }
+.continue-when { font-size: 12px; color: var(--muted); }
+.continue-actions { justify-content: center; }
+
 /* カスタマイズ */
 .customize-group { margin: 12px 0 4px; font-size: 14px; color: var(--muted); }
 .customize-row { display: grid; grid-template-columns: 7.5em 1fr; gap: 6px; align-items: center; margin: 6px 0; }

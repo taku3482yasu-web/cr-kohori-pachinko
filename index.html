@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
-    <link rel="stylesheet" href="css/style.css?v=7ef1f736">
+    <link rel="stylesheet" href="css/style.css?v=bed8e670">
 </head>
 <body>
     <main class="machine">
@@ -90,6 +90,18 @@
         </section>
     </main>
 
+    <!-- 前回から続けるか、新しく始めるか (このブラウザに保存した続き) -->
+    <div id="continue-panel" class="picker" hidden>
+        <div class="picker-box" role="dialog" aria-labelledby="continue-title">
+            <h2 id="continue-title">前回の続き</h2>
+            <p id="continue-summary" class="continue-summary"></p>
+            <div class="picker-actions continue-actions">
+                <button id="continue-no" class="small-button">新しく始める</button>
+                <button id="continue-yes" class="start-button">前回から続ける</button>
+            </div>
+        </div>
+    </div>
+
     <!-- カスタマイズ: 演出・盤面の見た目を選ぶ (当たりやすさは変わらない) -->
     <div id="customize-panel" class="picker" hidden>
         <div class="picker-box" role="dialog" aria-labelledby="customize-title">
@@ -126,15 +138,16 @@
     <script src="js/physics.js?v=a1301719"></script>
     <script src="js/sound-heso.js?v=ea2eb22a"></script>
     <script src="js/audio.js?v=8b8b3d23"></script>
-    <script src="js/scenario.js?v=bb566d99"></script>
-    <script src="js/machine.js?v=df7b7ac5"></script>
+    <script src="js/scenario.js?v=e860f780"></script>
+    <script src="js/machine.js?v=9ba6f2ac"></script>
     <script src="js/render.js?v=7ee56641"></script>
     <script src="js/figures.js?v=7b763032"></script>
     <script src="js/button.js?v=3d1b1ed5"></script>
     <script src="js/lcd-rash.js?v=669dd26c"></script>
     <script src="js/lcd-story.js?v=e954a3ad"></script>
     <script src="js/lcd.js?v=353d7f2d"></script>
+    <script src="js/save.js?v=8ec28e8e"></script>
     <script src="js/customize.js?v=09272d70"></script>
-    <script src="js/main.js?v=2323ccab"></script>
+    <script src="js/main.js?v=7a3250b4"></script>
 </body>
 </html>

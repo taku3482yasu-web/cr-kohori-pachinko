@@ -176,7 +176,7 @@ const Machine = (() => {
         if (fig === 1) Object.assign(result, Scenario.hold(m.config, m.spec, result, m.rng, m.senyomi));
         else {
             Object.assign(result, Scenario.hold2(m.config, result, { challenge: m.rush.challenge, rash: m.rush.active }, m.rng));
-            if (m.senyomi === 'none') result.button = null;
+            if (m.senyomi === 'none') { result.button = null; result.voice = false; }
         }
     }
 
@@ -335,6 +335,32 @@ const Machine = (() => {
         return 'left';
     }
 
+    // ----- 前回の続き (js/save.js) -----
+    // JSON にできる形で台の中身を取り出す (config・spec・乱数・イベントは除く)
+    function snapshot(m) {
+        const { config, spec, rng, events, ...rest } = m;
+        const data = JSON.parse(JSON.stringify(rest));
+        // 高確率ステージのきっかけの保留は「同じもの」で比べるので、何番目かを覚えておく
+        if (m.stage.hi) {
+            const list = [m.spin && m.spin.fig === 1 ? m.spin.result : null, ...m.holds[1]];
+            data.stage.hiIndex = list.indexOf(m.stage.hi.target);
+            delete data.stage.hi.target;
+        }
+        return data;
+    }
+
+    function restore(config, data, rng = Math.random) {
+        const m = create(config, data.specId, rng);
+        Object.assign(m, data, { config, spec: config.specs[data.specId], rng, events: [] });
+        if (m.stage.hi) {
+            const list = [m.spin && m.spin.fig === 1 ? m.spin.result : null, ...m.holds[1]];
+            m.stage.hi.target = list[m.stage.hiIndex] || null;
+            if (!m.stage.hi.target) m.stage.hi = null;
+            delete m.stage.hiIndex;
+        }
+        return m;
+    }
+
     // ----- デバッグ用 -----
     // 保留を1つ足す (結果を決めて)。allocNext: 'jitan' / 'normal' でその振り分けを選ぶ (null ならふつうに抽選)
     // kind: 'hit' / 'small' / 'reach' (リーチ外れ) / 'fail' (チャレンジ失敗)。options.enemy でバトルの相手、options.holdColor で保留の色
@@ -384,5 +410,5 @@ const Machine = (() => {
         }
     }
 
-    return { create, enter, update, aim, inJitan, setRashMode, setSenyomi, debugHold, debugJitan, debugChallenge };
+    return { create, enter, update, aim, inJitan, setRashMode, setSenyomi, snapshot, restore, debugHold, debugJitan, debugChallenge };
 })();
