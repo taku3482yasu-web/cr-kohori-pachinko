@@ -7,6 +7,7 @@
 //   fail      チャレンジ失敗。図柄がばらばらに止まる
 //   reach     チャレンジ成功 → 左右がそろってリーチ。バトルの相手が出てくる
 //   battle    バトル。最後に「PUSH!」(台のボタン)
+//   pursuit   追撃チャンス (plan.pursuit のときだけ)。こおりくんがもう2回攻撃して追加ダメージ
 //   result    撃破なら図柄がそろう (大当たり)、負けなら中の図柄がずれて止まる
 // 保留 (こおりくんの体の形。色つき)・ふるカワの吹き出し・大当たり・RASH の表示もここ。
 // 特図2 (突破チャレンジ・こおりRASH・おにおにRASH) は plan.kind で分ける。突破チャレンジとおにおにRASH は js/lcd-rash.js
@@ -174,7 +175,7 @@ const Lcd = (() => {
             Sound.play('hold');
             if (e.result.voice) {
                 // 入賞時の音 (録音) が鳴って、ボタンが赤く光る
-                Sound.playVoice();
+                Sound.playVoice(Boolean(e.result.kai));   // 怪の先バレは おどろおどろしい音
                 MachineButton.trigger(e.result.kai ? 'purple' : 'red', now);   // こおりRASH の怪の先バレは紫
             } else if (e.result.button) MachineButton.trigger(e.result.button, now);
         } else if (e.type === 'holdChange') {
@@ -407,9 +408,9 @@ const Lcd = (() => {
             stop[0] = r >= 0.45;
             stop[2] = r >= 0.7;
             stop[1] = r >= 0.999;
-        } else if (n === 'challenge' || n === 'battle') {
+        } else if (n === 'challenge' || n === 'battle' || n === 'pursuit') {
             big = false;
-            if (n === 'battle') stop[0] = stop[2] = true;
+            if (n !== 'challenge') stop[0] = stop[2] = true;
         } else if (n === 'fail') {
             stop[0] = local >= 0.2;
             stop[2] = local >= 0.5;
@@ -626,17 +627,38 @@ const Lcd = (() => {
                 kx = 50 + Math.sin(Math.min(1, k * 1.5) * Math.PI) * 110;
                 enemyHurt = Math.floor(now * 12) % 2 === 0 && k < 1;
                 enemyAlpha = 1 - k;
-                enemyHp = 0.4 * (1 - k);
+                enemyHp = (plan.summon ? 0 : plan.pursuit ? PURSUIT_HP : 0.4) * (1 - k);
             } else {
                 ex = 196 - Math.sin(Math.min(1, k * 1.5) * Math.PI) * 110;
                 kooriHurt = k < 1;
                 kooriDown = k >= 0.5;
                 kooriHp = 0.6 * (1 - k);
-                enemyHp = 0.4;
+                enemyHp = plan.pursuit ? PURSUIT_HP : 0.4;
             }
+        } else if (phase.name === 'pursuit') {
+            // 追撃チャンス: 「追撃チャンス！」のあと、こおりくんが2回攻撃して相手の体力を 0.4 → PURSUIT_HP に削る
+            const l = phase.local;
+            const hit = Math.floor((l - PURSUIT_START) / PURSUIT_TURN);   // 何回目の攻撃か (0, 1)
+            const inTurn = ((l - PURSUIT_START) % PURSUIT_TURN) / PURSUIT_TURN;
+            const done = Math.max(0, Math.min(2, hit + (inTurn > 0.5 ? 1 : 0)));
+            enemyHp = 0.4 - (0.4 - PURSUIT_HP) * done / 2;
+            kooriHp = 0.6;
+            if (l >= PURSUIT_START && hit < 2) {
+                kx += Math.sin(Math.min(1, inTurn * 2) * Math.PI) * 70;
+                enemyHurt = inTurn > 0.35 && inTurn < 0.65;
+                once(`pursuit${hit}`, 'attack');
+            }
+        } else if (phase.name === 'summon') {
+            // お仲間召喚: 画面が光って仲間が上から降りてくる → 相手に体当たり → 体力が 0 に (撃破確定)
+            const l = phase.local;
+            enemyHp = l < SUMMON_STRIKE ? 0.4 : 0;
+            kooriHp = 0.6;
+            enemyHurt = l >= SUMMON_STRIKE && l < SUMMON_STRIKE + 0.6 && Math.floor(now * 12) % 2 === 0;
+            if (l >= SUMMON_STRIKE) once('summonHit', 'attack');
         }
 
         if (enemyAlpha > 0) Characters.drawEnemy(ctx, plan.enemy, ex, ground, { scale, frame, hurt: enemyHurt, alpha: enemyAlpha, kai: plan.kai });
+        if (plan.summon && (phase.name === 'summon' || phase.name === 'result')) drawSummoned(now, plan, phase, ground, frame);
         if (kooriDown) {
             ctx.save();
             ctx.translate(kx + 16, ground - 8);
@@ -665,12 +687,64 @@ const Lcd = (() => {
                 ctx.fillRect(0, 0, W, H);
             }
         }
+        if (phase.name === 'pursuit') {
+            if (phase.local < PURSUIT_START + 0.2) {
+                band(62, 30, 0.6);
+                text('追撃チャンス！', W / 2, 77, 22, Math.floor(now * 8) % 2 ? '#ffe066' : '#ff3a3a');
+            } else if (phase.local >= PURSUIT_START + PURSUIT_TURN * 2) {
+                band(66, 26, 0.55);
+                text('追加ダメージ！', W / 2, 79, 20, '#ff9a3a');
+            }
+        }
+        if (phase.name === 'summon' && phase.local < 0.25) {
+            // 召喚の光
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.9 - phase.local * 3})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+        if (phase.name === 'summon' && phase.local >= 0.2 && phase.local < SUMMON_STRIKE) {
+            band(62, 30, 0.6);
+            text(phase.local < 0.9 ? 'お仲間召喚！' : `${CONFIG.show.summon.members[plan.summon]} 参上！`, W / 2, 77, 20, 'rainbow', 'center', now);
+        }
         if (phase.name === 'result' && phase.local >= 0.3 && phase.local < 0.9) {
             band(66, 26, 0.55);
             text(plan.win ? '撃破！！' : '敗北…', W / 2, 79, 22, plan.win ? '#ffe066' : '#8aa4c0');
         }
     }
     let lastTurn = -1;
+
+    // 追撃チャンス: 「追撃チャンス！」の秒 (PURSUIT_START) のあと PURSUIT_TURN 秒ごとに2回攻撃。削ったあとの相手の体力が PURSUIT_HP
+    const PURSUIT_START = 0.9, PURSUIT_TURN = 0.75, PURSUIT_HP = 0.1;
+    // お仲間召喚: 仲間が降りてくる (〜SUMMON_LAND 秒) → SUMMON_STRIKE 秒で相手に体当たり
+    const SUMMON_LAND = 0.9, SUMMON_STRIKE = 1.8;
+
+    // 変動の中で1回だけ鳴らす音 (key は変動ごと)
+    function once(key, name) {
+        if (!spinView) return;
+        if (!spinView.played) spinView.played = new Set();
+        if (spinView.played.has(key)) return;
+        spinView.played.add(key);
+        Sound.play(name);
+    }
+
+    // お仲間召喚の仲間 (やすさん・たむさん・だけさん)。こおりくんと相手のあいだに降りてきて、相手に体当たりする
+    function drawSummoned(now, plan, phase, ground, frame) {
+        const l = phase.name === 'summon' ? phase.local : Infinity;
+        const homeX = 116;
+        let x = homeX, y = ground;
+        if (l < SUMMON_LAND) y = ground - (1 - l / SUMMON_LAND) * 120;   // 上から降りてくる
+        else if (l >= SUMMON_STRIKE - 0.4 && l < SUMMON_STRIKE + 0.5) {
+            const k = (l - (SUMMON_STRIKE - 0.4)) / 0.9;
+            x = homeX + Math.sin(k * Math.PI) * 50;
+        }
+        // 足もとの光 (降りてきたところ)
+        if (l < SUMMON_STRIKE) {
+            ctx.fillStyle = rainbow(now, x);
+            ctx.globalAlpha = 0.5;
+            ctx.fillRect(x - 18, ground - 2, 36, 3);
+            ctx.globalAlpha = 1;
+        }
+        Characters.drawCompanion(ctx, plan.summon, x, y, { scale: 2, frame });
+    }
 
     // ----- 保留 (こおりくんの体の形) -----
     // color: 保留の色 ('black' は RASH 中の黒い保留) / spin: 回る保留 (RASH 中)
@@ -848,7 +922,7 @@ const Lcd = (() => {
             if (plan.kind === 'onioni') return plan.pattern === 'fullMoon' && (phase.name === 'anomaly' || phase.name === 'open') ? 'fullMoon' : 'castleHall';
             if (plan.kind === 'rashBattle') return plan.enemyInfo.map;
             if (phase.name === 'challenge') return CONFIG.show.challenges[plan.challenge].map;
-            if (phase.name === 'reach' || phase.name === 'battle' || phase.name === 'result') return CONFIG.show.battles[plan.enemy].map;
+            if (['reach', 'battle', 'pursuit', 'result'].includes(phase.name)) return CONFIG.show.battles[plan.enemy].map;
         }
         if (m.rush.active && rashMode === 'onioni' && !m.rush.challenge) return 'castleHall';
         if (Machine.inJitan(m) || m.rush.active) return 'seCastle';
@@ -864,6 +938,7 @@ const Lcd = (() => {
         if (phase.name === 'fail') Sound.play('fail');
         if (phase.name === 'reach') Sound.play('reach');
         if (phase.name === 'result' || phase.name === 'cresult') Sound.play(plan.win && !plan.revival ? 'win' : 'lose');   // 復活は一度負けて見せる
+        if (phase.name === 'pursuit' || phase.name === 'summon') Sound.play('success');
         if (phase.name === 'rvdark') Sound.play('fail');
         if (phase.name === 'rvsoredemo') Sound.play('reach');
         if (phase.name === 'rvflash') Sound.play('win');
@@ -945,7 +1020,7 @@ const Lcd = (() => {
                 RashView.drawOnioniRash(now, { pattern: null }, { name: 'roll', local: 0, t: 1 });
             }
             if (phase && phase.name === 'challenge') drawChallenge(now, plan, phase);
-            if (phase && (plan.kind === 'rashBattle' || (phase.name === 'reach' && phase.local >= 1.4) || phase.name === 'battle' || (phase.name === 'result' && phase.local < 0.6))) {
+            if (phase && (plan.kind === 'rashBattle' || (phase.name === 'reach' && phase.local >= 1.4) || phase.name === 'battle' || phase.name === 'pursuit' || (phase.name === 'result' && phase.local < 0.6))) {
                 // こおりRASH の結果は 0.6 秒から図柄を大きく出す (復活の負けの result はそのまま、撃破の rvkill も同じ)
                 const bigReels = (phase.name === 'result' && !plan.revival) || phase.name === 'rvkill';
                 if (plan.kind !== 'rashBattle' || !(bigReels && phase.local >= 0.6)) drawBattle(now, plan, phase);

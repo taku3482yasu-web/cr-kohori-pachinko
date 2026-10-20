@@ -6,10 +6,12 @@
 //   Scenario.hold2(config, result, ctx, rng)   玉が電チューに入ったとき: { holdColor, button, weapon }
 //   Scenario.challengePlan(config, holds)      突破チャレンジのバトルが始まるとき: 保留ごとの武器・決着のラウンド・時間
 //   Scenario.plan(config, spec, spin, rng)     変動が始まるとき: { kind, duration, phases, digits, enemy, win, talk, ... }
-// phases は [{ name, t }] の並び。液晶はこれを時間どおりに描く。kind (特図2):
+// phases は [{ name, t }] の並び。液晶はこれを時間どおりに描く。
+//   特図1 のリーチは roll → challenge → reach → battle → (pursuit: 追撃チャンス) → result。kind (特図2):
 //   'challenge' 突破チャレンジのバトルの1ラウンド (cintro → cround / cfinal → cresult)。おまけのラウンドは cextra → cfinal → cresult
 //   'rashBattle' こおりRASH のバトル (roll → battle → result。enemyKey: 相手 (怪は ○○Kai) / enemy: 描くキャラクター / kai: 怪の状態)
 //     revival: 復活 (result で一度負けて見せ、rvdark → rvnaitei → rvcant → rvstill → rvsoredemo → rvflash → rvkill で撃破)
+//     summon: お仲間召喚 (battle → summon → result。値は出てくる仲間の id。撃破確定)
 //   'onioni' おにおにRASH (wait → anomaly → open、外れは roll だけ)
 // =====================================================================
 
@@ -291,6 +293,12 @@ const Scenario = (() => {
                 p.enemy = result.forceEnemy || weighted(enemyWeights, rng);
                 p.phases = [{ name: 'roll', t: t.roll }, { name: 'challenge', t: t.challenge }, { name: 'reach', t: t.reach },
                     { name: 'battle', t: t.battle }, { name: 'result', t: t.result }];
+                // 追撃チャンス: PUSH のあとに追加ダメージ。当たりのバトルで出やすい (出たら成功率が上がる)
+                const pu = show.pursuit;
+                if (rng() < (hit ? pu.hitRate : pu.missRate)) {
+                    p.pursuit = true;
+                    p.phases.splice(4, 0, { name: 'pursuit', t: pu.time });
+                }
                 if (hit) p.digits = Array(3).fill(shownHitDigit(show, result, fig, rng, p));
                 else p.digits = missDigits(true, rng);
                 const f = show.furukawa;
@@ -390,6 +398,13 @@ const Scenario = (() => {
                         { name: 'rvstill', t: rt.still }, { name: 'rvsoredemo', t: rt.soredemo }, { name: 'rvflash', t: rt.flash },
                         { name: 'rvkill', t: rt.kill });
                     p.reveal = { phase: 'rvflash', at: 0.3 };
+                }
+                // お仲間召喚: 当たりのバトルだけ。仲間が現れて撃破 (確定の相手・復活では起きない)
+                const sm = show.summon;
+                if (win && !p.revival && p.enemyInfo.win < 1 && rng() < sm.rate) {
+                    p.summon = pickFrom(Object.keys(sm.members), rng);
+                    p.phases.splice(2, 0, { name: 'summon', t: sm.time });
+                    p.reveal = { phase: 'summon', at: 1.2 };
                 }
             } else {
                 p.kind = 'plain';

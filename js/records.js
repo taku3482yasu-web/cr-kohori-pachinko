@@ -77,6 +77,7 @@ const Collection = (() => {
             { id: 'anomaly', name: 'おにおにRASH の違和感', items: list(s.onioniRash.patterns) },
             { id: 'stage', name: 'ステージ', items: Object.entries(s.stages.names).map(([id, name]) => ({ id, name })) },
             { id: 'hold', name: '保留の色', items: s.holdColors.order.map(id => ({ id, name: colorNames[id] })) },
+            { id: 'summon', name: 'お仲間召喚 (こおりRASH)', items: list(s.summon.members, name => name) },
             { id: 'rashHold', name: 'RASH 中の保留', items: [{ id: 'black', name: '黒い保留' }, { id: 'spin', name: '回る保留' }] },
             { id: 'button', name: '台のボタン', items: [
                 { id: 'red', name: '赤く光る' }, { id: 'shake', name: '震える' }, { id: 'beep', name: '高い音' },
@@ -133,6 +134,7 @@ const Collection = (() => {
             if (p.type === 'reach' && p.enemy) {
                 see('battle', p.enemy);
                 if (p.win) win('battle', p.enemy);
+                if (p.win && p.pursuit) add(data.records, 'pursuitWins');
             }
             return;
         }
@@ -144,6 +146,7 @@ const Collection = (() => {
             if (p.win) win('kooriRash', key);
             if (p.win && p.kai) add(data.records, 'kaiWins');
             if (p.revival) add(data.records, 'revivals');
+            if (p.summon) see('summon', p.summon);
         } else if (p.kind === 'onioni' && p.pattern) see('anomaly', p.pattern);
         else if (p.kind === 'blackout') add(data.records, 'blackouts');
     }

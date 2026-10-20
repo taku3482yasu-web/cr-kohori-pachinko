@@ -417,6 +417,55 @@ test('復活: こおりRASH の当たりの約20%、1/99 は 900個 確定、確
     }
 });
 
+test('追撃チャンス: 通常時のバトルで出て、出たほうが勝ちやすい。相手ごとの成功率は変わらない', () => {
+    const pu = CONFIG.show.pursuit;
+    for (const { specId, log } of runs) {
+        const n = { on: [0, 0], off: [0, 0] };
+        for (const e of log.events) {
+            if (e.type !== 'spinEnd' || e.fig !== 1 || e.plan.type !== 'reach') continue;
+            const p = e.plan;
+            const names = p.phases.map(ph => ph.name).join();
+            assertEqual(names, p.pursuit ? 'roll,challenge,reach,battle,pursuit,result' : 'roll,challenge,reach,battle,result', `${specId} の追撃の流れ`);
+            const c = n[p.pursuit ? 'on' : 'off'];
+            c[0]++;
+            if (p.win) c[1]++;
+        }
+        assert(n.on[0] > 50, `${specId} で追撃チャンスが少ない (${n.on[0]})`);
+        assert(n.on[1] / n.on[0] > n.off[1] / n.off[0] + 0.2, `${specId} で追撃チャンスが出ても勝ちやすくない`);
+    }
+    // 相手ごと: 出たときの成功率 = w×hitRate ÷ (w×hitRate + (1−w)×missRate) が、出ないときより高い
+    for (const b of Object.values(CONFIG.show.battles)) {
+        if (b.win >= 1) continue;
+        const on = b.win * pu.hitRate / (b.win * pu.hitRate + (1 - b.win) * pu.missRate);
+        const off = b.win * (1 - pu.hitRate) / (b.win * (1 - pu.hitRate) + (1 - b.win) * (1 - pu.missRate));
+        assert(on > b.win && b.win > off, `${b.name} の追撃チャンスで成功率が上がらない`);
+    }
+});
+
+test('お仲間召喚: こおりRASH の当たりのバトルだけで、確定の相手・復活では起きず、3人とも出る', () => {
+    const sm = CONFIG.show.summon;
+    for (const { specId, log } of runs) {
+        let summons = 0, chances = 0, wrong = 0;
+        const members = new Set();
+        for (const e of log.events) {
+            if (e.type !== 'spinEnd' || e.plan.kind !== 'rashBattle') continue;
+            const p = e.plan;
+            if (p.win && !p.revival && p.enemyInfo.win < 1) chances++;
+            if (!p.summon) continue;
+            summons++;
+            members.add(p.summon);
+            if (!p.win || p.revival || p.enemyInfo.win >= 1 || !sm.members[p.summon]) wrong++;
+            if (p.phases.map(ph => ph.name).join() !== 'roll,battle,summon,result') wrong++;
+        }
+        assertEqual(wrong, 0, `${specId} でおかしなお仲間召喚`);
+        assert(chances > 200, `${specId} のこおりRASH の当たりのバトルが少ない (${chances})`);
+        assertBetween(summons / chances, sm.rate - 0.06, sm.rate + 0.06, `${specId} のお仲間召喚の割合`);
+        assertEqual(members.size, Object.keys(sm.members).length, `${specId} で出てこない仲間がいる`);
+    }
+    const { Characters } = base;
+    for (const id of Object.keys(sm.members)) assert(Characters.isCompanion(id), `${id} の絵がない`);
+});
+
 test('おにおにRASH: 違和感は当たりだけで全種類出て、図柄 8・9 は 1/99 で 900個 の当たりだけ', () => {
     const game = loadGame(SEED + 30);
     const { log } = run(game, 's99', 4, Math.min(HOURS, 120), 'onioni');

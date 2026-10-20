@@ -278,7 +278,11 @@ const CONFIG = {
         // 入賞時の音 (ユーザーが録音した sounds/heso.m4a。js/sound-heso.js に埋め込み): ヘソに入ったときにこの音が鳴って、台のボタンが赤く光る
         //   hitRate: 当たりの保留で鳴る割合 (占有率 60%。ユーザー指定) / reliability: ガセの量の基準 (fake 1 のとき鳴ったら当たりの割合)
         //   start〜end: 録音のうち鳴らすところ (秒。前後の無音を切った) / gain: 音量 (録音が小さめなので大きくする)
-        voice: { hitRate: 0.6, reliability: 0.4, start: 1.3, end: 3.5, gain: 4 },   // 録音の2つの音のうち長いほう (ユーザー指定)
+        //   eerie: こおりRASH の怪の先バレ音 (ユーザー指定 2026-10-20)。同じ録音を おどろおどろしくして鳴らす (js/audio.js の eerieVoice。数値は Claude が決めた)
+        //     rate: 再生の速さ (低く・ゆっくり) / second: 少し低くずらして重ねる音の速さの比 / wobble: 音の高さのゆれ (セント) / wobbleHz: ゆれの速さ
+        //     echo: こだまの間隔 (秒) / feedback: こだまの残り方 / lowpass: こもらせる周波数 (Hz) / drone: 低いうなりの周波数 (Hz。2つでうなる)
+        voice: { hitRate: 0.6, reliability: 0.4, start: 1.3, end: 3.5, gain: 4,   // 録音の2つの音のうち長いほう (ユーザー指定)
+            eerie: { rate: 0.72, second: 0.94, wobble: 40, wobbleHz: 5, echo: 0.32, feedback: 0.45, lowpass: 1600, drone: [55, 58.5] } },
 
         // 台のボタン (こおりくんの体の形)。ヘソに入ったときに 赤く光る・ぶるぶる震える・高い音 のどれかが起きる (ユーザー指定)
         // 起きたらその保留の当たりの確率が reliability (約60%) になるよう、外れのときに起きる確率を自動で計算する
@@ -356,6 +360,10 @@ const CONFIG = {
             labels: { s99: 900 },
             timing: { dark: 1.2, naitei: 1.8, cant: 2.2, still: 2.4, soredemo: 2.4, flash: 1.8, kill: 2.4 }
         },
+        // お仲間召喚 (こおりRASH のバトル。ユーザー指定 2026-10-20): バトルの途中で画面が光り、やすさん・たむさん・だけさん のだれかが現れて相手を撃破 (撃破確定)。
+        //   rate: 当たりのバトルで起きる割合 (外れでは起きない。Claude が決めた)。確定の相手 (ゴールド金面犬・アルアル) と復活では起きない
+        //   time: 召喚の場面の秒 / members: 出てくる仲間 (Characters の仲間の id と名前)
+        summon: { rate: 0.15, time: 3, members: { yasu: 'やすさん', tamu: 'たむさん', dake: 'だけさん' } },
         // ブラックアウト (RASH 中の突発当たり。こおりRASH・おにおにRASH 共通。ユーザー指定 2026-10-19)
         //   RASH 中の当たりの rate の割合で、前ぶれなく暗転 → 虹色のこおりくん → 「当たり」(虹色の文字) → 「こおりがいただいた！」で虹色にフラッシュ
         //   rate は Claude が決めた
@@ -452,6 +460,11 @@ const CONFIG = {
             naitei: { name: 'シーシャ・ナイテイ・ナイナイ', hit: 20, win: 1, map: 'goldHall' }
         },
         pushTime: 2,                 // バトルの最後の「PUSH!」でボタンを待つ時間 (秒)。押さなければそのまま進む
+        // 追撃チャンス (通常時のバトル。ユーザー指定 2026-10-20): PUSH のあとに「追撃チャンス！」で、こおりくんがもう2回攻撃して追加ダメージ。
+        //   当たりのバトルで hitRate、外れのバトルで missRate の割合で出る (Claude が決めた)。出たらそのバトルの成功率が上がる
+        //   (おかがっぱ 約5% → 約19% / ひびきまくり 約20% → 約53% / おにおに 約80% → 約95%)。相手ごとの成功率 (全体) は変わらない
+        //   time: 追撃の場面の秒 (リーチの変動がこのぶん長くなる)
+        pursuit: { hitRate: 0.45, missRate: 0.1, time: 3 },
 
         // ふるカワ (通常時の変動の始まりにしゃべる。スロット版のセリフを使う)
         //   熱さ 0〜6 (外れ 0 / チャレンジ外れ 1 / リーチ外れ 3 / 当たり 5 / 虹保留 6) ごとに出てくる確率と文字の色
@@ -600,7 +613,7 @@ const CONFIG = {
     // 実績は stat の値が value 以上になると解除 (value: 'all' はそのグループの全種類):
     //   記録 (records のキー): spins (特図1 の回転数) / hits (大当たり) / entries (RASH 突入) / bestStreak (1回の RASH の最高連チャン)
     //     / bestBalls (1回の RASH の最高出玉) / blackouts / renchan (〇G連確定) / promotes (昇格) / endings / holdChanges (保留変化)
-    //     / kaiWins (こおりRASH で怪の相手に勝った) / revivals (こおりRASH の復活)
+    //     / kaiWins (こおりRASH で怪の相手に勝った) / revivals (こおりRASH の復活) / pursuitWins (通常時のバトルで追撃チャンスから撃破)
     //   'seen:グループ' (見た種類の数) / 'seen:グループ:id' (その演出を見た回数) / 'win:グループ:id' (そのバトルに勝った回数)
     collection: {
         achievements: [
@@ -615,7 +628,10 @@ const CONFIG = {
             { id: 'goldDog', name: '黄金のワンちゃん', desc: 'こおりRASH で ゴールド金面犬 に勝つ', stat: 'win:kooriRash:goldDog', value: 1 },
             { id: 'kai', name: '怪退治', desc: 'こおりRASH で 怪 の相手に勝つ', stat: 'kaiWins', value: 1 },
             { id: 'revival', name: 'こおり生きていける', desc: 'こおりRASH でバトルに負けたあと、復活して撃破する', stat: 'revivals', value: 1 },
-            { id: 'aruaruRash', name: 'お兄さん登場', desc: 'こおりRASH で シーシャ・ナイテイ・アルアル と戦う', stat: 'seen:kooriRash:aruaru', value: 1 },
+            { id: 'pursuit', name: '追撃成功', desc: '通常時のバトルで、追撃チャンスから撃破する', stat: 'pursuitWins', value: 1 },
+            { id: 'summon', name: 'お仲間召喚', desc: 'こおりRASH で お仲間召喚 を見る', stat: 'seen:summon', value: 1 },
+            { id: 'allSummons', name: '3人そろって', desc: 'お仲間召喚で やすさん・たむさん・だけさん を全員見る', stat: 'seen:summon', value: 'all' },
+            { id: 'aruaruRash',name: 'お兄さん登場', desc: 'こおりRASH で シーシャ・ナイテイ・アルアル と戦う', stat: 'seen:kooriRash:aruaru', value: 1 },
             { id: 'blackout', name: 'ブラックアウト', desc: 'RASH 中にブラックアウトを見る', stat: 'blackouts', value: 1 },
             { id: 'renchan', name: '連チャン確定', desc: '〇G連確定 を見る', stat: 'renchan', value: 1 },
             { id: 'promote', name: '昇格', desc: '大当たりのラウンド中に図柄が昇格する', stat: 'promotes', value: 1 },

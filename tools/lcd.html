@@ -13,6 +13,8 @@
     ?force=blackout  RASH 中のブラックアウト (突発当たり)
     ?story=opening / ?story=ending  オープニング・エンディング
     ?force=rush&promote=1&fast=1  奇数の当たりを偶数で見せて、ラウンド中に昇格
+    ?force=reach&pursuit=1  通常時のバトルで追撃チャンス (force=hit で勝ち)
+    ?force=koori&hit=2&summon=1  こおりRASH のお仲間召喚
     ?force=koori&vpromote=1  小当たりを V 以外の図柄でそろえて、V入賞 → ラウンドの始めに V に昇格
     ?force=renchan&mode=onioni&fast=1  RASH の大当たり中に残り保留の当たりで「〇G連確定！」(&pos=2 で2つ目の保留。〇 は残り保留の当たりの数)
     ?force=koori&hit=3&fast=1  こおりRASH で特図2 の大当たり (3連目) → 大当たり → 「〇回目」→「〇〇RASH」
@@ -58,6 +60,8 @@
     if (params.get('fast')) CONFIG.machine.bonus.maxTime = params.get('promote') ? 8 : 0.5;
     if (params.get('promote')) CONFIG.show.promote.rate = 1;
     if (params.get('vpromote')) CONFIG.show.promote.vRate = 1;   // 小当たりを V 以外の図柄でそろえる (V入賞も自動で)
+    if (params.get('pursuit')) CONFIG.show.pursuit.hitRate = CONFIG.show.pursuit.missRate = 1;   // 通常時のバトルで必ず追撃チャンス
+    if (params.get('summon')) { CONFIG.show.summon.rate = 1; CONFIG.show.revival.share = 0; }   // こおりRASH の当たりのバトルで必ずお仲間召喚 (復活にしない)
     const m = Machine.create(CONFIG, params.get('spec') || 's99');
     const lcd = Lcd.init();
     const force = params.get('force') || 'hit';
