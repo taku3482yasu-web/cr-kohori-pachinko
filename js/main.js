@@ -73,6 +73,7 @@
         game.specId = specId;
         game.machine = saved ? Machine.restore(CONFIG, saved.machine) : Machine.create(CONFIG, specId);
         Machine.setSenyomi(game.machine, Customize.get('senyomi'));
+        Machine.setNotice(game.machine, Customize.get('notice'));
         game.board = Board.build(CONFIG, board);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
@@ -298,7 +299,8 @@
                 acc -= 1 / 60;
             }
         } else acc = 0;
-        BoardView.draw(game.view, game.world, Lcd.draw(time, game.machine));
+        const lcdCanvas = Lcd.draw(time, game.machine);
+        BoardView.draw(game.view, game.world, lcdCanvas, Lcd.gimmick(), time);
         // BGM: 台の状態で曲を変える。消音・BGM OFF・窓を開いているあいだは止める
         Bgm.play(Bgm.trackFor(game.machine, Lcd.storyPlaying()));
         Bgm.setPaused(Sound.muted || Customize.get('bgm') === 'off' || game.paused);
@@ -494,6 +496,7 @@
     Customize.onChange((key, value) => {
         if ((key === 'theme' || key === 'ball') && game.view) BoardView.redraw(game.view);
         if (key === 'senyomi' && game.machine) Machine.setSenyomi(game.machine, value);
+        if (key === 'notice' && game.machine) Machine.setNotice(game.machine, value);
     });
 
     // ----- 前回から続ける / 新しく始める -----

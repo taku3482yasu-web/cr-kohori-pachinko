@@ -79,6 +79,8 @@ const Collection = (() => {
             { id: 'hold', name: '保留の色', items: s.holdColors.order.map(id => ({ id, name: colorNames[id] })) },
             { id: 'stepUp', name: 'ステップアップ予告 (3段目の文字)', items: [{ id: 'white', name: '白' }, { id: 'red', name: '赤' }, { id: 'gold', name: '金' }] },
             { id: 'zenkaiten', name: '全回転', items: list(s.zenkaiten.kinds) },
+            { id: 'gun', name: '群予告', items: list(s.gun.kinds) },
+            { id: 'cutin', name: 'こおりカットイン', items: list(s.cutin.colors) },
             { id: 'summon', name: 'お仲間召喚 (こおりRASH)', items: list(s.summon.members, name => name) },
             { id: 'rashHold', name: 'RASH 中の保留', items: [{ id: 'black', name: '黒い保留' }, { id: 'spin', name: '回る保留' }] },
             { id: 'button', name: '台のボタン', items: [
@@ -133,6 +135,10 @@ const Collection = (() => {
             if (p.zenkaiten) see('zenkaiten', p.zenkaiten);
             if (p.stepUp && p.stepUp.step === 3) see('stepUp', p.stepUp.color);
             if (p.gizi) best('bestGizi', p.gizi + 1);
+            if (p.gun) see('gun', p.gun);
+            if (p.cutin) see('cutin', p.cutin);
+            if (p.develop) add(data.records, 'develops');
+            if (p.gimmick) add(data.records, 'gimmicks');
             if (p.challenge && p.type !== 'plain') {
                 see('challenge', p.challenge);
                 if (p.type === 'reach') win('challenge', p.challenge);

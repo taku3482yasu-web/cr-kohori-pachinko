@@ -504,6 +504,36 @@ const CONFIG = {
                 onioni: { name: 'おにおに', steps: [{ who: 'onioni', text: 'おにおにの気配…' }, { who: 'onioni', text: 'おにおにが怒った！' }, { who: 'onioni', text: 'おにおに激怒！！' }] }
             }
         },
+        // 群予告 (ユーザー指定 2026-10-20): 変動の始めにキャラの群れが画面を横切る。こおり群・おにおに群は約90%、ひびきまくり群は当たり確定 (ユーザー指定)
+        //   hit: 当たりの変動で出る割合 (Claude が決めた) / reliability: 出たら当たる割合。外れで出る割合は自動で計算する (Scenario.revealRate)
+        //   who: 群れになるキャラ / time: 横切る秒。群予告が出た外れは必ずチャレンジに入る (失敗)
+        gun: {
+            time: 2.4,
+            kinds: {
+                koori: { name: 'こおり群', who: 'koori', hit: 0.06, reliability: 0.9 },
+                onioni: { name: 'おにおに群', who: 'onioni', hit: 0.06, reliability: 0.9 },
+                hibiki: { name: 'ひびきまくり群', who: 'hibikimakuri', hit: 0.04, reliability: 1 }
+            }
+        },
+        // こおりカットイン (ユーザー指定 2026-10-20): リーチのあと、バトルの前にこおりくんのカットイン。色で期待度
+        //   赤は 80% 越え・金は約95% (ユーザー指定。青・緑と hit は Claude が決めた)。リーチの変動の中で、出たら当たる割合が reliability
+        cutin: {
+            time: 2,
+            colors: {
+                blue: { name: '青', color: '#3a8aff', hit: 0.15, reliability: 0.3 },
+                green: { name: '緑', color: '#3fdf6f', hit: 0.15, reliability: 0.5 },
+                red: { name: '赤', color: '#ff3a3a', hit: 0.2, reliability: 0.83 },
+                gold: { name: '金', color: '#ffd040', hit: 0.1, reliability: 0.95 }
+            },
+            lines: { blue: 'いくぞ！', green: 'いくぞ！！', red: '絶対勝つ！！', gold: '内定ツラヌク！！！' }
+        },
+        // 盤面の役物 (ユーザー指定 2026-10-20、数値は Claude が決めた): ふだんは液晶の枠の屋根に小さいこおりくんが座っていて、
+        //   バトルの始めに液晶の前へ落ちてきて虹色に光る (time 秒で戻る)。リーチの変動の中で、出たら当たる割合が reliability
+        gimmick: { hit: 0.25, reliability: 0.7, time: 2 },
+        // リーチの発展 (SP → SPSP。ユーザー指定 2026-10-20、数値は Claude が決めた): バトルは相手で SPリーチ / SPSPリーチ (最終決戦) に分かれる。
+        //   SPSP の相手のバトルの rate は、はじめ SPリーチ の相手 (from のどれか) が出てきて、「発展！！」(time 秒) で SPSP の相手に変わる
+        //   どの相手と戦うかは前と同じなので、成功率は変わらない (発展したら SPSP の成功率)
+        develop: { rate: 0.6, time: 2.5, from: ['okagappa', 'hibikimakuri'], sp: { okagappa: 'SP', hibikimakuri: 'SP', onioni: 'SPSP', naitei: 'SPSP' } },
         // 全回転 (プレミア。ユーザー指定 2026-10-20): 当たりの変動の rate で、チャレンジ・バトルなしに3つの図柄が同じキャラのまま回って当たる (大当たり確定)
         //   kinds: 5種類 (ユーザー指定)。figure はそろう図柄 (8 ナイナイ・9 アルアルは全回転だけの図柄)。
         //     odd / even: 奇数 (突破チャレンジへ行く当たり)・偶数の当たりで選べるか (図柄の色と出玉の振り分けを合わせる)。weight と rate は Claude が決めた
@@ -673,7 +703,7 @@ const CONFIG = {
     //   記録 (records のキー): spins (特図1 の回転数) / hits (大当たり) / entries (RASH 突入) / bestStreak (1回の RASH の最高連チャン)
     //     / bestBalls (1回の RASH の最高出玉) / blackouts / renchan (〇G連確定) / promotes (昇格) / endings / holdChanges (保留変化)
     //     / kaiWins (こおりRASH で怪の相手に勝った) / revivals (こおりRASH の復活) / pursuitWins (通常時のバトルで追撃チャンスから撃破)
-    //     / bestGizi (擬似連の最高。擬似〇連の〇) / yutimes (遊タイムに入った)
+    //     / bestGizi (擬似連の最高。擬似〇連の〇) / yutimes (遊タイムに入った) / develops (SPSP への発展) / gimmicks (盤面の役物の落下)
     //   'seen:グループ' (見た種類の数) / 'seen:グループ:id' (その演出を見た回数) / 'win:グループ:id' (そのバトルに勝った回数)
     collection: {
         achievements: [
@@ -692,6 +722,10 @@ const CONFIG = {
             { id: 'allZenkaiten', name: '全回転コンプリート', desc: '全回転を5種類ぜんぶ見る', stat: 'seen:zenkaiten', value: 'all' },
             { id: 'goldStep', name: '金の文字', desc: 'ステップアップ予告で3段目が金文字になる', stat: 'seen:stepUp:gold', value: 1 },
             { id: 'gizi4', name: '擬似4連', desc: '擬似連を4連まで続ける', stat: 'bestGizi', value: 4 },
+            { id: 'hibikiGun', name: 'ひびきまくり群', desc: 'ひびきまくり群 (当たり確定) を見る', stat: 'seen:gun:hibiki', value: 1 },
+            { id: 'goldCutin', name: '金のカットイン', desc: 'こおりカットインの金を見る', stat: 'seen:cutin:gold', value: 1 },
+            { id: 'develop', name: '最終決戦', desc: 'SPリーチから SPSPリーチ に発展する', stat: 'develops', value: 1 },
+            { id: 'gimmick', name: '役物落下', desc: '盤面の こおりくん が落ちてくるのを見る', stat: 'gimmicks', value: 1 },
             { id: 'yutime', name: '遊タイム', desc: '遊タイムに入る', stat: 'yutimes', value: 1 },
             { id: 'pursuit', name: '追撃成功', desc: '通常時のバトルで、追撃チャンスから撃破する', stat: 'pursuitWins', value: 1 },
             { id: 'summon', name: 'お仲間召喚', desc: 'こおりRASH で お仲間召喚 を見る', stat: 'seen:summon', value: 1 },

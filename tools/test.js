@@ -425,8 +425,8 @@ test('追撃チャンス: 通常時のバトルで出て、出たほうが勝ち
         for (const e of log.events) {
             if (e.type !== 'spinEnd' || e.fig !== 1 || e.plan.type !== 'reach') continue;
             const p = e.plan;
-            // ステップアップ予告・擬似連は除いて流れを見る
-            const names = p.phases.map(ph => ph.name).filter(n => n !== 'stepup' && n !== 'next').join();
+            // 予告 (ステップアップ・群)・擬似連・発展・カットインは除いて流れを見る
+            const names = p.phases.map(ph => ph.name).filter(n => !['stepup', 'gun', 'next', 'develop', 'cutin'].includes(n)).join();
             assertEqual(names, p.pursuit ? 'roll,challenge,reach,battle,pursuit,result' : 'roll,challenge,reach,battle,result', `${specId} の追撃の流れ`);
             const c = n[p.pursuit ? 'on' : 'off'];
             c[0]++;
@@ -537,6 +537,52 @@ test('擬似連: チャレンジに入る変動だけで出て、続くほど当
         const alloc = spec.firstHit.find(a => a.next === 'jitan');
         const p = game.Scenario.plan(game.CONFIG, spec, { fig: 1, result: { kind: 'hit', alloc, forceZenkaiten: null }, holdsLeft: 0, rush: false, specId: 's99' }, game.rng);
         if (p.type === 'zenkaiten' && !game.CONFIG.show.zenkaiten.kinds[p.zenkaiten].odd) throw new Error(`奇数の当たりで ${p.zenkaiten} の全回転`);
+    }
+});
+
+test('群予告・こおりカットイン・役物・発展: こおり群・おにおに群は約90%、ひびきまくり群は確定、カットインの赤は80%越え・金は約95%', () => {
+    for (const specId of ['s99', 's159']) {
+        const { CONFIG, plans } = fig1Plans(specId, 1500000, 12);
+        const count = {};
+        const add = (key, win) => { const c = count[key] || (count[key] = [0, 0]); c[0]++; if (win) c[1]++; };
+        let wrong = 0;
+        for (const p of plans) {
+            if (p.gun) { add('gun:' + p.gun, p.win); if (!p.win && p.type === 'plain') wrong++; }
+            if (p.cutin) add('cutin:' + p.cutin, p.win);
+            if (p.gimmick) add('gimmick', p.win);
+            if (p.develop) {
+                add('develop', p.win);
+                if (CONFIG.show.develop.sp[p.enemy] !== 'SPSP' || !CONFIG.show.develop.from.includes(p.develop.from)) wrong++;
+            }
+            if ((p.cutin || p.gimmick || p.develop) && p.type !== 'reach') wrong++;
+        }
+        assertEqual(wrong, 0, `${specId} でおかしな群予告・カットイン・発展`);
+        const rate = key => count[key][1] / count[key][0];
+        assertBetween(rate('gun:koori'), 0.84, 0.95, `${specId} のこおり群`);
+        assertBetween(rate('gun:onioni'), 0.84, 0.95, `${specId} のおにおに群`);
+        assertEqual(rate('gun:hibiki'), 1, `${specId} のひびきまくり群`);
+        assert(rate('cutin:red') > 0.8, `${specId} のカットインの赤が 80% 以下 (${pct(rate('cutin:red'))})`);
+        assertBetween(rate('cutin:gold'), 0.92, 0.98, `${specId} のカットインの金`);
+        assert(rate('cutin:blue') < rate('cutin:green') && rate('cutin:green') < rate('cutin:red'), `${specId} のカットインの色の順`);
+        assertBetween(rate('gimmick'), 0.6, 0.8, `${specId} の役物`);
+    }
+});
+
+test('告知のタイプ: 後告知・一発告知は通常時の演出なしで、後告知の当たりは図柄が外れの目で止まってからそろう', () => {
+    const game = loadGame(13);
+    const { CONFIG, Scenario } = game;
+    const spec = CONFIG.specs.s99;
+    for (const notice of ['post', 'oneshot']) {
+        for (let i = 0; i < 3000; i++) {
+            const hit = i % 3 === 0;
+            const result = hit ? { kind: 'hit', alloc: spec.firstHit[1] } : { kind: 'miss' };
+            const p = Scenario.plan(CONFIG, spec, { fig: 1, result, holdsLeft: 1, rush: false, notice, specId: 's99' }, game.rng);
+            if (p.challenge || p.stepUp || p.gun || p.gizi || p.zenkaiten) throw new Error(`${notice} で演出が出た`);
+            const names = p.phases.map(ph => ph.name).join();
+            const expected = hit && notice === 'post' ? 'roll,postnotice' : 'roll';
+            if (names !== expected) throw new Error(`${notice} の流れ: ${names}`);
+            if (hit && notice === 'post' && p.fakeDigits[0] === p.fakeDigits[1] && p.fakeDigits[1] === p.fakeDigits[2]) throw new Error('後告知の外れの目がそろっている');
+        }
     }
 });
 

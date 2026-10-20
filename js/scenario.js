@@ -7,8 +7,10 @@
 //   Scenario.challengePlan(config, holds)      突破チャレンジのバトルが始まるとき: 保留ごとの武器・決着のラウンド・時間
 //   Scenario.plan(config, spec, spin, rng)     変動が始まるとき: { kind, duration, phases, digits, enemy, win, talk, ... }
 // phases は [{ name, t }] の並び。液晶はこれを時間どおりに描く。
-//   特図1 のリーチは (stepup: ステップアップ予告) → roll → (next: 擬似連 × p.gizi) → challenge → reach → battle → (pursuit: 追撃チャンス) → result。
-//   全回転 (p.type 'zenkaiten'。p.zenkaiten は種類): zroll → zenkaiten → zend。kind (特図2):
+//   特図1 のリーチは (stepup: ステップアップ予告) → (gun: 群予告) → roll → (next: 擬似連 × p.gizi) → challenge → reach
+//     → (develop: SP → SPSP の発展) → (cutin: こおりカットイン) → battle (p.gimmick なら始めに盤面の役物) → (pursuit: 追撃チャンス) → result。
+//   全回転 (p.type 'zenkaiten'。p.zenkaiten は種類): zroll → zenkaiten → zend。
+//   告知のタイプ (p.notice。カスタマイズの後告知・一発告知): roll だけ。後告知の当たり (p.type 'post') は roll → postnotice。kind (特図2):
 //   'challenge' 突破チャレンジのバトルの1ラウンド (cintro → cround / cfinal → cresult)。おまけのラウンドは cextra → cfinal → cresult
 //   'rashBattle' こおりRASH のバトル (roll → battle → result。enemyKey: 相手 (怪は ○○Kai) / enemy: 描くキャラクター / kai: 怪の状態)
 //     revival: 復活 (result で一度負けて見せ、rvdark → rvnaitei → rvcant → rvstill → rvsoredemo → rvflash → rvkill で撃破)
@@ -265,11 +267,14 @@ const Scenario = (() => {
         if (fig === 2) return plan2(config, spec, spin, rng);
 
         const hit = result.kind === 'hit';
+        // 告知のタイプ (カスタマイズ。後告知・一発告知) は演出なし
+        if (!spin.rush && (spin.notice === 'post' || spin.notice === 'oneshot')) return noticePlan(config, spin, rng);
         // 全回転 (プレミア): 通常時の当たりの変動の rate
         if (hit && !spin.rush && (result.forceZenkaiten || rng() < show.zenkaiten.rate)) return zenkaitenPlan(config, spin, rng);
 
-        // ステップアップ予告 (通常時だけ)
+        // ステップアップ予告・群予告 (通常時だけ)
         const step = spin.rush ? null : stepUp(show, spec, hit, result, rng);
+        const gun = spin.rush ? null : result.forceGun || pickReveal(show.gun.kinds, spec.hitRate, hit, rng);
         let type;   // 'plain' / 'fail' / 'reach'
         if (hit || result.force === 'reach') type = 'reach';
         else if (result.force === 'fail') type = 'fail';
@@ -277,8 +282,8 @@ const Scenario = (() => {
             const r = rng();
             const reach = reachMissRate(show, spec);
             type = r < reach ? 'reach' : r < show.challengeRate ? 'fail' : 'plain';
-            // 保留変化した外れの保留・ステップアップが3段目まで行った外れは、必ずチャレンジ (失敗) に入る
-            if (type === 'plain' && (result.changed || (step && step.step === 3))) type = 'fail';
+            // 保留変化した外れの保留・ステップアップが3段目まで行った外れ・群予告の外れは、必ずチャレンジ (失敗) に入る
+            if (type === 'plain' && (result.changed || (step && step.step === 3) || gun)) type = 'fail';
         }
 
         const p = { fig, type, win: hit, talk: null };
@@ -305,6 +310,20 @@ const Scenario = (() => {
                     p.pursuit = true;
                     p.phases.splice(p.phases.length - 1, 0, { name: 'pursuit', t: pu.time });
                 }
+                // リーチの発展: SPSP の相手は、はじめ SP の相手で出てきて「発展！！」することがある
+                const dv = show.develop;
+                p.sp = dv.sp[p.enemy] || 'SP';
+                const battleAt = () => p.phases.findIndex(ph => ph.name === 'battle');
+                if (p.sp === 'SPSP' && (result.forceDevelop || rng() < dv.rate)) {
+                    p.develop = { from: pickFrom(dv.from, rng) };
+                    p.phases.splice(battleAt(), 0, { name: 'develop', t: dv.time });
+                }
+                // こおりカットイン (バトルの前) と 盤面の役物 (バトルの始め): リーチの変動の中で、出たら当たる割合が決まっている
+                const hReach = reachHitShare(show, spec);
+                p.cutin = result.forceCutin || pickReveal(show.cutin.colors, hReach, hit, rng);
+                if (p.cutin) p.phases.splice(battleAt(), 0, { name: 'cutin', t: show.cutin.time });
+                const gm = show.gimmick;
+                p.gimmick = Boolean(result.forceGimmick || rng() < (hit ? gm.hit : revealRate(gm.hit, gm.reliability, hReach)));
                 if (hit) p.digits = Array(3).fill(shownHitDigit(show, result, fig, rng, p));
                 else p.digits = missDigits(true, rng);
                 const f = show.furukawa;
@@ -321,6 +340,11 @@ const Scenario = (() => {
                 p.phases.splice(1, 0, ...Array.from({ length: n }, () => ({ name: 'next', t: g.time })));
             }
         }
+        // 群予告: 変動の始め (ステップアップ予告のあと)
+        if (gun) {
+            p.gun = gun;
+            p.phases.unshift({ name: 'gun', t: show.gun.time });
+        }
         // ステップアップ予告: 変動のいちばん始め
         if (step) {
             p.stepUp = step;
@@ -329,6 +353,49 @@ const Scenario = (() => {
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         // 通常時だけ、ふるカワが変動の始まりにしゃべる
         if (!spin.rush) p.talk = talk(show, p, spin, rng);
+        return p;
+    }
+
+    // 出たら当たる割合 (reliability) が決まっている演出の、外れの変動で出る割合。
+    //   hitShare: 当たりの変動で出る割合 / base: 出るかもしれない変動のうち当たりの割合
+    function revealRate(hitShare, reliability, base) {
+        return reliability >= 1 ? 0 : hitShare * base / (1 - base) * (1 - reliability) / reliability;
+    }
+
+    // kinds ({ id: { hit, reliability } }) から、この変動で出るものを1つ選ぶ (出ないときは null)
+    function pickReveal(kinds, base, hit, rng) {
+        let r = rng();
+        for (const [id, k] of Object.entries(kinds)) {
+            if ((r -= hit ? k.hit : revealRate(k.hit, k.reliability, base)) < 0) return id;
+        }
+        return null;
+    }
+
+    // リーチ (バトル) の変動のうち当たりの割合
+    function reachHitShare(show, spec) {
+        const h = spec.hitRate;
+        return h / (h + (1 - h) * reachMissRate(show, spec));
+    }
+
+    // 告知のタイプ (ユーザー指定 2026-10-20。カスタマイズ): 通常時の特図1 は演出なし
+    //   oneshot (一発告知): 当たりは変動の始めにボタンが虹色に光り、図柄がそろって止まる
+    //   post (後告知): 当たりは図柄がばらばらに止まったあと (postnotice)、ボタンが虹色に光って図柄がそろう
+    function noticePlan(config, spin, rng) {
+        const show = config.show;
+        const { result } = spin;
+        const hit = result.kind === 'hit';
+        const roll = show.timing.miss[Math.min(show.timing.miss.length, spin.holdsLeft + 1) - 1];
+        const p = { fig: 1, type: 'plain', win: hit, talk: null, notice: spin.notice };
+        p.phases = [{ name: 'roll', t: Math.max(roll, hit ? 3 : 0) }];
+        p.digits = hit ? Array(3).fill(hitDigit(show, result, 1, rng)) : missDigits(false, rng);
+        if (hit && spin.notice === 'post') {
+            p.type = 'post';
+            p.fakeDigits = missDigits(false, rng);
+            p.phases.push({ name: 'postnotice', t: 2.5 });
+            p.reveal = { phase: 'postnotice', at: 0.8 };
+        }
+        if (hit) { p.defeatLine = show.furukawa.congratsLine; p.defeatColor = 6; }
+        p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         return p;
     }
 
@@ -354,6 +421,7 @@ const Scenario = (() => {
     // この変動のステップアップ予告: { id, step, color, kind } (出ないときは null)
     function stepUp(show, spec, hit, result, rng) {
         const su = show.stepUp;
+        if (result.forceStepUp === 'none') return null;   // 確認用 (tools/lcd.html の stepup=none)
         let id = result.forceStepUp || null;
         if (!id) {
             const rates = stepUpRates(show, spec);
@@ -552,5 +620,5 @@ const Scenario = (() => {
         return { text, color };
     }
 
-    return { hold, hold2, challengePlan, plan, skipPoint, stepUpRates, buttonMissRate, reachMissRate, missBattleMass, kooriEnemies, kaiRate, revivalRate, newStage, stepStage, endStage, stageMap };
+    return { hold, hold2, challengePlan, plan, skipPoint, stepUpRates, revealRate, reachHitShare, buttonMissRate, reachMissRate, missBattleMass, kooriEnemies, kaiRate, revivalRate, newStage, stepStage, endStage, stageMap };
 })();

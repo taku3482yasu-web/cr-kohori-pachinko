@@ -179,8 +179,32 @@ const BoardView = (() => {
         g.restore();
     }
 
-    // lcdCanvas: 液晶の絵 (256x144)。玉と部品は view.world から
-    function draw(view, world, lcdCanvas) {
+    // 盤面の役物 (ユーザー指定 2026-10-20): ふだんは液晶の枠の屋根の上に小さいこおりくんが座っている。
+    // t (0〜1。Lcd.gimmick) のあいだ、液晶の前へ落ちてきて大きくなり、虹色に光ってぶるぶる震え、最後に屋根へ戻る
+    function drawGimmick(ctx, b, t, now) {
+        const f = b.lcdFrame;
+        const cx = (f.left + f.right) / 2;
+        const restY = f.top - 15;        // 屋根の上 (足もと)
+        const downY = b.lcd.y + b.lcd.h * 0.8;
+        let k = 0;   // 0: 屋根の上 / 1: 液晶の前
+        if (t !== null) k = t < 0.2 ? (t / 0.2) ** 2 : t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2;
+        const scale = 1 + k * 3;
+        const size = 16 * scale;
+        const shake = t !== null && t >= 0.2 && t < 0.8 ? Math.sin(now * 50) * 1.5 : 0;
+        const footY = restY + (downY - restY) * k;
+        const x = cx - size / 2 + shake;
+        const y = footY - size;
+        if (k > 0.5) {
+            // 虹色の後光
+            ctx.fillStyle = `hsla(${(now * 360) % 360}, 90%, 60%, 0.45)`;
+            ctx.fillRect(x - 8, y - 8, size + 16, size + 16);
+        }
+        ctx.imageSmoothingEnabled = false;
+        drawSprite(ctx, SPRITES.koori, 'walk1', x, y, scale);
+    }
+
+    // lcdCanvas: 液晶の絵 (256x144)。玉と部品は view.world から。gimmick: 役物の進み具合 (0〜1、動いていないときは null)
+    function draw(view, world, lcdCanvas, gimmick = null, now = 0) {
         const { ctx, board } = view;
         const b = board.config;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -191,6 +215,7 @@ const BoardView = (() => {
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(lcdCanvas, b.lcd.x, b.lcd.y, b.lcd.w, b.lcd.h);
         }
+        drawGimmick(ctx, b, gimmick, now);
 
         // 電チューの羽根・アタッカーのふた
         Object.entries(board.parts).forEach(([id, part]) => {

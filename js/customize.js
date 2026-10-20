@@ -2,7 +2,7 @@
 // カスタマイズ (演出・盤面の見た目。ユーザー指定 2026-10-19)
 // ---------------------------------------------------------------------
 // 遊ぶ人が選べる。当たりやすさ・出玉には関係しない (見た目と演出だけ)。選んだ内容はこのブラウザに保存する。
-//   演出: senyomi (先読みの量: なし / チャンス / おすすめ / 熱) / notice (告知: ふつう / 先告知) / furukawa (よくしゃべる / ふつう / しゃべらない) / vibrate (ボタンの振動) / bgm (BGM)
+//   演出: senyomi (先読みの量: なし / チャンス / おすすめ / 熱) / notice (告知: ふつう / 先告知 / 後告知 / 一発告知) / furukawa (よくしゃべる / ふつう / しゃべらない) / vibrate (ボタンの振動) / bgm (BGM)
 //   操作: skip (早送り: 台のボタンの長押し) / autoAim (打ち分け)
 //   見た目: theme (盤面の色) / ball (玉の色) / koori (こおりくんの色)
 // Customize.get('theme') で読む。Customize.onChange(fn) で変わったときに呼ばれる。
@@ -13,8 +13,9 @@ const Customize = (() => {
         senyomi: { label: '先読み', group: '演出',
             note: '大当たりのうち先読み演出 (保留の色・ボタン・SE城前/満月) が出る割合 (占有率)。なし 0% / チャンス 30% / おすすめ 50% / 熱 90%。占有率が高いほどガセが少ない',
             choices: { none: 'なし', chance: 'チャンス', recommend: 'おすすめ', hot: '熱' }, default: 'recommend' },
-        notice: { label: '告知', group: '演出', note: '先告知: 当たりの変動が始まったときにボタンが虹色に光って教えてくれる',
-            choices: { normal: 'ふつう', pre: '先告知' }, default: 'normal' },
+        notice: { label: '告知', group: '演出',
+            note: '先告知: 当たりの変動が始まったときにボタンが虹色に光る。後告知: 演出なしで、当たりは図柄がばらばらに止まったあとにボタンが虹色に光って図柄がそろう。一発告知: 演出なしで、当たりは変動の始めにボタンが虹色に光る',
+            choices: { normal: 'ふつう', pre: '先告知', post: '後告知', oneshot: '一発告知' }, default: 'normal' },
         furukawa: { label: 'ふるカワ', group: '演出', note: '',
             choices: { often: 'よくしゃべる', normal: 'ふつう', off: 'しゃべらない' }, default: 'normal' },
         vibrate: { label: 'ボタンの振動', group: '演出', note: 'スマホの本体の振動',

@@ -204,6 +204,11 @@ const Lcd = (() => {
                 say(list[Math.floor(Math.random() * list.length)], 0, now);
             }
             // 先告知: 当たりの変動が始まった瞬間にボタンが虹色、「当たり確定！」
+            // 一発告知: 当たりの変動の始めにボタンが虹色に光るだけ
+            if (e.plan.notice === 'oneshot' && e.result.kind === 'hit') {
+                MachineButton.trigger('rainbow', now);
+                Sound.play('v');
+            }
             if (Customize.get('notice') === 'pre' && e.fig === 1 && e.result.kind === 'hit') {
                 MachineButton.trigger('rainbow', now);
                 show('当たり確定！', 'rainbow', now, 1.5);
@@ -418,7 +423,9 @@ const Lcd = (() => {
             return { stop: [done, done, done], big: false };
         }
         // 特図1 の予告・擬似連・全回転: 図柄は大きく回ったまま (全回転は drawReels で同じ図柄をそろえて回す)
-        if (n === 'stepup' || n === 'next' || n === 'zroll') return { stop: [false, false, false], big: true };
+        if (n === 'stepup' || n === 'gun' || n === 'next' || n === 'zroll') return { stop: [false, false, false], big: true };
+        if (n === 'develop' || n === 'cutin') return { stop: [true, false, true], big: false };
+        if (n === 'postnotice') return { stop: [true, true, true], big: true };
         if (n === 'zenkaiten') return { stop: [false, false, false], big: true, zenkaiten: true };
         if (n === 'zend') return { stop: [true, true, true], big: true };
         if (plan.type === undefined || plan.type === 'plain') {
@@ -472,7 +479,9 @@ const Lcd = (() => {
             Figures.draw(ctx, plan.oddFigure, SMALL.xs[1], SMALL.y, SMALL.w, SMALL.h, { glow: 0.5 + 0.5 * Math.sin(now * 10) });
             return { reach: false, aligned: false, big: false };
         }
-        const digits = plan ? plan.digits : shown;
+        // 後告知の当たり: 図柄はいったん外れの目で止まり、告知のあと (postnotice の 0.8秒) にそろう
+        const fake = plan && plan.type === 'post' && phase && (phase.name === 'roll' || phase.local < 0.8);
+        const digits = plan ? (fake ? plan.fakeDigits : plan.digits) : shown;
         const state = plan ? reelState(plan, phase) : { stop: [true, true, true], big: true };
         if (state.hidden) return { reach: false, aligned: false, big: false };
         if (state.zenkaiten) return drawZenkaitenReels(now, digits[0], phase);
@@ -723,6 +732,10 @@ const Lcd = (() => {
                 plan = { ...plan, win: false };
             }
         }
+        // リーチの発展: 発展するまでは SP の相手 (plan.develop.from) を見せる
+        if (plan.develop && (phase.name === 'reach' || (phase.name === 'develop' && phase.local < DEVELOP_SWITCH))) {
+            plan = { ...plan, enemy: plan.develop.from, sp: 'SP' };
+        }
         const b = plan.enemyInfo || CONFIG.show.battles[plan.enemy];
         const frame = Math.floor(now * 4) % 2;
         const ground = 128;
@@ -734,6 +747,14 @@ const Lcd = (() => {
             ex = 196 + Math.max(0, 1 - phase.local / 0.8) * 90;           // こおりRASH: 右から入ってくる
         } else if (phase.name === 'reach') {
             ex = 196 + Math.max(0, 1 - (phase.local - 1.4) / 0.8) * 90;   // リーチのあと、右から入ってくる
+        } else if (phase.name === 'develop') {
+            // 発展: SP の相手がぶるぶる震える → 「発展！！」で光る → SPSP の相手が右から入ってくる
+            const l = phase.local;
+            if (l < DEVELOP_SWITCH) {
+                ex = 196 + Math.sin(now * 40) * 2;
+                enemyHurt = l > 0.6 && Math.floor(now * 12) % 2 === 0;
+            } else ex = 196 + Math.max(0, 1 - (l - DEVELOP_SWITCH) / 0.6) * 90;
+            once('develop', 'reach');
         } else if (phase.name === 'battle') {
             // 1.2秒ごとに攻撃しあう (偶数回目はこおりくん、奇数回目は相手)
             const pushStart = phase.t - CONFIG.show.pushTime;
@@ -802,6 +823,22 @@ const Lcd = (() => {
         // 名前の色: 確定の相手は虹、怪は紫、おにおには赤。長い名前は小さく
         const titleColor = b.win >= 1 ? 'rainbow' : plan.kai ? '#c070ff' : plan.enemy === 'onioni' ? '#ff3a3a' : '#ffffff';
         text(`VS ${b.name}`, W / 2 + 34, 40, b.name.length > 10 ? 10 : 12, titleColor, 'center', now);
+        // 通常時のバトル: SPリーチ / SPSPリーチ (最終決戦)
+        if (plan.fig === 1 && plan.sp) {
+            const spsp = plan.sp === 'SPSP';
+            text(spsp ? 'SPSPリーチ 最終決戦' : 'SPリーチ', W - 6, 9, 9, spsp ? '#ff6a3a' : '#7fd3f7', 'right');
+        }
+        if (phase.name === 'develop' && phase.local >= DEVELOP_SWITCH - 0.25) {
+            const k = phase.local - (DEVELOP_SWITCH - 0.25);
+            if (k < 0.35) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.9 - k * 2.5})`;
+                ctx.fillRect(0, 0, W, H);
+            }
+            if (k < 1.2) {
+                band(62, 30, 0.6);
+                text('発展！！', W / 2, 77, 24, 'rainbow', 'center', now);
+            }
+        }
         hpBar(90, 54, 70, kooriHp, '#7fd3f7');
         hpBar(176, 54, 70, enemyHp, '#ff6a8a');
 
@@ -842,6 +879,65 @@ const Lcd = (() => {
 
     // 追撃チャンス: 「追撃チャンス！」の秒 (PURSUIT_START) のあと PURSUIT_TURN 秒ごとに2回攻撃。削ったあとの相手の体力が PURSUIT_HP
     const PURSUIT_START = 0.9, PURSUIT_TURN = 0.75, PURSUIT_HP = 0.1;
+    // リーチの発展: この秒で SP の相手から SPSP の相手に変わる
+    const DEVELOP_SWITCH = 1.1;
+
+    // ----- 群予告 (ユーザー指定 2026-10-20): キャラの群れが右から左へ横切る -----
+    function drawGun(now, plan, phase) {
+        const g = CONFIG.show.gun.kinds[plan.gun];
+        const p = phase.local / phase.t;
+        for (let i = 0; i < 14; i++) {
+            // 列ごとに少しずつずらして、画面の右の外から左の外へ
+            const x = W + 40 - (p * (W + 120)) + (i % 5) * 26 + (i % 3) * 9;
+            const foot = 52 + (i % 4) * 26 + (i % 2) * 6;
+            drawInfoPortrait(g.who, x, foot, 24, 26, now + i * 0.2);
+        }
+        band(4, 22, 0.6);
+        text(`${g.name}！`, W / 2, 15, 16, g.reliability >= 1 ? 'rainbow' : '#ffe066', 'center', now);
+        once('gun', 'challenge');
+    }
+
+    // ----- こおりカットイン (ユーザー指定 2026-10-20): 色の帯の上に大きなこおりくんとセリフ。金はきらめく -----
+    function drawCutin(now, plan, phase) {
+        const c = CONFIG.show.cutin;
+        const color = c.colors[plan.cutin].color;
+        const slide = Math.max(0, 1 - phase.local / 0.25);
+        ctx.save();
+        ctx.translate(-slide * W, 0);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(0, 34);
+        ctx.lineTo(W, 22);
+        ctx.lineTo(W, 108);
+        ctx.lineTo(0, 120);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        if (plan.cutin === 'gold') {
+            // 金: 光の筋が流れる
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+            const sx = ((now * 220) % (W + 60)) - 30;
+            ctx.fillRect(sx, 22, 12, 98);
+        }
+        drawSprite(ctx, SPRITES.koori, 'walk1', 14, 40, 4.5);
+        fitCenter(c.lines[plan.cutin], 172, 72, 22, plan.cutin === 'gold' && Math.floor(now * 8) % 2 ? '#fff6c0' : '#ffffff', 150);
+        ctx.restore();
+        once('cutin', plan.cutin === 'gold' ? 'win' : plan.cutin === 'red' ? 'reach' : 'success');
+    }
+
+    // ----- 盤面の役物 (ユーザー指定 2026-10-20) -----
+    // 当たりの見込みが高いリーチで、バトルの始めに屋根のこおりくんが液晶の前へ落ちてくる。進み具合 (0〜1) を返す (盤面が描く。js/render.js)
+    function gimmick() {
+        const plan = spinView && spinView.plan;
+        const phase = currentPhase;
+        if (!plan || !plan.gimmick || !phase || phase.name !== 'battle') return null;
+        const t = phase.local / CONFIG.show.gimmick.time;
+        if (t >= 1) return null;
+        once('gimmick', 'hurt');
+        if (t > 0.25) once('gimmickWin', 'win');
+        return t;
+    }
     // お仲間召喚: 仲間が降りてくる (〜SUMMON_LAND 秒) → SUMMON_STRIKE 秒で相手に体当たり
     const SUMMON_LAND = 0.9, SUMMON_STRIKE = 1.8;
 
@@ -1067,7 +1163,7 @@ const Lcd = (() => {
             if (plan.kind === 'onioni') return plan.pattern === 'fullMoon' && (phase.name === 'anomaly' || phase.name === 'open') ? 'fullMoon' : 'castleHall';
             if (plan.kind === 'rashBattle') return plan.enemyInfo.map;
             if (phase.name === 'challenge') return CONFIG.show.challenges[plan.challenge].map;
-            if (['reach', 'battle', 'pursuit', 'result'].includes(phase.name)) return CONFIG.show.battles[plan.enemy].map;
+            if (['reach', 'develop', 'cutin', 'battle', 'pursuit', 'result'].includes(phase.name)) return CONFIG.show.battles[plan.enemy].map;
         }
         if (m.rush.active && rashMode === 'onioni' && !m.rush.challenge) return 'castleHall';
         if (Machine.inJitan(m) || m.rush.active) return 'seCastle';
@@ -1165,7 +1261,7 @@ const Lcd = (() => {
                 RashView.drawOnioniRash(now, { pattern: null }, { name: 'roll', local: 0, t: 1 });
             }
             if (phase && phase.name === 'challenge') drawChallenge(now, plan, phase);
-            if (phase && (plan.kind === 'rashBattle' || (phase.name === 'reach' && phase.local >= 1.4) || phase.name === 'battle' || phase.name === 'pursuit' || (phase.name === 'result' && phase.local < 0.6))) {
+            if (phase && (plan.kind === 'rashBattle' || (phase.name === 'reach' && phase.local >= 1.4) || ['develop', 'cutin', 'battle', 'pursuit'].includes(phase.name) || (phase.name === 'result' && phase.local < 0.6))) {
                 // こおりRASH の結果は 0.6 秒から図柄を大きく出す (復活の負けの result はそのまま、撃破の rvkill も同じ)
                 const bigReels = (phase.name === 'result' && !plan.revival) || phase.name === 'rvkill';
                 if (plan.kind !== 'rashBattle' || !(bigReels && phase.local >= 0.6)) drawBattle(now, plan, phase);
@@ -1181,6 +1277,13 @@ const Lcd = (() => {
             }
             const state = drawReels(now, plan, phase);
             if (phase && phase.name === 'stepup') drawStepUp(now, plan, phase);
+            if (phase && phase.name === 'gun') drawGun(now, plan, phase);
+            if (phase && phase.name === 'cutin') drawCutin(now, plan, phase);
+            // 後告知: 図柄が止まったあと、ボタンが虹色に光って図柄がそろう
+            if (phase && phase.name === 'postnotice' && phase.local >= 0.4 && !(spinView.played && spinView.played.has('postnotice'))) {
+                MachineButton.trigger('rainbow', now);
+                once('postnotice', 'win');
+            }
             if (phase && phase.name === 'next') drawNext(now, plan, phase);
             if (plan && plan.type === 'zenkaiten' && phase) drawZenkaiten(now, plan, phase);
             // 擬似連のあと (チャレンジのあいだ) は右上に「擬似〇連」
@@ -1255,7 +1358,7 @@ const Lcd = (() => {
         return canvas;
     }
 
-    return { init, reset, draw, event, aim, show, push, setChoosing, W, H,
+    return { init, reset, draw, event, aim, show, push, setChoosing, gimmick, W, H,
         playStory: (name, now) => Story.play(name, now), skipStory: () => Story.skip(),
         storyPlaying: () => Story.active() ? Story.name : null };
 })();
