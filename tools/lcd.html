@@ -19,7 +19,7 @@
     ?force=koori&hit=2&cheer=3  こおりRASH のお仲間の応援 (0〜3人)
     ?force=hit&enemy=onioni&gun=hibiki&cutin=gold&develop=1&gimmick=1&stepup=none  群予告・SPSP への発展・こおりカットイン・役物 (役物は盤面に描くので index.html で)
     ?force=hit&notice=post  告知のタイプ (post: 後告知 / oneshot: 一発告知)
-    ?force=okapipo&hit=6&oka=rainbow  おかピポRASH の当たり (lose=1 で外れ)
+    ?force=okapipo&hit=6&oka=rainbow  おかピポRASH の当たり (lose=1 で外れ。oka=gold で金色のおかがっぱ、oka=gun で告知なしのおかがっぱ群)
     ?force=reach&pursuit=1  通常時のバトルで追撃チャンス (force=hit で勝ち)
     ?force=koori&hit=2&summon=1  こおりRASH のお仲間召喚
     ?force=koori&vpromote=1  小当たりを V 以外の図柄でそろえて、V入賞 → ラウンドの始めに V に昇格
@@ -97,7 +97,7 @@
         Machine.setRashMode(m, force);
         m.holds[1].length = 0;
         Machine.debugHold(m, 2, params.get('lose') ? 'reach' : params.get('hit') ? 'hit' : 'small', null, { enemy: options.enemy, pattern: params.get('pattern') || undefined });
-        if (params.get('oka')) m.holds[2][0].forceOkaNotice = params.get('oka');   // &oka=gimmick: おかピポRASH の一発告知 (shake / voice / rainbow / gimmick)
+        if (params.get('oka')) m.holds[2][0].forceOkaNotice = params.get('oka');   // &oka=gimmick: おかピポRASH の一発告知 (gold / gun / shake / voice / rainbow / gimmick)
         if (params.get('hit')) m.rush.hits = Number(params.get('hit'));   // 何連目か
         if (params.get('rashhold')) m.holds[2].push({ kind: 'small', holdColor: 'white', rashHold: params.get('rashhold') });
         // 復活: 当たりのバトルを一度負けに見せる (1/99 は 900個 の当たりにする)

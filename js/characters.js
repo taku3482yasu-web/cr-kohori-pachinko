@@ -480,7 +480,8 @@ const Characters = (() => {
 
     // 敵を描く。(x, groundY) は足元の中央。hurt で白く光る、silhouette で黒い影、alpha で透明度
     // flip: 左右反転 (右を向く。こおりくんの味方として出すとき) / kai: 怪の状態 (目のまわりに靄、赤く光る目)
-    function drawEnemy(ctx, id, x, groundY, { scale = 2, frame = 0, hurt = false, silhouette = false, alpha = 1, flip = false, kai = false } = {}) {
+    // gold: 金色にする (色の明るさで金の濃淡に置きかえる。おかピポRASH の金色のおかがっぱ)
+    function drawEnemy(ctx, id, x, groundY, { scale = 2, frame = 0, hurt = false, silhouette = false, alpha = 1, flip = false, kai = false, gold = false } = {}) {
         const enemy = ENEMIES[id];
         if (!enemy) return;
         const left = Math.round(x - (enemy.w * scale) / 2);
@@ -490,11 +491,19 @@ const Characters = (() => {
             const fx = flip ? enemy.w - rx - rw : rx;
             const x0 = Math.round(left + fx * scale), x1 = Math.round(left + (fx + rw) * scale);
             const y0 = Math.round(top + ry * scale), y1 = Math.round(top + (ry + rh) * scale);
-            ctx.fillStyle = silhouette ? '#101018' : hurt ? '#ffffff' : color;
+            ctx.fillStyle = silhouette ? '#101018' : hurt ? '#ffffff' : gold ? goldTint(color) : color;
             ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
         }, frame);
         if (kai && KAI_EYES[id] && !silhouette) drawKai(ctx, KAI_EYES[id], enemy, left, top, scale, flip, alpha, hurt);
         ctx.globalAlpha = 1;
+    }
+
+    // 金色: 明るさ (0〜1) で金の濃淡を選ぶ
+    const GOLD_SHADES = ['#4a3200', '#8a6200', '#b88a10', '#e0b020', '#f0c830', '#ffe680', '#fff6c8'];
+    function goldTint(color) {
+        const n = parseInt(color.slice(1), 16);
+        const light = (0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255;
+        return GOLD_SHADES[Math.min(GOLD_SHADES.length - 1, Math.floor(light * GOLD_SHADES.length))];
     }
 
     // 怪: 目のまわりに紫の靄 (ゆらぐ) をかけ、その上に赤く光る目 (光のにじみ + 明るい芯)

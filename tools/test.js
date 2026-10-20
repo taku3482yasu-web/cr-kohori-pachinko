@@ -568,6 +568,57 @@ test('群予告・こおりカットイン・役物・発展: こおり群・お
     }
 });
 
+test('先読み: 出たら当たる割合が 熱 で約90%、量が多いほど高い。ガセが減るので外れで出る回数も減る', () => {
+    const game = loadGame(31);
+    const { CONFIG, Scenario } = game;
+    const kinds = ['color', 'change', 'button', 'voice', 'hiStage'];
+    const names = { color: '色が付いた保留', change: '保留変化', button: 'ボタン', voice: '入賞時の音', hiStage: '高確率ステージ' };
+    for (const specId of ['s99', 's159']) {
+        const spec = CONFIG.specs[specId];
+        const rel = {}, missShown = {};
+        for (const level of ['chance', 'recommend', 'hot']) {
+            const c = Object.fromEntries(kinds.map(k => [k, [0, 0]]));
+            let misses = 0, shownOnMiss = 0;
+            for (let i = 0; i < 600000; i++) {
+                const hit = game.rng() < spec.hitRate;
+                const r = Scenario.hold(CONFIG, spec, { kind: hit ? 'hit' : 'miss' }, game.rng, level);
+                const shown = { color: r.holdColor !== 'white', change: r.changed, button: Boolean(r.button), voice: r.voice, hiStage: r.hiStage };
+                kinds.forEach(k => { if (shown[k]) { c[k][0]++; if (hit) c[k][1]++; } });
+                if (!hit) { misses++; if (kinds.some(k => shown[k])) shownOnMiss++; }
+            }
+            rel[level] = Object.fromEntries(kinds.map(k => [k, c[k][1] / c[k][0]]));
+            missShown[level] = shownOnMiss / misses;
+            const target = CONFIG.show.senyomi.levels[level].rel;
+            kinds.forEach(k => assertBetween(rel[level][k], target - 0.06, target + 0.06, `${specId} ${level} の${names[k]}`));
+        }
+        kinds.forEach(k => assert(rel.chance[k] < rel.recommend[k] && rel.recommend[k] < rel.hot[k], `${specId} の${names[k]}が先読みの量の順に上がらない`));
+        assert(missShown.chance > missShown.recommend && missShown.recommend > missShown.hot, `${specId} の外れで出る先読みが量の順に減らない`);
+        assertBetween(rel.hot.color, 0.85, 0.95, `${specId} 熱の色が付いた保留`);
+    }
+});
+
+test('7 のリーチは当たり確定: 通常時のリーチ・こおりRASH のバトルの外れは 7 でそろえない', () => {
+    for (const specId of ['s99', 's159']) {
+        const { CONFIG, Scenario, plans } = fig1Plans(specId, 150000, 41);
+        let reachMiss = 0, wrong = 0, sevenHit = 0;
+        for (const p of plans) {
+            if (p.type !== 'reach') continue;
+            if (!p.win) { reachMiss++; if (p.digits[0] === 7 || p.digits[2] === 7) wrong++; }
+            else if (p.digits[0] === 7) sevenHit++;
+        }
+        assert(reachMiss > 300, `${specId} の外れのリーチが少ない`);
+        assert(sevenHit > 0, `${specId} で 7 の当たりのリーチが出ない`);
+        assertEqual(wrong, 0, `${specId} の通常時の 7 の外れのリーチ`);
+        const game = loadGame(42);
+        const spec = CONFIG.specs[specId];
+        for (let i = 0; i < 20000; i++) {
+            const p = game.Scenario.plan(game.CONFIG, spec, { fig: 2, result: { kind: 'miss', force: 'reach' }, holdsLeft: 1, rush: true, rashMode: 'koori', specId, rushStreak: 3 }, game.rng);
+            if (p.kind === 'rashBattle' && (p.digits[0] === 7 || p.digits[2] === 7)) wrong++;
+        }
+        assertEqual(wrong, 0, `${specId} のこおりRASH の 7 の外れのリーチ`);
+    }
+});
+
 test('おかピポRASH: 5連目から選べて、当たりだけ一発告知 → 大量発生。入ったときの先読みは出さず、RASH が終わると元のモードに戻る', () => {
     const game = loadGame(14);
     const { CONFIG, Machine, Scenario, Bgm } = game;
@@ -583,8 +634,9 @@ test('おかピポRASH: 5連目から選べて、当たりだけ一発告知 →
     Machine.setRashMode(m, 'okapipo');
     assertEqual(Bgm.trackFor(m, null), 'okapipoRash', 'おかピポRASH の曲');
     const spec = CONFIG.specs.s99;
-    const notices = new Set();
-    for (let i = 0; i < 4000; i++) {
+    const notices = {};
+    const flows = { gold: 'roll,pgold,pface', gun: 'roll,pgun,palign' };
+    for (let i = 0; i < 20000; i++) {
         const kind = i % 4 === 0 ? 'hit' : i % 4 === 1 ? 'small' : 'miss';
         const result = { kind, alloc: kind === 'miss' ? undefined : spec.rushHit[0] };
         Object.assign(result, Scenario.hold2(CONFIG, result, { rash: true, challenge: false, koori: false, okapipo: true, streak: 5, spec }, game.rng));
@@ -593,12 +645,16 @@ test('おかピポRASH: 5連目から選べて、当たりだけ一発告知 →
         assertEqual(p.kind, 'okapipo', 'おかピポRASH の変動');
         if (kind === 'miss' && (p.okaNotice || p.phases.length !== 1)) throw new Error('おかピポRASH の外れで一発告知');
         if (kind !== 'miss') {
-            if (p.phases.map(ph => ph.name).join() !== 'roll,pnotice,pipo') throw new Error('おかピポRASH の当たりの流れ');
-            notices.add(p.okaNotice);
+            const flow = CONFIG.show.okapipoRash.notices[p.okaNotice].flow;
+            if (p.phases.map(ph => ph.name).join() !== (flows[flow] || 'roll,pnotice,pipo')) throw new Error(`おかピポRASH の当たりの流れ (${p.okaNotice})`);
+            notices[p.okaNotice] = (notices[p.okaNotice] || 0) + 1;
         }
         if (p.talk) throw new Error('おかピポRASH でふるカワがしゃべった');
     }
-    assertEqual(notices.size, Object.keys(CONFIG.show.okapipoRash.notices).length, '出てこない一発告知がある');
+    assertEqual(Object.keys(notices).length, Object.keys(CONFIG.show.okapipoRash.notices).length, '出てこない一発告知がある');
+    const wins = Object.values(notices).reduce((a, x) => a + x, 0);
+    assertBetween(notices.gold / wins, 0.37, 0.43, '金色のおかがっぱの割合 (約40%)');
+    assertBetween(notices.gun / wins, 0.08, 0.12, '告知なしのおかがっぱ群の割合 (約10%)');
     // RASH が終わると元のモードに戻る
     m.rush = { active: true, hits: 6, startTime: 0, challenge: false };
     m.jitanLeft = 0;

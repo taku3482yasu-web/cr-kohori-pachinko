@@ -107,9 +107,10 @@
         <p class="note">最初は白で出て、変動が始まるときや保留が進むときに色が変わることがあります（保留変化）。保留変化したら、外れでも必ずチャレンジ演出に入ります。</p>
         <h3>台のボタン・入賞時の音</h3>
         <ul>
-            <li>ヘソに入ったとき、ボタンが <b>赤く光る / 震える / 高い音</b> が起きたら、その保留は当たり約 <span id="button-rel"></span>。<b>虹色</b>は当たり確定</li>
+            <li>ヘソに入ったとき、ボタンが <b>赤く光る / 震える / 高い音</b> が起きたら、その保留はチャンス（出たら当たる割合は先読みの量しだい: <span id="button-rel"></span>）。<b>虹色</b>は当たり確定</li>
             <li>入賞時に<b>こおりくんの声</b>が鳴ってボタンが赤く光ることがあります（チャンス）</li>
-            <li>「カスタマイズ」の先読みの量で、これらの出やすさが変わります（当たりやすさは変わりません）</li>
+            <li>「カスタマイズ」の先読みの量で、これらの出やすさが変わります（当たりやすさは変わりません）。量が多いほどガセが減って出にくくなり、保留の色・保留変化・ボタン・入賞時の音が出たら当たる割合が上がります（熱で約90%）</li>
+            <li><b>7 のリーチ</b>は当たり確定</li>
         </ul>
         <h3>変動の流れ</h3>
         <p>図柄が回る → <b>チャレンジ</b> → 成功すると <b>リーチ</b> → <b>バトル</b>。バトルに勝つと図柄がそろって大当たりです。</p>
@@ -186,8 +187,8 @@
         <p style="margin-top: 32px;"><a href="index.html" class="small-button link-button">← 台にもどる</a></p>
     </main>
 
-    <script src="js/config.js?v=679d40cf"></script>
-    <script src="js/updates.js?v=21f4e627"></script>
+    <script src="js/config.js?v=55809b0e"></script>
+    <script src="js/updates.js?v=4cc17e2b"></script>
     <script>
         (() => {
             const $ = id => document.getElementById(id);
@@ -244,7 +245,8 @@
                 const chip = id === 'rainbow' ? '<i class="chip chip-rainbow"></i>' : `<i class="chip" style="background:${s.holdColors.colors[id]}"></i>`;
                 return `${chip}${names[id]}`;
             }).join(' → ') + '。<b>虹は大当たり確定</b>';
-            $('button-rel').textContent = pct(s.button.reliability);
+            $('button-rel').textContent = Object.entries({ chance: 'チャンス', recommend: 'おすすめ', hot: '熱' })
+                .map(([id, name]) => `${name} 約${pct(s.senyomi.levels[id].rel)}`).join(' / ');
 
             // チャレンジ・バトル
             const ch = Object.values(s.challenges);

@@ -424,8 +424,8 @@ const Lcd = (() => {
             return { stop: [r >= 0.45, r >= 0.999, r >= 0.7], big: false };
         }
         if (plan.kind === 'okapipo' && plan.okaNotice) {
-            // おかピポRASH の当たり: 図柄は左上に小さく回り、おかピポ大量発生の途中でそろって大きく
-            const done = n === 'pipo' && local >= PIPO_ALIGN;
+            // おかピポRASH の当たり: 図柄は左上に小さく回り、おかピポ (顔) 大量発生の途中か、おかがっぱ群のあと (palign) でそろって大きく
+            const done = ((n === 'pipo' || n === 'pface') && local >= PIPO_ALIGN) || n === 'palign';
             return { stop: [done, done, done], big: done };
         }
         if (plan.kind === 'challenge' || (plan.kind === 'onioni' && plan.pattern)) {
@@ -939,11 +939,13 @@ const Lcd = (() => {
 
     // ----- おかピポRASH (ユーザー指定 2026-10-20) -----
     // おかピポ (おかがっぱ) が DJ をしている。当たりは一発告知 (pnotice) → おかピポが大量発生して虹色に光る (pipo)
+    // 金色のおかがっぱ (pgold) → おかがっぱの顔が大量発生 (pface) / 告知なしで おかがっぱ群 (pgun) → 図柄がそろう (palign)
     const PIPO_ALIGN = 1.6;   // pipo のこの秒で図柄がそろう
     function drawOkapipoRash(now, plan, phase) {
         const frame = Math.floor(now * 4) % 2;
         const beat = Math.floor(now * 128 / 60) % 2;   // 128BPM で光る
-        const pipo = plan && phase && phase.name === 'pipo';
+        const name = plan && phase ? phase.name : null;
+        const pipo = name === 'pipo' || name === 'pface' || name === 'palign';
         // ミラーボールの光
         for (let i = 0; i < 6; i++) {
             ctx.fillStyle = `hsla(${(i * 60 + now * 90) % 360}, 90%, 60%, ${pipo ? 0.35 : 0.18})`;
@@ -958,6 +960,15 @@ const Lcd = (() => {
         ctx.fillRect(W / 2 + 18, 108, 16, 6);
         Characters.drawEnemy(ctx, 'okagappa', W / 2, 106 + (beat ? -2 : 0), { scale: 1.8, frame });
         ['♪', '♫'].forEach((n, i) => text(n, W / 2 - 60 + i * 120, 64 + Math.sin(now * 4 + i) * 6, 12, ['#ffe066', '#4fe0ff'][i]));
+        if (name === 'pgold') return drawOkaGold(now, phase);
+        if (name === 'pgun') return drawOkaGun(now, phase);
+        if (name === 'palign') {
+            ctx.fillStyle = `hsla(${(now * 400) % 360}, 90%, 60%, ${0.45 * (1 - phase.local / phase.t)})`;
+            ctx.fillRect(0, 0, W, H);
+            once('okaAlign', 'win');
+            return;
+        }
+        if (name === 'pface') return drawOkaFaces(now, phase);
         if (!pipo) return;
         // おかピポ大量発生: 少しずつ増えて画面を埋め、虹色に光る
         const l = phase.local;
@@ -974,6 +985,84 @@ const Lcd = (() => {
             text('おかピポ大量発生！！', W / 2, 71, 18, 'rainbow', 'center', now);
         }
         once('pipo', 'win');
+    }
+
+    // おかがっぱの顔だけを描く ((x, cy) は顔の真ん中。体は切り取る)
+    function drawOkaFace(x, cy, scale, frame, gold) {
+        const top = cy - 10 * scale;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x - 16 * scale, top, 32 * scale, 19 * scale);
+        ctx.clip();
+        Characters.drawEnemy(ctx, 'okagappa', x, top + 40 * scale, { scale, frame, gold });
+        ctx.restore();
+    }
+
+    // 金色のおかがっぱ (一発告知。ユーザー指定 2026-10-20): 下から出てきて「あ～らあらあら / き～んいろだわ / very nice おかピポ」
+    const OKA_GOLD_RISE = 0.5, OKA_GOLD_LINE = 0.9;
+    function drawOkaGold(now, phase) {
+        const l = phase.local;
+        ctx.fillStyle = 'rgba(40, 24, 0, 0.88)';   // 後ろの DJ が透けないように
+        ctx.fillRect(0, 0, W, H);
+        // 金の光の筋
+        for (let i = 0; i < 10; i++) {
+            const a = now * 0.8 + i * Math.PI / 5;
+            ctx.fillStyle = `rgba(255, 214, 64, ${0.12 + 0.08 * Math.sin(now * 6 + i)})`;
+            ctx.beginPath();
+            ctx.moveTo(W / 2, 96);
+            ctx.lineTo(W / 2 + Math.cos(a) * 220, 96 + Math.sin(a) * 220);
+            ctx.lineTo(W / 2 + Math.cos(a + 0.18) * 220, 96 + Math.sin(a + 0.18) * 220);
+            ctx.fill();
+        }
+        const rise = Math.min(1, l / OKA_GOLD_RISE);
+        // 左の小さい図柄の下に出す (セリフは右側)
+        Characters.drawEnemy(ctx, 'okagappa', 60, 166 - 26 * rise + (Math.floor(now * 4) % 2 ? -1 : 0), { scale: 2.2, frame: Math.floor(now * 4) % 2, gold: true });
+        // きらきら
+        for (let i = 0; i < 8; i++) {
+            if ((Math.floor(now * 10) + i) % 3) continue;
+            text('✦', 20 + ((i * 37) % 90), 50 + ((i * 23) % 70), 8, '#fff6c0');
+        }
+        const lines = CONFIG.show.okapipoRash.goldLines;
+        lines.forEach((line, i) => {
+            if (l < OKA_GOLD_RISE + i * OKA_GOLD_LINE) return;
+            const y = 52 + i * 26;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+            ctx.fillRect(112, y - 11, W - 116, 22);
+            fitCenter(line, 112 + (W - 116) / 2, y, i === 2 ? 16 : 15, Math.floor(now * 8) % 2 ? '#ffe066' : '#fff6c0', W - 124, now);
+        });
+        once('okaGold', 'reach');
+        if (l >= OKA_GOLD_RISE + (lines.length - 1) * OKA_GOLD_LINE) once('okaGoldNice', 'success');
+    }
+
+    // おかがっぱの顔が大量発生: 少しずつ増えて画面を埋め、虹色に光る (金の顔も混ざる)
+    function drawOkaFaces(now, phase) {
+        const l = phase.local;
+        const frame = Math.floor(now * 4) % 2;
+        const count = Math.min(60, Math.floor(l * 45));
+        for (let i = 0; i < count; i++) {
+            const x = ((i * 47) % 270) - 6;
+            const y = 14 + ((i * 29) % 124) + Math.sin(now * 8 + i) * 2;
+            drawOkaFace(x, y, 0.9 + (i % 3) * 0.25, (i + frame) % 2, i % 4 === 0);
+        }
+        ctx.fillStyle = `hsla(${(now * 400) % 360}, 90%, 60%, 0.28)`;
+        ctx.fillRect(0, 0, W, H);
+        if (l < PIPO_ALIGN) {
+            band(58, 26, 0.6);
+            text('おかピポ大量発生！！', W / 2, 71, 18, 'rainbow', 'center', now);
+        }
+        once('pipo', 'win');
+    }
+
+    // おかがっぱ群 (告知なし。ユーザー指定 2026-10-20): 文字も出さずに、おかがっぱの群れが右から左へ横切る
+    function drawOkaGun(now, phase) {
+        const p = phase.local / phase.t;
+        const frame = Math.floor(now * 6) % 2;
+        for (let i = 0; i < 18; i++) {
+            const x = W + 40 - p * (W + 140) + (i % 6) * 24 + (i % 3) * 8;
+            const foot = 50 + (i % 4) * 26 + (i % 2) * 6;
+            Characters.drawEnemy(ctx, 'okagappa', x, foot, { scale: 0.85, frame: (i + frame) % 2 });
+        }
+        once('okaGun', 'challenge');
     }
 
     // おかピポRASH の一発告知: notice の 0.2秒で、ボタンが震える・先バレ音・ボタンが虹色 (役物は gimmick() が盤面に描く)

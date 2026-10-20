@@ -16,7 +16,8 @@
 //     revival: 復活 (result で一度負けて見せ、rvdark → rvnaitei → rvcant → rvstill → rvsoredemo → rvflash → rvkill で撃破)
 //     summon: お仲間召喚 (battle → summon → result。値は出てくる仲間の id。撃破確定)
 //   'onioni' おにおにRASH (wait → anomaly → open、外れは roll だけ)
-//   'okapipo' おかピポRASH (当たりは roll → pnotice (一発告知。p.okaNotice) → pipo (おかピポ大量発生)、外れは roll だけ)
+//   'okapipo' おかピポRASH (外れは roll だけ。当たりは p.okaNotice ごとに roll → pnotice (一発告知) → pipo (おかピポ大量発生)、
+//     金色のおかがっぱは roll → pgold → pface (顔が大量発生)、告知なしは roll → pgun (おかがっぱ群) → palign)
 // =====================================================================
 
 const Scenario = (() => {
@@ -33,14 +34,9 @@ const Scenario = (() => {
     const pickFrom = (list, rng) => list[Math.floor(rng() * list.length)];
 
     // ----- 保留 (玉がヘソに入ったとき) -----
-    // ボタンが起きる確率: 当たりは hitRate。外れは「起きたときに当たりの割合が reliability」になる値
-    function buttonMissRate(show, spec) {
-        const h = spec.hitRate;
-        const b = show.button;
-        return b.hitRate * h * (1 - b.reliability) / b.reliability / (1 - h);
-    }
-
-    // level: 先読みの量 (config.show.senyomi.levels のキー)。当たりは占有率 occ で先読みを出し、外れのガセは fake 倍にする
+    // level: 先読みの量 (config.show.senyomi.levels のキー)。当たりは占有率 occ で先読みを出す。
+    // 外れ (ガセ) は、先読み演出 (保留の色・保留変化・ボタン・入賞時の音・高確率ステージ) が出たときに当たる割合が rel になる量だけ出す
+    // (2026-10-20 ユーザー指定: 占有率が高いほど当たる割合が上がり、熱で約90%。ガセが減るぶん演出も出にくくなる)
     function hold(config, spec, result, rng, level = 'recommend') {
         const show = config.show;
         const sy = show.senyomi;
@@ -53,6 +49,14 @@ const Scenario = (() => {
         const kinds = hit ? { ...show.button.kinds, ...show.button.hitOnlyKinds } : show.button.kinds;
         const hi = show.stages.hi;
         const h = spec.hitRate;
+        // 当たりで出る割合 → 外れで出る割合 (出たら当たる割合が lv.rel になる値)
+        const missRate = hitShare => Math.min(1, hitShare * h * (1 - lv.rel) / lv.rel / (1 - h));
+        const rates = {
+            color: lv.occ,
+            button: lv.occ * show.button.hitRate / sy.base,
+            hiStage: lv.occ * hi.hitRate / sy.base,
+            voice: show.voice.hitRate
+        };
         let holdColor = 'white', button = null, hiStage = false, voice = false;
         if (hit) {
             // 当たり: 占有率で「先読みを出すか」を1回だけ決める。出すなら必ず色が付き、ボタン・高確率ステージはその中で
@@ -61,22 +65,20 @@ const Scenario = (() => {
                 if (rng() < show.button.hitRate / sy.base) button = weighted(kinds, rng);
                 hiStage = rng() < hi.hitRate / sy.base;
             }
-            voice = rng() < show.voice.hitRate;
+            voice = rng() < rates.voice;
         } else {
-            // 外れ (ガセ): それぞれの出る量を fake 倍
-            const total = Object.values(weights).reduce((a, x) => a + x, 0);
-            const coloredShare = Object.values(colored).reduce((a, x) => a + x, 0) / total;
-            if (rng() < Math.min(1, coloredShare * lv.fake)) holdColor = weighted(colored, rng);
-            if (rng() < buttonMissRate(show, spec) * lv.fake) button = weighted(kinds, rng);
-            hiStage = rng() < hi.hitRate * h * (1 - hi.reliability) / hi.reliability / (1 - h) * lv.fake;
-            const v = show.voice;
-            voice = rng() < v.hitRate * h * (1 - v.reliability) / v.reliability / (1 - h) * lv.fake;
+            if (rng() < missRate(rates.color)) holdColor = weighted(colored, rng);
+            if (rng() < missRate(rates.button)) button = weighted(kinds, rng);
+            hiStage = rng() < missRate(rates.hiStage);
+            voice = rng() < missRate(rates.voice);
         }
-        // 保留変化: 色が付く保留の一部は、最初は白で出して途中で変わる
+        // 保留変化: 色が付く保留の一部は、最初は白で出して途中で変わる。
+        // 外れで変わる割合は、保留変化したら当たる割合が lv.rel になる値 (色が付いた外れのうち)
         let shownColor = holdColor;
         let change = null;
         let changed = false;
-        if (holdColor !== 'white' && rng() < (hit ? sy.change.hitRate : sy.change.missRate)) {
+        const changeMiss = Math.min(1, missRate(rates.color * sy.change.hitRate) / missRate(rates.color));
+        if (holdColor !== 'white' && rng() < (hit ? sy.change.hitRate : changeMiss)) {
             shownColor = 'white';
             change = rng() < sy.change.self ? 'self' : 'next';
             changed = true;   // 保留変化した保留は、外れでも必ずチャレンジ演出に入る
@@ -250,8 +252,11 @@ const Scenario = (() => {
     const randomFigure = rng => 1 + Math.floor(rng() * 7);
 
     // reach: 左右だけそろえる (中は違う) / それ以外の外れ: 左右をそろえない
+    // 7 (こおりくん) のリーチは当たり確定 (ユーザー指定 2026-10-20) なので、外れのリーチは 7 以外でそろえる
+    const SURE_REACH = 7;
     function missDigits(reach, rng) {
-        const l = randomFigure(rng);
+        let l = randomFigure(rng);
+        while (reach && l === SURE_REACH) l = randomFigure(rng);
         let r = reach ? l : randomFigure(rng);
         while (!reach && r === l) r = randomFigure(rng);
         let c = randomFigure(rng);
@@ -480,13 +485,24 @@ const Scenario = (() => {
             p.kind = 'plain';
             p.phases = [{ name: 'roll', t: plain }];
         } else if (spin.rush && !spin.inChallenge && spin.rashMode === 'okapipo') {
-            // おかピポRASH: 当たりだけ一発告知 → おかピポ大量発生 (ブラックアウトもなし)。外れは何も起きない
+            // おかピポRASH: 当たりだけ演出 (ブラックアウトもなし)。外れは何も起きない
+            //   金色のおかがっぱ (一発告知) / 告知なしのおかがっぱ群 / 一発告知 → おかピポ大量発生
             p.kind = 'okapipo';
             if (win) {
                 const op = show.okapipoRash;
+                const t = op.timing;
                 p.okaNotice = result.forceOkaNotice || weighted(Object.fromEntries(Object.entries(op.notices).map(([id, n]) => [id, n.weight])), rng);
-                p.phases = [{ name: 'roll', t: op.timing.roll }, { name: 'pnotice', t: op.timing.notice }, { name: 'pipo', t: op.timing.pipo }];
-                p.reveal = { phase: 'pipo', at: 0.4 };
+                const flow = (op.notices[p.okaNotice] || {}).flow;
+                if (flow === 'gold') {
+                    p.phases = [{ name: 'roll', t: t.roll }, { name: 'pgold', t: t.gold }, { name: 'pface', t: t.face }];
+                    p.reveal = { phase: 'pface', at: 0.4 };
+                } else if (flow === 'gun') {
+                    p.phases = [{ name: 'roll', t: t.roll }, { name: 'pgun', t: t.gun }, { name: 'palign', t: t.align }];
+                    p.reveal = { phase: 'palign', at: 0 };
+                } else {
+                    p.phases = [{ name: 'roll', t: t.roll }, { name: 'pnotice', t: t.notice }, { name: 'pipo', t: t.pipo }];
+                    p.reveal = { phase: 'pipo', at: 0.4 };
+                }
             } else p.phases = [{ name: 'roll', t: plain }];
         } else if (spin.rush && !spin.inChallenge && win && !kaiHold && result.force !== 'revival' && (result.force === 'blackout' || rng() < bo.rate)) {
             // ブラックアウト (突発当たり): モードに関係なく
@@ -633,5 +649,5 @@ const Scenario = (() => {
         return { text, color };
     }
 
-    return { hold, hold2, challengePlan, plan, skipPoint, stepUpRates, revealRate, reachHitShare, buttonMissRate, reachMissRate, missBattleMass, kooriEnemies, kaiRate, revivalRate, newStage, stepStage, endStage, stageMap };
+    return { hold, hold2, challengePlan, plan, skipPoint, stepUpRates, revealRate, reachHitShare, reachMissRate, missBattleMass, kooriEnemies, kaiRate, revivalRate, newStage, stepStage, endStage, stageMap };
 })();
