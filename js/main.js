@@ -417,9 +417,10 @@
         const m = game.machine;
         if (Lcd.storyPlaying() === 'opening') { Lcd.skipStory(); return; }
         if (m.bonus && m.rush.active && !m.rush.challenge && m.rush.hits > 2 && rashChoice.hidden) {
-            Machine.setRashMode(m, m.rashMode === 'koori' ? 'onioni' : 'koori');
+            // 選べるモードを順に (おかピポRASH は 5連目から)
+            Machine.setRashMode(m, Machine.nextRashMode(m));
             Sound.play('push');
-            Lcd.show(`${CONFIG.show.rash.modes[m.rashMode].name}！`, m.rashMode === 'onioni' ? '#ff6a6a' : '#7fd3f7', time, 1);
+            Lcd.show(`${CONFIG.show.rash.modes[m.rashMode].name}！`, CONFIG.show.rash.modes[m.rashMode].color, time, 1);
             return;
         }
         Lcd.push(time);
@@ -436,7 +437,7 @@
         if (rashChoice.hidden) return;
         rashChoice.hidden = true;
         Lcd.setChoosing(false);
-        Lcd.show(`${CONFIG.show.rash.modes[game.machine.rashMode].name}！`, game.machine.rashMode === 'onioni' ? '#ff6a6a' : '#7fd3f7', time, 2);
+        Lcd.show(`${CONFIG.show.rash.modes[game.machine.rashMode].name}！`, CONFIG.show.rash.modes[game.machine.rashMode].color, time, 2);
     }
     function updateRashChoice() {
         rashChoice.querySelectorAll('button').forEach(b => b.classList.toggle('selected', b.dataset.mode === game.machine.rashMode));
@@ -588,7 +589,8 @@
         $('debug-button').addEventListener('click', () => MachineButton.trigger(['red', 'shake', 'beep'][Math.floor(Math.random() * 3)], time));
         $('debug-rainbow').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'hit', null, { holdColor: 'rainbow', enemy: enemy() }));
         $('debug-rash-mode').addEventListener('click', () => {
-            Machine.setRashMode(game.machine, game.machine.rashMode === 'koori' ? 'onioni' : 'koori');
+            const ids = Object.keys(CONFIG.show.rash.modes);   // デバッグ: 連チャン数に関係なく順に
+            Machine.setRashMode(game.machine, ids[(ids.indexOf(game.machine.rashMode) + 1) % ids.length]);
             $('debug-rash-mode').textContent = `RASH: ${CONFIG.show.rash.modes[game.machine.rashMode].name}`;
         });
         $('debug-rash-mode').textContent = `RASH: ${CONFIG.show.rash.modes[CONFIG.show.rash.defaultMode].name}`;

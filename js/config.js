@@ -328,8 +328,25 @@ const CONFIG = {
         rash: {
             defaultMode: 'koori',
             modes: {
-                koori: { name: 'こおりRASH', note: 'バトルで勝てば当たり' },
-                onioni: { name: 'おにおにRASH', note: 'おにおにが開眼すれば当たり' }
+                koori: { name: 'こおりRASH', note: 'バトルで勝てば当たり', color: '#7fd3f7' },
+                onioni: { name: 'おにおにRASH', note: 'おにおにが開眼すれば当たり', color: '#ff6a6a' },
+                // おかピポRASH (ユーザー指定 2026-10-20): RASH の 5連目 (minStreak) から、大当たり中のボタンの切り替えで選べる。
+                //   RASH が終わる (または次に RASH に入る) と defaultMode に戻る
+                okapipo: { name: 'おかピポRASH', note: '一発告知で当たり', color: '#ff4fa0', minStreak: 5 }
+            }
+        },
+        // おかピポRASH (ユーザー指定 2026-10-20): おかピポ (おかがっぱ) が DJ をしている。一発告知だけの RASH で、外れでは何も起きない。
+        //   当たりは変動の始め (roll のあと、notice) に一発告知 → おかピポが大量発生して虹色に光り (pipo)、図柄がそろう
+        //   notices: 一発告知の種類 (ユーザー指定。重みは Claude が決めた)。shake: ボタンが震える / voice: 先バレ音 / rainbow: ボタンが虹色 / gimmick: 盤面の役物が落ちる
+        //   おかピポRASH 中は、電チューに入ったときのボタン・先バレ音・RASH の保留・怪も出さない (一発告知だけにするため)
+        okapipoRash: {
+            timing: { roll: 0.8, notice: 1.6, pipo: 2.8 },
+            map: 'gameCenter',
+            notices: {
+                shake: { name: 'ボタンが震える', weight: 30 },
+                voice: { name: '先バレ音が鳴る', weight: 25 },
+                rainbow: { name: 'ボタンが虹色に光る', weight: 25 },
+                gimmick: { name: '役物が落ちる', weight: 20 }
             }
         },
         // こおりRASH: 当たりの保留と、最後の保留 (このあと時短も保留もない) は必ずバトル。外れでもときどきバトル (成功率から自動で計算)
@@ -722,6 +739,8 @@ const CONFIG = {
             { id: 'allZenkaiten', name: '全回転コンプリート', desc: '全回転を5種類ぜんぶ見る', stat: 'seen:zenkaiten', value: 'all' },
             { id: 'goldStep', name: '金の文字', desc: 'ステップアップ予告で3段目が金文字になる', stat: 'seen:stepUp:gold', value: 1 },
             { id: 'gizi4', name: '擬似4連', desc: '擬似連を4連まで続ける', stat: 'bestGizi', value: 4 },
+            { id: 'okapipo', name: 'おかピポ大量発生', desc: 'おかピポRASH で当たる', stat: 'seen:okapipo', value: 1 },
+            { id: 'allOkapipo', name: '一発告知マスター', desc: 'おかピポRASH の一発告知を全種類見る', stat: 'seen:okapipo', value: 'all' },
             { id: 'hibikiGun', name: 'ひびきまくり群', desc: 'ひびきまくり群 (当たり確定) を見る', stat: 'seen:gun:hibiki', value: 1 },
             { id: 'goldCutin', name: '金のカットイン', desc: 'こおりカットインの金を見る', stat: 'seen:cutin:gold', value: 1 },
             { id: 'develop', name: '最終決戦', desc: 'SPリーチから SPSPリーチ に発展する', stat: 'develops', value: 1 },

@@ -568,6 +568,44 @@ test('群予告・こおりカットイン・役物・発展: こおり群・お
     }
 });
 
+test('おかピポRASH: 5連目から選べて、当たりだけ一発告知 → 大量発生。入ったときの先読みは出さず、RASH が終わると元のモードに戻る', () => {
+    const game = loadGame(14);
+    const { CONFIG, Machine, Scenario, Bgm } = game;
+    const m = Machine.create(CONFIG, 's99', game.rng);
+    m.rush = { active: true, hits: 5, startTime: 0, challenge: false };   // 4連
+    assert(!Machine.rashModes(m).includes('okapipo'), '4連でおかピポRASH が選べる');
+    m.rush.hits = 6;   // 5連
+    assert(Machine.rashModes(m).includes('okapipo'), '5連でおかピポRASH が選べない');
+    let mode = m.rashMode;
+    const seen = new Set();
+    for (let i = 0; i < 3; i++) { mode = Machine.nextRashMode({ ...m, rashMode: mode }); seen.add(mode); }
+    assertEqual(seen.size, 3, 'ボタンの切り替えで3つのモードを順に選べない');
+    Machine.setRashMode(m, 'okapipo');
+    assertEqual(Bgm.trackFor(m, null), 'okapipoRash', 'おかピポRASH の曲');
+    const spec = CONFIG.specs.s99;
+    const notices = new Set();
+    for (let i = 0; i < 4000; i++) {
+        const kind = i % 4 === 0 ? 'hit' : i % 4 === 1 ? 'small' : 'miss';
+        const result = { kind, alloc: kind === 'miss' ? undefined : spec.rushHit[0] };
+        Object.assign(result, Scenario.hold2(CONFIG, result, { rash: true, challenge: false, koori: false, okapipo: true, streak: 5, spec }, game.rng));
+        if (result.button || result.voice || result.rashHold || result.kai) throw new Error('おかピポRASH で入ったときの先読みが出た');
+        const p = Scenario.plan(CONFIG, spec, { fig: 2, result, holdsLeft: 0, rush: true, rashMode: 'okapipo', specId: 's99', rushStreak: 5 }, game.rng);
+        assertEqual(p.kind, 'okapipo', 'おかピポRASH の変動');
+        if (kind === 'miss' && (p.okaNotice || p.phases.length !== 1)) throw new Error('おかピポRASH の外れで一発告知');
+        if (kind !== 'miss') {
+            if (p.phases.map(ph => ph.name).join() !== 'roll,pnotice,pipo') throw new Error('おかピポRASH の当たりの流れ');
+            notices.add(p.okaNotice);
+        }
+        if (p.talk) throw new Error('おかピポRASH でふるカワがしゃべった');
+    }
+    assertEqual(notices.size, Object.keys(CONFIG.show.okapipoRash.notices).length, '出てこない一発告知がある');
+    // RASH が終わると元のモードに戻る
+    m.rush = { active: true, hits: 6, startTime: 0, challenge: false };
+    m.jitanLeft = 0;
+    Machine.update(m, 0.1);
+    assert(!m.rush.active && m.rashMode === CONFIG.show.rash.defaultMode, 'RASH が終わってもおかピポRASH のまま');
+});
+
 test('告知のタイプ: 後告知・一発告知は通常時の演出なしで、後告知の当たりは図柄が外れの目で止まってからそろう', () => {
     const game = loadGame(13);
     const { CONFIG, Scenario } = game;

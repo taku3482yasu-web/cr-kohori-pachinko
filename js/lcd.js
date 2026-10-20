@@ -139,7 +139,7 @@ const Lcd = (() => {
             const pop = Math.min(1, t / 0.25);
             text(`${rashCount.count}回目`, W / 2, 66, Math.round(20 + 18 * pop), '#ffe066');
         } else {
-            text(`${rashName()}`, W / 2, 62, 24, rashMode === 'onioni' ? '#ff6a6a' : '#7fd3f7');
+            text(`${rashName()}`, W / 2, 62, 24, rashColor());
             text('継続！', W / 2, 92, 16, '#ffffff');
         }
     }
@@ -349,6 +349,7 @@ const Lcd = (() => {
 
     let rashMode = null;
     const rashName = () => CONFIG.show.rash.modes[rashMode || CONFIG.show.rash.defaultMode].name;
+    const rashColor = () => CONFIG.show.rash.modes[rashMode || CONFIG.show.rash.defaultMode].color;
 
     // 台のボタンが押された (バトルの PUSH)
     function push(now) {
@@ -417,6 +418,16 @@ const Lcd = (() => {
             return { stop, big };
         }
         if (plan.kind === 'blackout') return { stop: [false, false, false], big: false, hidden: n !== 'itadaki' || local < 1 };
+        if (plan.kind === 'okapipo' && !plan.okaNotice) {
+            // おかピポRASH の外れ: DJ が見えるよう、図柄は左上に小さく (左 45% → 右 70% → 中 100%)
+            const r = local / phase.t;
+            return { stop: [r >= 0.45, r >= 0.999, r >= 0.7], big: false };
+        }
+        if (plan.kind === 'okapipo' && plan.okaNotice) {
+            // おかピポRASH の当たり: 図柄は左上に小さく回り、おかピポ大量発生の途中でそろって大きく
+            const done = n === 'pipo' && local >= PIPO_ALIGN;
+            return { stop: [done, done, done], big: done };
+        }
         if (plan.kind === 'challenge' || (plan.kind === 'onioni' && plan.pattern)) {
             // 突破チャレンジ・おにおにRASH の当たり: 図柄は左上に小さく、最後に止まる
             const done = last && local >= phase.t - 0.5;
@@ -926,11 +937,65 @@ const Lcd = (() => {
         once('cutin', plan.cutin === 'gold' ? 'win' : plan.cutin === 'red' ? 'reach' : 'success');
     }
 
+    // ----- おかピポRASH (ユーザー指定 2026-10-20) -----
+    // おかピポ (おかがっぱ) が DJ をしている。当たりは一発告知 (pnotice) → おかピポが大量発生して虹色に光る (pipo)
+    const PIPO_ALIGN = 1.6;   // pipo のこの秒で図柄がそろう
+    function drawOkapipoRash(now, plan, phase) {
+        const frame = Math.floor(now * 4) % 2;
+        const beat = Math.floor(now * 128 / 60) % 2;   // 128BPM で光る
+        const pipo = plan && phase && phase.name === 'pipo';
+        // ミラーボールの光
+        for (let i = 0; i < 6; i++) {
+            ctx.fillStyle = `hsla(${(i * 60 + now * 90) % 360}, 90%, 60%, ${pipo ? 0.35 : 0.18})`;
+            const x = (Math.sin(now * 1.3 + i) * 0.5 + 0.5) * W;
+            ctx.fillRect(x - 10, 0, 20, H);
+        }
+        // DJ ブース
+        ctx.fillStyle = '#2a2a3a';
+        ctx.fillRect(W / 2 - 40, 104, 80, 22);
+        ctx.fillStyle = beat ? '#ff4fa0' : '#4fe0ff';
+        ctx.fillRect(W / 2 - 34, 108, 16, 6);
+        ctx.fillRect(W / 2 + 18, 108, 16, 6);
+        Characters.drawEnemy(ctx, 'okagappa', W / 2, 106 + (beat ? -2 : 0), { scale: 1.8, frame });
+        ['♪', '♫'].forEach((n, i) => text(n, W / 2 - 60 + i * 120, 64 + Math.sin(now * 4 + i) * 6, 12, ['#ffe066', '#4fe0ff'][i]));
+        if (!pipo) return;
+        // おかピポ大量発生: 少しずつ増えて画面を埋め、虹色に光る
+        const l = phase.local;
+        const count = Math.min(40, Math.floor(l * 30));
+        for (let i = 0; i < count; i++) {
+            const x = ((i * 53) % 260) - 2;
+            const y = 40 + ((i * 37) % 100) + Math.sin(now * 8 + i) * 2;
+            Characters.drawEnemy(ctx, 'okagappa', x, y, { scale: 0.9, frame: (i + frame) % 2 });
+        }
+        ctx.fillStyle = `hsla(${(now * 400) % 360}, 90%, 60%, 0.3)`;
+        ctx.fillRect(0, 0, W, H);
+        if (l < PIPO_ALIGN) {
+            band(58, 26, 0.6);
+            text('おかピポ大量発生！！', W / 2, 71, 18, 'rainbow', 'center', now);
+        }
+        once('pipo', 'win');
+    }
+
+    // おかピポRASH の一発告知: notice の 0.2秒で、ボタンが震える・先バレ音・ボタンが虹色 (役物は gimmick() が盤面に描く)
+    function okapipoNotice(now, plan, phase) {
+        if (phase.name !== 'pnotice' || phase.local < 0.2 || (spinView.played && spinView.played.has('okaNotice'))) return;
+        spinView.played = spinView.played || new Set();
+        spinView.played.add('okaNotice');
+        if (plan.okaNotice === 'shake') MachineButton.trigger('shake', now);
+        else if (plan.okaNotice === 'voice') Sound.playVoice();
+        else if (plan.okaNotice === 'rainbow') { MachineButton.trigger('rainbow', now); Sound.play('v'); }
+    }
+
     // ----- 盤面の役物 (ユーザー指定 2026-10-20) -----
     // 当たりの見込みが高いリーチで、バトルの始めに屋根のこおりくんが液晶の前へ落ちてくる。進み具合 (0〜1) を返す (盤面が描く。js/render.js)
+    // おかピポRASH の一発告知 (役物) では、一発告知の場面 (pnotice) で落ちてくる
     function gimmick() {
         const plan = spinView && spinView.plan;
         const phase = currentPhase;
+        if (plan && plan.okaNotice === 'gimmick' && phase && phase.name === 'pnotice') {
+            once('gimmick', 'hurt');
+            return Math.min(0.99, phase.local / phase.t);
+        }
         if (!plan || !plan.gimmick || !phase || phase.name !== 'battle') return null;
         const t = phase.local / CONFIG.show.gimmick.time;
         if (t >= 1) return null;
@@ -1076,7 +1141,10 @@ const Lcd = (() => {
         // RASH の2回目からは、ラウンド中にボタンで切り替え
         if (!choosing && m.rush.active && !m.rush.challenge && m.rush.hits > 2) {
             band(118, 16, 0.6);
-            text(`ボタンで切り替え: ${rashName()}`, W / 2, 126, 10, rashMode === 'onioni' ? '#ff6a6a' : '#7fd3f7');
+            text(`ボタンで切り替え: ${rashName()}`, W / 2, 126, 10, rashColor());
+            // おかピポRASH が選べるようになった (5連目から)
+            const okapipo = CONFIG.show.rash.modes.okapipo;
+            if (m.rush.hits - 1 >= okapipo.minStreak && rashMode !== 'okapipo') text(`${okapipo.name} 解禁！`, W - 6, 112, 9, 'rainbow', 'right', now);
         }
         if (choosing) {
             band(90, 36, 0.75);
@@ -1166,6 +1234,7 @@ const Lcd = (() => {
             if (['reach', 'develop', 'cutin', 'battle', 'pursuit', 'result'].includes(phase.name)) return CONFIG.show.battles[plan.enemy].map;
         }
         if (m.rush.active && rashMode === 'onioni' && !m.rush.challenge) return 'castleHall';
+        if (m.rush.active && rashMode === 'okapipo' && !m.rush.challenge) return CONFIG.show.okapipoRash.map;
         if (Machine.inJitan(m) || m.rush.active) return 'seCastle';
         return Scenario.stageMap(m.stage);
     }
@@ -1256,6 +1325,10 @@ const Lcd = (() => {
             if (plan && plan.kind === 'blackout') RashView.drawBlackout(now, plan, phase);
             else if (plan && plan.kind === 'challenge' && phase.name !== 'roll') RashView.drawChallenge(now, plan, phase, m, spinView);
             else if (plan && plan.kind === 'onioni' && plan.pattern) RashView.drawOnioniRash(now, plan, phase);
+            else if (m.rush.active && !m.rush.challenge && rashMode === 'okapipo' && (!plan || plan.kind === 'okapipo' || plan.kind === 'plain')) {
+                drawOkapipoRash(now, plan, phase);
+                if (plan && plan.okaNotice && phase) okapipoNotice(now, plan, phase);
+            }
             else if (m.rush.active && !m.rush.challenge && rashMode === 'onioni' && (!plan || (plan.kind !== 'rashBattle' && plan.kind !== 'blackout'))) {
                 // おにおにRASH の外れ: 眠っているおにおに
                 RashView.drawOnioniRash(now, { pattern: null }, { name: 'roll', local: 0, t: 1 });

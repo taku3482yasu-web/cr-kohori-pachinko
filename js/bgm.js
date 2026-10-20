@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------
 // 曲は 8分音符単位の音名の並び。'.' は休符。メロディ (矩形波) とベース (三角波) の2パート。
 // 先の音を少しずつ予約して鳴らすので、画面の描画が重くてもテンポがずれにくい。
-// 曲は台の状態で決める (Bgm.trackFor)。通常時・チャンスステージ (SE城前・満月)・突破チャレンジ・こおりRASH (疾走感)・
+// 曲は台の状態で決める (Bgm.trackFor)。通常時・チャンスステージ (SE城前・満月)・突破チャレンジ・こおりRASH (疾走感)・おかピポRASH (DJ)・
 // おにおにRASH (威圧感)・怪 (おどろおどろしい)・大当たり中。
 // 「音: OFF」とカスタマイズの「BGM: OFF」で消える。窓を開いているあいだは止める。
 // 曲のうち normal・seCastle・challenge・bonus はスロット版の曲 (field・castle・battle・super)。fullMoon・kooriRash・onioniRash・kai は新しく作った (2026-10-20 ユーザー指定)
@@ -90,6 +90,22 @@ const BGM_TRACKS = {
             'C2', 'C3', 'D2', 'D3', 'B1', 'B2', 'B1', 'B2'
         ]
     },
+    // おかピポRASH: おかピポの DJ (ユーザー指定 2026-10-20。曲は Claude が作った)。128BPM の4つ打ちのベースに、跳ねるシンセのフレーズ
+    okapipoRash: {
+        bpm: 128,
+        melody: [
+            'A5', '.', 'C6', 'A5', 'E6', '.', 'D6', 'C6',
+            'A5', '.', 'C6', 'A5', 'G5', '.', 'E5', '.',
+            'A5', '.', 'C6', 'A5', 'E6', '.', 'G6', 'E6',
+            'D6', 'C6', 'A5', 'G5', 'A5', '.', 'A5', '.'
+        ],
+        bass: [
+            'A2', 'A3', 'A2', 'A3', 'A2', 'A3', 'A2', 'A3',
+            'F2', 'F3', 'F2', 'F3', 'G2', 'G3', 'G2', 'G3',
+            'A2', 'A3', 'A2', 'A3', 'A2', 'A3', 'A2', 'A3',
+            'F2', 'F3', 'G2', 'G3', 'E2', 'E3', 'E2', 'E3'
+        ]
+    },
     // おにおにRASH: 威圧感 (遅いテンポ・低い音。重いベースを刻み、半音でぶつける)
     onioniRash: {
         bpm: 84,
@@ -161,7 +177,7 @@ const Bgm = (() => {
         if (m.bonus) return 'bonus';
         if (m.rush.active && m.rush.challenge) return 'challenge';
         if (m.yutime) return 'kooriRash';   // 遊タイム: 疾走感の曲 (2026-10-20)
-        if (m.rush.active) return kaiNow(m) ? 'kai' : m.rashMode === 'onioni' ? 'onioniRash' : 'kooriRash';
+        if (m.rush.active) return kaiNow(m) ? 'kai' : m.rashMode === 'onioni' ? 'onioniRash' : m.rashMode === 'okapipo' ? 'okapipoRash' : 'kooriRash';
         if (m.stage.hi) return m.stage.hi.id === 'fullMoon' ? 'fullMoon' : 'seCastle';   // チャンスステージは、そのステージの曲
         return 'normal';
     }

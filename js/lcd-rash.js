@@ -482,7 +482,7 @@ const RashView = (() => {
     }
 
     // ----- 〇G連確定 (RASH 中の大当たりのラウンド中。残り保留に当たりがあるとき) -----
-    // 暗転 → こおりRASH ならこおりくん、おにおにRASH ならおにおにが虹色に光る →「〇G連確定！」
+    // 暗転 → こおりRASH ならこおりくん、おにおにRASH ならおにおに、おかピポRASH ならおかピポが虹色に光る →「〇G連確定！」
     function drawRenchan(now, t, games, mode) {
         const { ctx, W, H, text } = kit;
         ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, t / 0.3)})`;
@@ -494,6 +494,7 @@ const RashView = (() => {
         ctx.arc(W / 2, 74, 46, 0, Math.PI * 2);
         ctx.fill();
         if (mode === 'onioni') drawOnioni(W / 2, 112, 1.6, { eyesOpen: true, glow: true, rainbow: true, now });
+        else if (mode === 'okapipo') Characters.drawEnemy(ctx, 'okagappa', W / 2, 112, { scale: 2.4, frame: Math.floor(now * 4) % 2 });   // おかピポRASH: おかピポ
         else rainbowKoori(W / 2, 108, 3.4, now);
         if (t > 1.1) {
             kit.band(116, 26, 0.6);

@@ -16,6 +16,7 @@
 //     revival: 復活 (result で一度負けて見せ、rvdark → rvnaitei → rvcant → rvstill → rvsoredemo → rvflash → rvkill で撃破)
 //     summon: お仲間召喚 (battle → summon → result。値は出てくる仲間の id。撃破確定)
 //   'onioni' おにおにRASH (wait → anomaly → open、外れは roll だけ)
+//   'okapipo' おかピポRASH (当たりは roll → pnotice (一発告知。p.okaNotice) → pipo (おかピポ大量発生)、外れは roll だけ)
 // =====================================================================
 
 const Scenario = (() => {
@@ -140,6 +141,8 @@ const Scenario = (() => {
     // RASH 中・突破チャレンジ中: 当たりの保留の rashButton.hitRate でボタン (外れでは起きない)。突破チャレンジ中は武器も決める
     function hold2(config, result, ctx, rng) {
         const show = config.show;
+        // おかピポRASH: 一発告知だけにするので、入ったときは何も出さない
+        if (ctx.okapipo && ctx.rash && !ctx.challenge) return { holdColor: 'white', button: null, weapon: null, voice: false, rashHold: null, kai: false };
         const win = result.kind !== 'miss';
         const button = ctx.rash && win && rng() < show.rashButton.hitRate ? weighted(show.rashButton.kinds, rng) : null;
         // 入賞時の音 + 赤いボタン (ユーザー指定 2026-10-19): RASH 中・突破チャレンジ中も、当たりの保留の voice.hitRate (60%)。外れでは鳴らない
@@ -476,6 +479,15 @@ const Scenario = (() => {
             // 遊タイム: 演出なし (当たれば RASH 突入。液晶は遊タイムの表示)
             p.kind = 'plain';
             p.phases = [{ name: 'roll', t: plain }];
+        } else if (spin.rush && !spin.inChallenge && spin.rashMode === 'okapipo') {
+            // おかピポRASH: 当たりだけ一発告知 → おかピポ大量発生 (ブラックアウトもなし)。外れは何も起きない
+            p.kind = 'okapipo';
+            if (win) {
+                const op = show.okapipoRash;
+                p.okaNotice = result.forceOkaNotice || weighted(Object.fromEntries(Object.entries(op.notices).map(([id, n]) => [id, n.weight])), rng);
+                p.phases = [{ name: 'roll', t: op.timing.roll }, { name: 'pnotice', t: op.timing.notice }, { name: 'pipo', t: op.timing.pipo }];
+                p.reveal = { phase: 'pipo', at: 0.4 };
+            } else p.phases = [{ name: 'roll', t: plain }];
         } else if (spin.rush && !spin.inChallenge && win && !kaiHold && result.force !== 'revival' && (result.force === 'blackout' || rng() < bo.rate)) {
             // ブラックアウト (突発当たり): モードに関係なく
             p.kind = 'blackout';
@@ -586,7 +598,8 @@ const Scenario = (() => {
         }
         // RASH 中・突破チャレンジ中: 当たりの見込みに応じてしゃべる (突破チャレンジの1ラウンド目は勝負のセリフ)
         // ブラックアウトは突発なので、しゃべらない
-        if (spin.rush && !p.reply && p.kind !== 'blackout') p.talk = rashTalk(show, win, rng);
+        // おかピポRASH は一発告知だけなので、しゃべらない
+        if (spin.rush && !p.reply && p.kind !== 'blackout' && p.kind !== 'okapipo') p.talk = rashTalk(show, win, rng);
         return p;
     }
 

@@ -10,7 +10,8 @@
 //   遊タイム (天井。ユーザー指定 2026-10-20): 通常時に spec.yutime.at 回まわしても当たらなければ、時短 spec.yutime.spins 回 (m.yutime)。
 //     遊タイム中に特図2 で当たれば (小当たり → V も) RASH 突入。特図1 の当たりはふつうの初当たり。外れたまま終われば通常時に戻る
 //     数えるのは通常時 (RASH・時短でない) の特図1 の回転数 (m.normalSpins)。大当たりで 0 に戻る
-//   RASH のモード (こおりRASH / おにおにRASH) は m.rashMode。Machine.setRashMode で変える (演出だけが変わる)
+//   RASH のモード (こおりRASH / おにおにRASH / おかピポRASH) は m.rashMode。Machine.setRashMode で変える (演出だけが変わる)
+//     おかピポRASH は RASH の 5連目から (modes.*.minStreak。Machine.rashModes / nextRashMode)。RASH が終わる・次の RASH に入ると defaultMode に戻る
 //   保留は特図2 を先に消化する。結果は玉が入ったときに決める (先読みに使える)。
 //   保留の色・ボタン・変動の流れと時間は Scenario (js/scenario.js) が決める。
 //
@@ -217,7 +218,7 @@ const Machine = (() => {
         if (fig === 1) Object.assign(result, Scenario.hold(m.config, m.spec, result, m.rng, m.senyomi));
         else {
             Object.assign(result, Scenario.hold2(m.config, result, {
-                challenge: m.rush.challenge, rash: m.rush.active, koori: m.rashMode === 'koori',
+                challenge: m.rush.challenge, rash: m.rush.active, koori: m.rashMode === 'koori', okapipo: m.rashMode === 'okapipo',
                 streak: m.rush.active && !m.rush.challenge ? m.rush.hits - 1 : 0, spec: m.spec
             }, m.rng));
             if (m.senyomi === 'none') { result.button = null; result.voice = false; result.rashHold = null; }
@@ -247,6 +248,24 @@ const Machine = (() => {
 
     function setRashMode(m, mode) {
         if (m.config.show.rash.modes[mode]) m.rashMode = mode;
+    }
+
+    // いま選べる RASH のモード (minStreak のあるモードは、RASH の連チャン数がそれ以上のときだけ)
+    function rashModes(m) {
+        const modes = m.config.show.rash.modes;
+        const streak = m.rush.active && !m.rush.challenge ? m.rush.hits - 1 : 0;
+        return Object.keys(modes).filter(id => !modes[id].minStreak || streak >= modes[id].minStreak);
+    }
+
+    // 台のボタンで切り替えたときの次のモード (選べるモードを順に)
+    function nextRashMode(m) {
+        const list = rashModes(m);
+        return list[(list.indexOf(m.rashMode) + 1) % list.length];
+    }
+
+    // 選べなくなったモード (おかピポRASH) を defaultMode に戻す
+    function resetRashMode(m) {
+        if (!rashModes(m).includes(m.rashMode)) m.rashMode = m.config.show.rash.defaultMode;
     }
 
     function updateSmall(m, dt) {
@@ -287,6 +306,7 @@ const Machine = (() => {
                 m.rush.challenge = false;
                 m.stats.rushEntries++;
                 entry = true;
+                resetRashMode(m);
             }
         }
         // promote: 出玉を隠す昇格 (奇数への昇格)。V への昇格 (toV) は出玉が変わらないので隠さない
@@ -349,6 +369,7 @@ const Machine = (() => {
         emit(m, 'rushEnd', { hits: m.rush.hits, time: m.time - m.rush.startTime, challengeFailed: m.rush.challenge });
         m.challengeRun = null;
         m.rush = { active: false, hits: 0, startTime: 0, challenge: false };
+        resetRashMode(m);
     }
 
     // ----- 普図 (ゲート → 電チュー) -----
@@ -486,5 +507,5 @@ const Machine = (() => {
         }
     }
 
-    return { create, enter, update, aim, inJitan, yutimeLeft, setRashMode, setSenyomi, setNotice, snapshot, restore, debugHold, debugJitan, debugChallenge };
+    return { create, enter, update, aim, inJitan, yutimeLeft, setRashMode, rashModes, nextRashMode, setSenyomi, setNotice, snapshot, restore, debugHold, debugJitan, debugChallenge };
 })();

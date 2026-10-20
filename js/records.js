@@ -80,6 +80,7 @@ const Collection = (() => {
             { id: 'stepUp', name: 'ステップアップ予告 (3段目の文字)', items: [{ id: 'white', name: '白' }, { id: 'red', name: '赤' }, { id: 'gold', name: '金' }] },
             { id: 'zenkaiten', name: '全回転', items: list(s.zenkaiten.kinds) },
             { id: 'gun', name: '群予告', items: list(s.gun.kinds) },
+            { id: 'okapipo', name: 'おかピポRASH の一発告知', items: list(s.okapipoRash.notices) },
             { id: 'cutin', name: 'こおりカットイン', items: list(s.cutin.colors) },
             { id: 'summon', name: 'お仲間召喚 (こおりRASH)', items: list(s.summon.members, name => name) },
             { id: 'rashHold', name: 'RASH 中の保留', items: [{ id: 'black', name: '黒い保留' }, { id: 'spin', name: '回る保留' }] },
@@ -160,6 +161,7 @@ const Collection = (() => {
             if (p.revival) add(data.records, 'revivals');
             if (p.summon) see('summon', p.summon);
         } else if (p.kind === 'onioni' && p.pattern) see('anomaly', p.pattern);
+        else if (p.kind === 'okapipo' && p.okaNotice) see('okapipo', p.okaNotice);
         else if (p.kind === 'blackout') add(data.records, 'blackouts');
     }
 
