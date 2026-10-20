@@ -161,11 +161,12 @@ function run(game, specId, setting, hours, mode = 'koori') {
         DataCounter.tick(counter, DT, ctx(), CONFIG);
         for (const e of m.events.splice(0)) {
             // main.js と同じ: RASH が終わったら出玉を付けてから記録し、ときどきトロフィー
-            if (e.type === 'jitanStart' && e.rushHits === 1) rushStartBalls = balls;
+            if ((e.type === 'jitanStart' && e.rushHits === 1) || (e.type === 'bonusStart' && e.yutime)) rushStartBalls = balls;
             if (e.type === 'rushEnd') e.balls = balls - rushStartBalls;
             record(e);
             if (e.type === 'bonusStart' && !e.rush) { log.firstHits++; if (e.next === 'jitan') log.firstToChallenge++; }
-            if (e.type === 'bonusStart' && e.entry) log.challengeWins++;
+            if (e.type === 'bonusStart' && e.yutime) log.yutimeHits = (log.yutimeHits || 0) + 1;   // 遊タイムからの RASH 突入 (データカウンターでは初当たり)
+            if (e.type === 'bonusStart' && e.entry && !e.yutime) log.challengeWins++;   // 遊タイムからの RASH 突入は突破に数えない
             if (e.type === 'jitanStart' && e.challenge) log.challenges++;
             if (e.type === 'bonusStart' && e.rush && !e.entry) log.rushContinues++;
             if (e.type === 'spinStart' && e.fig === 2 && m.rush.challenge) {
@@ -424,7 +425,8 @@ test('追撃チャンス: 通常時のバトルで出て、出たほうが勝ち
         for (const e of log.events) {
             if (e.type !== 'spinEnd' || e.fig !== 1 || e.plan.type !== 'reach') continue;
             const p = e.plan;
-            const names = p.phases.map(ph => ph.name).join();
+            // ステップアップ予告・擬似連は除いて流れを見る
+            const names = p.phases.map(ph => ph.name).filter(n => n !== 'stepup' && n !== 'next').join();
             assertEqual(names, p.pursuit ? 'roll,challenge,reach,battle,pursuit,result' : 'roll,challenge,reach,battle,result', `${specId} の追撃の流れ`);
             const c = n[p.pursuit ? 'on' : 'off'];
             c[0]++;
@@ -464,6 +466,131 @@ test('お仲間召喚: こおりRASH の当たりのバトルだけで、確定�
     }
     const { Characters } = base;
     for (const id of Object.keys(sm.members)) assert(Characters.isCompanion(id), `${id} の絵がない`);
+});
+
+// 特図1 の変動 (通常時) の筋書きだけを たくさん作って数える (台をまわすより早い)
+function fig1Plans(specId, count, seed) {
+    const game = loadGame(seed);
+    const { CONFIG, Scenario } = game;
+    const spec = CONFIG.specs[specId];
+    const plans = [];
+    for (let i = 0; i < count; i++) {
+        const hit = game.rng() < spec.hitRate;
+        const result = hit ? { kind: 'hit', alloc: spec.firstHit[Math.floor(game.rng() * spec.firstHit.length)] } : { kind: 'miss' };
+        Object.assign(result, Scenario.hold(CONFIG, spec, result, game.rng, 'recommend'));
+        plans.push(Scenario.plan(CONFIG, spec, { fig: 1, result, holdsLeft: 1, rush: false, holdColor: result.holdColor, specId }, game.rng));
+    }
+    return { CONFIG, Scenario, plans };
+}
+
+test('ステップアップ予告: 3段目の金文字は約90%、赤文字はチャンス、3段目まで行くと白でも期待できる。3段目の外れはチャレンジに入る', () => {
+    for (const specId of ['s99', 's159']) {
+        const { CONFIG, plans } = fig1Plans(specId, 600000, 7);
+        const n = {};
+        let wrongType = 0;
+        for (const p of plans) {
+            if (!p.stepUp) continue;
+            const c = n[p.stepUp.id] || (n[p.stepUp.id] = [0, 0]);
+            c[0]++;
+            if (p.win) c[1]++;
+            if (p.stepUp.step === 3 && !p.win && p.type === 'plain') wrongType++;
+            if (!CONFIG.show.stepUp.kinds[p.stepUp.kind]) wrongType++;
+        }
+        assertEqual(wrongType, 0, `${specId} で3段目なのにチャレンジに入らない外れ (または種類がない)`);
+        const rate = id => n[id][1] / n[id][0];
+        assert(n.s3gold[0] > 80, `${specId} で金文字が少ない (${n.s3gold[0]})`);
+        assertBetween(rate('s3gold'), 0.82, 0.97, `${specId} の金文字の当たる割合`);
+        assertBetween(rate('s3red'), 0.4, 0.6, `${specId} の赤文字の当たる割合`);
+        assert(rate('s3white') > rate('s2') && rate('s2') > rate('s1'), `${specId} で段が進むほど当たりやすくなっていない`);
+    }
+});
+
+test('擬似連: チャレンジに入る変動だけで出て、続くほど当たりやすい。全回転は当たりだけで、図柄の色が振り分けと合う', () => {
+    const { CONFIG, plans } = fig1Plans('s99', 600000, 8);
+    const n = [[0, 0], [0, 0], [0, 0], [0, 0]];
+    let wrong = 0, zen = 0, hits = 0;
+    const zenKinds = new Set();
+    for (const p of plans) {
+        if (p.win) hits++;
+        if (p.type === 'zenkaiten') {
+            zen++;
+            zenKinds.add(p.zenkaiten);
+            const k = CONFIG.show.zenkaiten.kinds[p.zenkaiten];
+            if (!p.win || p.digits.some(d => d !== k.figure) || p.challenge) wrong++;
+            continue;
+        }
+        if (p.type === 'plain' && p.gizi) wrong++;
+        if (p.type === 'plain') continue;
+        const g = p.gizi || 0;
+        if (p.phases.filter(ph => ph.name === 'next').length !== g) wrong++;
+        n[g][0]++;
+        if (p.win) n[g][1]++;
+    }
+    assertEqual(wrong, 0, 'おかしな擬似連・全回転');
+    for (let g = 1; g < 4; g++) assert(n[g][1] / n[g][0] > n[g - 1][1] / n[g - 1][0], `擬似${g + 1}連 が 擬似${g}連 より当たりにくい`);
+    assertBetween(zen / hits, CONFIG.show.zenkaiten.rate - 0.012, CONFIG.show.zenkaiten.rate + 0.012, '全回転の割合');
+    assertEqual(zenKinds.size, Object.keys(CONFIG.show.zenkaiten.kinds).length, '出てこない全回転がある');
+    // 奇数の当たり (突破チャレンジへ) では偶数だけの全回転 (おかがっぱ) を選ばない
+    const game = loadGame(9);
+    const spec = game.CONFIG.specs.s99;
+    for (let i = 0; i < 2000; i++) {
+        const alloc = spec.firstHit.find(a => a.next === 'jitan');
+        const p = game.Scenario.plan(game.CONFIG, spec, { fig: 1, result: { kind: 'hit', alloc, forceZenkaiten: null }, holdsLeft: 0, rush: false, specId: 's99' }, game.rng);
+        if (p.type === 'zenkaiten' && !game.CONFIG.show.zenkaiten.kinds[p.zenkaiten].odd) throw new Error(`奇数の当たりで ${p.zenkaiten} の全回転`);
+    }
+});
+
+test('早送り: 飛ばす先は当たりが見える場面かリーチの結果の始めで、変動の長さより前', () => {
+    const { Scenario, plans } = fig1Plans('s99', 20000, 10);
+    for (const p of plans) {
+        const at = Scenario.skipPoint(p);
+        assert(at >= 0 && at < p.duration, '早送りの先が変動の外');
+        if (p.type === 'reach' || p.type === 'fail') {
+            const names = p.phases.map(ph => ph.name);
+            const target = p.reveal ? p.reveal.phase : p.type === 'reach' ? 'result' : 'fail';
+            const start = p.phases.slice(0, names.indexOf(target)).reduce((a, ph) => a + ph.t, 0);
+            assertEqual(at, start, `早送りの先 (${p.type})`);
+        }
+    }
+});
+
+test('遊タイム: 通常時に天井の回数まわすと時短に入り、特図2 で当たれば RASH 突入。当たれば数え直す', () => {
+    for (const [specId, at] of [['s99', 300], ['s159', 500]]) {
+        assertEqual(CONFIG.specs[specId].yutime.at, at, `${specId} の天井`);
+        const game = loadGame(11);
+        const { Machine } = game;
+        const m = Machine.create(game.CONFIG, specId, game.rng);
+        for (let i = 0; i < at; i++) {
+            Machine.debugHold(m, 1, 'miss', null);   // ずっと外れ
+            for (let k = 0; k < 200 && (m.spin || m.holds[1].length); k++) Machine.update(m, 0.5);
+        }
+        assert(m.yutime && Machine.inJitan(m), `${specId}: ${at}回 まわしても遊タイムに入らない`);
+        assertEqual(m.jitanLeft, game.CONFIG.specs[specId].yutime.spins, `${specId} の遊タイムの時短の回数`);
+        assertEqual(m.events.filter(e => e.type === 'yutimeStart').length, 1, `${specId} の遊タイム突入のイベント`);
+        // 特図2 の小当たり → V → RASH 突入
+        Machine.debugHold(m, 2, 'small', null);
+        for (let k = 0; k < 100 && !m.small; k++) Machine.update(m, 0.5);
+        Machine.enter(m, 'attacker');
+        const start = m.events.find(e => e.type === 'bonusStart');
+        assert(start && start.entry && start.yutime && m.rush.active, `${specId}: 遊タイムの当たりで RASH に入らない`);
+        assertEqual(m.normalSpins, 0, `${specId}: 当たったのに遊タイムの回数が残っている`);
+        assert(!m.yutime, `${specId}: 当たったのに遊タイムのまま`);
+    }
+    // 長くまわした台: 遊タイムに入っても突破率・継続率のテストは変わらない (遊タイムからの突入は突破に数えない)
+    for (const { specId, m } of runs) assert((m.stats.yutimes || 0) > 0, `${specId} で遊タイムに1回も入らない`);
+});
+
+test('お仲間の応援: こおりRASH のバトルで、人数が多いほど勝ちやすい', () => {
+    for (const { specId, log } of runs) {
+        const n = [[0, 0], [0, 0], [0, 0], [0, 0]];
+        for (const e of log.events) {
+            if (e.type !== 'spinEnd' || e.plan.kind !== 'rashBattle') continue;
+            const c = n[e.plan.cheer];
+            c[0]++;
+            if (e.plan.win) c[1]++;
+        }
+        for (let i = 1; i < 4; i++) assert(n[i][1] / n[i][0] > n[i - 1][1] / n[i - 1][0], `${specId}: 応援 ${i}人 が ${i - 1}人 より勝ちにくい`);
+    }
 });
 
 test('おにおにRASH: 違和感は当たりだけで全種類出て、図柄 8・9 は 1/99 で 900個 の当たりだけ', () => {
@@ -572,7 +699,7 @@ test('図鑑: 記録が台の集計と合い、実績は値が条件を満たし
 
 test('データカウンター: 大当たり履歴・RASH の回数・出玉の推移が台の集計と合う', () => {
     for (const { specId, m, counter, log, balls } of runs) {
-        assertEqual(counter.firstHits, log.firstHits, `${specId} の大当たり (初当たり)`);
+        assertEqual(counter.firstHits, log.firstHits + (log.yutimeHits || 0), `${specId} の大当たり (初当たり。遊タイムの当たりも)`);
         assertEqual(counter.rashes, m.stats.rushEntries, `${specId} の RASH`);
         assert(counter.history.length <= CONFIG.dataCounter.historyShown, `${specId} の履歴が多すぎる`);
         assert(counter.history.filter(h => h.active).length <= 1, `${specId} で当たり中の履歴が2つ以上`);

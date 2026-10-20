@@ -7,7 +7,8 @@
 //   Scenario.challengePlan(config, holds)      突破チャレンジのバトルが始まるとき: 保留ごとの武器・決着のラウンド・時間
 //   Scenario.plan(config, spec, spin, rng)     変動が始まるとき: { kind, duration, phases, digits, enemy, win, talk, ... }
 // phases は [{ name, t }] の並び。液晶はこれを時間どおりに描く。
-//   特図1 のリーチは roll → challenge → reach → battle → (pursuit: 追撃チャンス) → result。kind (特図2):
+//   特図1 のリーチは (stepup: ステップアップ予告) → roll → (next: 擬似連 × p.gizi) → challenge → reach → battle → (pursuit: 追撃チャンス) → result。
+//   全回転 (p.type 'zenkaiten'。p.zenkaiten は種類): zroll → zenkaiten → zend。kind (特図2):
 //   'challenge' 突破チャレンジのバトルの1ラウンド (cintro → cround / cfinal → cresult)。おまけのラウンドは cextra → cfinal → cresult
 //   'rashBattle' こおりRASH のバトル (roll → battle → result。enemyKey: 相手 (怪は ○○Kai) / enemy: 描くキャラクター / kai: 怪の状態)
 //     revival: 復活 (result で一度負けて見せ、rvdark → rvnaitei → rvcant → rvstill → rvsoredemo → rvflash → rvkill で撃破)
@@ -264,6 +265,11 @@ const Scenario = (() => {
         if (fig === 2) return plan2(config, spec, spin, rng);
 
         const hit = result.kind === 'hit';
+        // 全回転 (プレミア): 通常時の当たりの変動の rate
+        if (hit && !spin.rush && (result.forceZenkaiten || rng() < show.zenkaiten.rate)) return zenkaitenPlan(config, spin, rng);
+
+        // ステップアップ予告 (通常時だけ)
+        const step = spin.rush ? null : stepUp(show, spec, hit, result, rng);
         let type;   // 'plain' / 'fail' / 'reach'
         if (hit || result.force === 'reach') type = 'reach';
         else if (result.force === 'fail') type = 'fail';
@@ -271,8 +277,8 @@ const Scenario = (() => {
             const r = rng();
             const reach = reachMissRate(show, spec);
             type = r < reach ? 'reach' : r < show.challengeRate ? 'fail' : 'plain';
-            // 保留変化した外れの保留は、必ずチャレンジ (失敗) に入る
-            if (type === 'plain' && result.changed) type = 'fail';
+            // 保留変化した外れの保留・ステップアップが3段目まで行った外れは、必ずチャレンジ (失敗) に入る
+            if (type === 'plain' && (result.changed || (step && step.step === 3))) type = 'fail';
         }
 
         const p = { fig, type, win: hit, talk: null };
@@ -297,7 +303,7 @@ const Scenario = (() => {
                 const pu = show.pursuit;
                 if (rng() < (hit ? pu.hitRate : pu.missRate)) {
                     p.pursuit = true;
-                    p.phases.splice(4, 0, { name: 'pursuit', t: pu.time });
+                    p.phases.splice(p.phases.length - 1, 0, { name: 'pursuit', t: pu.time });
                 }
                 if (hit) p.digits = Array(3).fill(shownHitDigit(show, result, fig, rng, p));
                 else p.digits = missDigits(true, rng);
@@ -306,8 +312,75 @@ const Scenario = (() => {
                 p.defeatLine = hit && f.defeatLines[p.enemy] ? pickFrom(f.defeatLines[p.enemy], rng) : null;
             }
         }
+        // 擬似連: チャレンジに入る変動だけ、回り始めのあとに「NEXT」を gizi 回
+        if (type !== 'plain') {
+            const g = show.gizi;
+            const n = result.forceGizi ?? Number(weighted(g.weights[hit ? 'hit' : type], rng));
+            if (n > 0) {
+                p.gizi = n;
+                p.phases.splice(1, 0, ...Array.from({ length: n }, () => ({ name: 'next', t: g.time })));
+            }
+        }
+        // ステップアップ予告: 変動のいちばん始め
+        if (step) {
+            p.stepUp = step;
+            p.phases.unshift({ name: 'stepup', t: step.step * show.stepUp.stepTime + show.stepUp.tail });
+        }
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         // 通常時だけ、ふるカワが変動の始まりにしゃべる
+        if (!spin.rush) p.talk = talk(show, p, spin, rng);
+        return p;
+    }
+
+    // 早送り (ユーザー指定 2026-10-20): 台のボタンの長押しで、変動のこの秒まで飛ばす。
+    //   当たりが見える場面 (reveal。復活は虹色のフラッシュ、お仲間召喚は召喚) か、リーチの結果・チャレンジ失敗の始めまで。
+    //   それ以外 (外れ・特図2 のふつうの変動) は止まる SKIP_TAIL 秒前まで
+    const SKIP_TAIL = 0.6;
+    function skipPoint(plan) {
+        const names = plan.phases.map(ph => ph.name);
+        let index = plan.reveal ? names.indexOf(plan.reveal.phase) : -1;
+        if (index < 0) index = names.findIndex(n => n === 'result' || n === 'fail');
+        if (index < 0) return Math.max(0, plan.duration - SKIP_TAIL);
+        return plan.phases.slice(0, index).reduce((a, ph) => a + ph.t, 0);
+    }
+
+    // ステップアップ予告の出る割合 ({ id: 当たりで出る割合, 外れで出る割合 })。外れは「出たら当たる割合」が reliability になるように
+    function stepUpRates(show, spec) {
+        const h = spec.hitRate;
+        return Object.fromEntries(Object.entries(show.stepUp.outcomes).map(([id, o]) =>
+            [id, { hit: o.hit, miss: o.hit * h / (1 - h) * (1 - o.reliability) / o.reliability }]));
+    }
+
+    // この変動のステップアップ予告: { id, step, color, kind } (出ないときは null)
+    function stepUp(show, spec, hit, result, rng) {
+        const su = show.stepUp;
+        let id = result.forceStepUp || null;
+        if (!id) {
+            const rates = stepUpRates(show, spec);
+            let r = rng();
+            for (const [key, x] of Object.entries(rates)) {
+                if ((r -= hit ? x.hit : x.miss) < 0) { id = key; break; }
+            }
+        }
+        if (!id) return null;
+        const o = su.outcomes[id];
+        const kinds = Object.keys(su.kinds);
+        return { id, step: o.step, color: o.color, kind: kinds[Math.floor(rng() * kinds.length)] };
+    }
+
+    // 全回転: 図柄の色 (奇数・偶数) が当たりの振り分けに合う種類から選ぶ。図柄は3つとも その種類の図柄
+    function zenkaitenPlan(config, spin, rng) {
+        const show = config.show;
+        const z = show.zenkaiten;
+        const odd = Figures_isOdd(hitDigit(show, spin.result, 1, rng));
+        const kinds = Object.fromEntries(Object.entries(z.kinds).map(([id, k]) => [id, (odd ? k.odd : k.even) ? k.weight : 0]));
+        const kind = spin.result.forceZenkaiten && z.kinds[spin.result.forceZenkaiten] ? spin.result.forceZenkaiten : weighted(kinds, rng);
+        const figure = z.kinds[kind].figure;
+        const t = z.timing;
+        const p = { fig: 1, type: 'zenkaiten', win: true, talk: null, zenkaiten: kind, digits: [figure, figure, figure],
+            phases: [{ name: 'zroll', t: t.zroll }, { name: 'zenkaiten', t: t.zenkaiten }, { name: 'zend', t: t.zend }],
+            reveal: { phase: 'zenkaiten', at: 0.8 }, defeatLine: show.furukawa.congratsLine, defeatColor: 6 };
+        p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         if (!spin.rush) p.talk = talk(show, p, spin, rng);
         return p;
     }
@@ -331,7 +404,11 @@ const Scenario = (() => {
         const bo = show.blackout;
         // RASH に入ってから (突破チャレンジ中は出さない)
         const kaiHold = Boolean(result.kai) && spin.rashMode === 'koori';   // 怪の保留 (先バレしたので必ず怪のバトル)
-        if (spin.rush && !spin.inChallenge && win && !kaiHold && result.force !== 'revival' && (result.force === 'blackout' || rng() < bo.rate)) {
+        if (spin.yutime) {
+            // 遊タイム: 演出なし (当たれば RASH 突入。液晶は遊タイムの表示)
+            p.kind = 'plain';
+            p.phases = [{ name: 'roll', t: plain }];
+        } else if (spin.rush && !spin.inChallenge && win && !kaiHold && result.force !== 'revival' && (result.force === 'blackout' || rng() < bo.rate)) {
             // ブラックアウト (突発当たり): モードに関係なく
             p.kind = 'blackout';
             p.phases = [{ name: 'dark', t: bo.timing.dark }, { name: 'bokoori', t: bo.timing.koori },
@@ -399,6 +476,8 @@ const Scenario = (() => {
                         { name: 'rvkill', t: rt.kill });
                     p.reveal = { phase: 'rvflash', at: 0.3 };
                 }
+                // お仲間の応援 (0〜3人): 人数が多いほど勝ちやすい
+                p.cheer = Number(weighted(show.cheer[win ? 'win' : 'miss'], rng));
                 // お仲間召喚: 当たりのバトルだけ。仲間が現れて撃破 (確定の相手・復活では起きない)
                 const sm = show.summon;
                 if (win && !p.revival && p.enemyInfo.win < 1 && rng() < sm.rate) {
@@ -473,5 +552,5 @@ const Scenario = (() => {
         return { text, color };
     }
 
-    return { hold, hold2, challengePlan, plan, buttonMissRate, reachMissRate, missBattleMass, kooriEnemies, kaiRate, revivalRate, newStage, stepStage, endStage, stageMap };
+    return { hold, hold2, challengePlan, plan, skipPoint, stepUpRates, buttonMissRate, reachMissRate, missBattleMass, kooriEnemies, kaiRate, revivalRate, newStage, stepStage, endStage, stageMap };
 })();

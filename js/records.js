@@ -77,6 +77,8 @@ const Collection = (() => {
             { id: 'anomaly', name: 'おにおにRASH の違和感', items: list(s.onioniRash.patterns) },
             { id: 'stage', name: 'ステージ', items: Object.entries(s.stages.names).map(([id, name]) => ({ id, name })) },
             { id: 'hold', name: '保留の色', items: s.holdColors.order.map(id => ({ id, name: colorNames[id] })) },
+            { id: 'stepUp', name: 'ステップアップ予告 (3段目の文字)', items: [{ id: 'white', name: '白' }, { id: 'red', name: '赤' }, { id: 'gold', name: '金' }] },
+            { id: 'zenkaiten', name: '全回転', items: list(s.zenkaiten.kinds) },
             { id: 'summon', name: 'お仲間召喚 (こおりRASH)', items: list(s.summon.members, name => name) },
             { id: 'rashHold', name: 'RASH 中の保留', items: [{ id: 'black', name: '黒い保留' }, { id: 'spin', name: '回る保留' }] },
             { id: 'button', name: '台のボタン', items: [
@@ -104,6 +106,7 @@ const Collection = (() => {
             if (e.result.voice) see('button', 'voice');
         } else if (e.type === 'holdChange') add(r, 'holdChanges');
         else if (e.type === 'stageChange') see('stage', e.stage.id);
+        else if (e.type === 'yutimeStart') add(r, 'yutimes');
         else if (e.type === 'bonusStart') {
             add(r, 'hits');
             if (e.entry) add(r, 'entries');
@@ -127,6 +130,9 @@ const Collection = (() => {
         const p = e.plan;
         if (e.fig === 1) {
             see('hold', e.result.holdColor || 'white');
+            if (p.zenkaiten) see('zenkaiten', p.zenkaiten);
+            if (p.stepUp && p.stepUp.step === 3) see('stepUp', p.stepUp.color);
+            if (p.gizi) best('bestGizi', p.gizi + 1);
             if (p.challenge && p.type !== 'plain') {
                 see('challenge', p.challenge);
                 if (p.type === 'reach') win('challenge', p.challenge);
@@ -215,14 +221,19 @@ const DataCounter = (() => {
     function note(c, e, ctx, config) {
         const active = c.history.find(h => h.active);
         if (e.type === 'spinStart' && e.fig === 1) c.spins = (c.spins || 0) + 1;
-        if (e.type === 'bonusStart' && !e.rush) {
-            // 初当たり
+        if (e.type === 'bonusStart' && (!e.rush || e.yutime)) {
+            // 初当たり (遊タイムの当たりも。そのまま RASH)
             if (active) finish(active, ctx);
             c.firstHits++;
             c.history.unshift({
                 no: c.firstHits, spins: ctx.spins1 - c.spinsAtHit, label: e.label, kind: e.next === 'jitan' ? 'challenge' : 'normal',
-                streak: 0, startBalls: ctx.balls, balls: 0, trophy: null, active: true
+                streak: 0, startBalls: ctx.balls, balls: 0, trophy: null, active: true, yutime: Boolean(e.yutime)
             });
+            if (e.yutime) {
+                c.history[0].kind = 'rash';
+                c.history[0].streak = e.rushHits - 1;
+                c.rashes++;
+            }
             c.spinsAtHit = ctx.spins1;
             c.history.length = Math.min(c.history.length, config.dataCounter.historyShown);
         } else if (e.type === 'bonusStart' && active) {

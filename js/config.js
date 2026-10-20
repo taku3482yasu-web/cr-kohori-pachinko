@@ -180,6 +180,8 @@ const CONFIG = {
             ],
             challengeSmallRate: 1 / 6.7,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/7 で 47〜48%)
             jitan: { challengeSpins: 1, spins: 6 },
+            // 遊タイム (天井。ユーザー指定 2026-10-20): 通常時に at 回まわして当たらなければ、時短 spins 回 (回数は Claude が決めた。RASH 突入 約98%)
+            yutime: { at: 300, spins: 30 },
             payout: { heso: 2 },   // 賞球をこのスペックだけ変える (1/99 は当たりが小さいので、ヘソを 2 にして出玉率を上げた)
             target: { challenge: 0.5, continuation: 0.79 }
         },
@@ -197,6 +199,7 @@ const CONFIG = {
             ],
             challengeSmallRate: 1 / 6.7,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/7 で 47〜48%)
             jitan: { challengeSpins: 1, spins: 6 },
+            yutime: { at: 500, spins: 30 },   // 遊タイム (ユーザー指定 2026-10-20)
             target: { challenge: 0.5, continuation: 0.80 }
         }
     },
@@ -233,7 +236,7 @@ const CONFIG = {
             5: { name: 'シバター', ids: ['shibata'] },
             6: { name: 'やすさん・たむさん・だけさん', ids: ['yasu', 'tamu', 'dake'] },
             7: { name: 'こおりくん', ids: ['koori'] },
-            // おにおにRASH の違和感でだけ出る図柄 (ユーザー指定 2026-10-19)。ふだんの変動には出ない (Figures.COUNT は 7)
+            // おにおにRASH の違和感と全回転でだけ出る図柄 (ユーザー指定 2026-10-19・2026-10-20)。ふだんの変動には出ない (Figures.COUNT は 7)
             8: { name: 'シーシャ・ナイテイ・ナイナイ', ids: ['naitei'] },
             9: { name: 'シーシャ・ナイテイ・アルアル', ids: ['aruaru'] }
         },
@@ -364,6 +367,10 @@ const CONFIG = {
         //   rate: 当たりのバトルで起きる割合 (外れでは起きない。Claude が決めた)。確定の相手 (ゴールド金面犬・アルアル) と復活では起きない
         //   time: 召喚の場面の秒 / members: 出てくる仲間 (Characters の仲間の id と名前)
         summon: { rate: 0.15, time: 3, members: { yasu: 'やすさん', tamu: 'たむさん', dake: 'だけさん' } },
+        // お仲間の応援 (こおりRASH のバトル。ユーザー指定 2026-10-20、中身は Claude が決めた): バトル中に こおりくんのうしろで
+        //   やすさん → たむさん → だけさん の順に 0〜3人 が応援する。人数が多いほど勝ちやすい (勝ち win / 負け miss の重み)。
+        //   3人そろうと「全員で応援！」(3人の応援で負けることもある)。当たりやすさは変わらない
+        cheer: { win: { 0: 40, 1: 25, 2: 20, 3: 15 }, miss: { 0: 75, 1: 17, 2: 7, 3: 1 } },
         // ブラックアウト (RASH 中の突発当たり。こおりRASH・おにおにRASH 共通。ユーザー指定 2026-10-19)
         //   RASH 中の当たりの rate の割合で、前ぶれなく暗転 → 虹色のこおりくん → 「当たり」(虹色の文字) → 「こおりがいただいた！」で虹色にフラッシュ
         //   rate は Claude が決めた
@@ -460,6 +467,58 @@ const CONFIG = {
             naitei: { name: 'シーシャ・ナイテイ・ナイナイ', hit: 20, win: 1, map: 'goldHall' }
         },
         pushTime: 2,                 // バトルの最後の「PUSH!」でボタンを待つ時間 (秒)。押さなければそのまま進む
+        // 擬似連 (ユーザー指定 2026-10-20): チャレンジの前に「NEXT」で図柄が回り直す。回り直す回数 (0〜3 = 擬似1〜4連) の重みは
+        //   hit: 当たり / reach: リーチ外れ / fail: チャレンジ失敗 で別 (外れの「チャレンジにも入らない変動」では出ない)。数値は Claude が決めた
+        //   time: 1回の「NEXT」の秒
+        gizi: {
+            time: 1.6,
+            weights: {
+                hit: { 0: 35, 1: 25, 2: 22, 3: 18 },
+                reach: { 0: 65, 1: 22, 2: 10, 3: 3 },
+                fail: { 0: 85, 1: 12, 2: 3, 3: 0 }
+            }
+        },
+        // ステップアップ予告 (ユーザー指定 2026-10-20): 変動の始めにキャラが1段ずつ出てくる。3段目まで続くとチャンス。
+        //   3段目の文字が赤ならチャンス、金なら約90%で当たり (ユーザー指定。ほかの数値は Claude が決めた)
+        //   outcomes: 何段目まで行くか・3段目の文字の色。hit: 当たりの変動で出る割合 / reliability: 出たら当たる割合
+        //     外れの変動で出る割合は reliability になるよう、スペックの大当たり確率から自動で計算する (Scenario.stepUpRates)
+        //     3段目まで行った外れは、必ずチャレンジに入る (失敗する)
+        //   kinds: 種類 (どれも期待度は同じ)。steps の who は出てくるキャラ (ドット絵・敵・仲間の id)、text は文字
+        //   stepTime: 1段の秒 / tail: 最後の段のあとの秒
+        stepUp: {
+            stepTime: 1.1,
+            tail: 0.5,
+            outcomes: {
+                s1: { step: 1, color: 'white', hit: 0.08, reliability: 0.03 },
+                s2: { step: 2, color: 'white', hit: 0.12, reliability: 0.08 },
+                s3white: { step: 3, color: 'white', hit: 0.1, reliability: 0.25 },
+                s3red: { step: 3, color: 'red', hit: 0.16, reliability: 0.5 },
+                s3gold: { step: 3, color: 'gold', hit: 0.1, reliability: 0.9 }
+            },
+            colors: { white: '#ffffff', red: '#ff3a3a', gold: '#ffd040' },
+            kinds: {
+                koori: { name: 'こおりくん', steps: [{ who: 'koori', text: 'こおりくん、出発！' }, { who: 'koori', text: '内定を目指せ！' }, { who: 'koori', text: 'ツラヌケ！！' }] },
+                furukawa: { name: 'ふるカワ', steps: [{ who: 'furukawa', text: 'ふるカワが見てる…' }, { who: 'furukawa', text: 'ふるカワが応援！' }, { who: 'furukawa', text: 'ふるカワ大興奮！！' }] },
+                tomoishi: { name: 'ともいし', steps: [{ who: 'tomoishi', text: 'ともいし登場' }, { who: 'tomoishi', text: '内定とりなさい！' }, { who: 'tomoishi', text: '今すぐとりなさい！！' }] },
+                companions: { name: 'お仲間', steps: [{ who: 'yasu', text: 'やすさん登場！' }, { who: 'tamu', text: 'たむさんも来た！' }, { who: 'dake', text: 'だけさんで全員集合！！' }] },
+                onioni: { name: 'おにおに', steps: [{ who: 'onioni', text: 'おにおにの気配…' }, { who: 'onioni', text: 'おにおにが怒った！' }, { who: 'onioni', text: 'おにおに激怒！！' }] }
+            }
+        },
+        // 全回転 (プレミア。ユーザー指定 2026-10-20): 当たりの変動の rate で、チャレンジ・バトルなしに3つの図柄が同じキャラのまま回って当たる (大当たり確定)
+        //   kinds: 5種類 (ユーザー指定)。figure はそろう図柄 (8 ナイナイ・9 アルアルは全回転だけの図柄)。
+        //     odd / even: 奇数 (突破チャレンジへ行く当たり)・偶数の当たりで選べるか (図柄の色と出玉の振り分けを合わせる)。weight と rate は Claude が決めた
+        //   timing: zroll (ふつうに回る) → zenkaiten (全回転) → zend (止まって大当たり) の秒
+        zenkaiten: {
+            rate: 0.03,
+            timing: { zroll: 1.5, zenkaiten: 6, zend: 2.5 },
+            kinds: {
+                koori: { name: 'こおりくん', figure: 7, weight: 30, odd: true, even: false },
+                naitei: { name: 'シーシャ・ナイテイ・ナイナイ', figure: 8, weight: 15, odd: true, even: true },
+                aruaru: { name: 'シーシャ・ナイテイ・アルアル', figure: 9, weight: 10, odd: true, even: true },
+                onioni: { name: 'おにおに', figure: 3, weight: 25, odd: true, even: false },
+                okagappa: { name: 'おかがっぱ', figure: 4, weight: 20, odd: false, even: true }
+            }
+        },
         // 追撃チャンス (通常時のバトル。ユーザー指定 2026-10-20): PUSH のあとに「追撃チャンス！」で、こおりくんがもう2回攻撃して追加ダメージ。
         //   当たりのバトルで hitRate、外れのバトルで missRate の割合で出る (Claude が決めた)。出たらそのバトルの成功率が上がる
         //   (おかがっぱ 約5% → 約19% / ひびきまくり 約20% → 約53% / おにおに 約80% → 約95%)。相手ごとの成功率 (全体) は変わらない
@@ -614,6 +673,7 @@ const CONFIG = {
     //   記録 (records のキー): spins (特図1 の回転数) / hits (大当たり) / entries (RASH 突入) / bestStreak (1回の RASH の最高連チャン)
     //     / bestBalls (1回の RASH の最高出玉) / blackouts / renchan (〇G連確定) / promotes (昇格) / endings / holdChanges (保留変化)
     //     / kaiWins (こおりRASH で怪の相手に勝った) / revivals (こおりRASH の復活) / pursuitWins (通常時のバトルで追撃チャンスから撃破)
+    //     / bestGizi (擬似連の最高。擬似〇連の〇) / yutimes (遊タイムに入った)
     //   'seen:グループ' (見た種類の数) / 'seen:グループ:id' (その演出を見た回数) / 'win:グループ:id' (そのバトルに勝った回数)
     collection: {
         achievements: [
@@ -628,6 +688,11 @@ const CONFIG = {
             { id: 'goldDog', name: '黄金のワンちゃん', desc: 'こおりRASH で ゴールド金面犬 に勝つ', stat: 'win:kooriRash:goldDog', value: 1 },
             { id: 'kai', name: '怪退治', desc: 'こおりRASH で 怪 の相手に勝つ', stat: 'kaiWins', value: 1 },
             { id: 'revival', name: 'こおり生きていける', desc: 'こおりRASH でバトルに負けたあと、復活して撃破する', stat: 'revivals', value: 1 },
+            { id: 'zenkaiten', name: '全回転', desc: '全回転を見る', stat: 'seen:zenkaiten', value: 1 },
+            { id: 'allZenkaiten', name: '全回転コンプリート', desc: '全回転を5種類ぜんぶ見る', stat: 'seen:zenkaiten', value: 'all' },
+            { id: 'goldStep', name: '金の文字', desc: 'ステップアップ予告で3段目が金文字になる', stat: 'seen:stepUp:gold', value: 1 },
+            { id: 'gizi4', name: '擬似4連', desc: '擬似連を4連まで続ける', stat: 'bestGizi', value: 4 },
+            { id: 'yutime', name: '遊タイム', desc: '遊タイムに入る', stat: 'yutimes', value: 1 },
             { id: 'pursuit', name: '追撃成功', desc: '通常時のバトルで、追撃チャンスから撃破する', stat: 'pursuitWins', value: 1 },
             { id: 'summon', name: 'お仲間召喚', desc: 'こおりRASH で お仲間召喚 を見る', stat: 'seen:summon', value: 1 },
             { id: 'allSummons', name: '3人そろって', desc: 'お仲間召喚で やすさん・たむさん・だけさん を全員見る', stat: 'seen:summon', value: 'all' },

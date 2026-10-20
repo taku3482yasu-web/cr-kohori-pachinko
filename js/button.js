@@ -5,22 +5,32 @@
 //   red: 赤く光る / shake: ぶるぶる震える (スマホは本体も振動) / beep: 高い音が鳴る / rainbow: 虹色 (当たり確定)
 //   purple: 紫に光る (こおりRASH の怪の先バレ。入賞時の音といっしょ)
 // RASH 中・突破チャレンジ中は、当たりの保留の 60% で 震える・赤・虹 (外れでは起きない。config.show.rashButton)
-// 起きたら当たりの確率が約60% (config.show.button)。バトルの最後には「PUSH」で押せる。
-// MachineButton.init(要素, 押されたとき), trigger(種類, now), prompt(PUSH を出すか), update(now)
+// 起きたら当たりの確率が約60% (config.show.button)。バトルの最後には「PUSH」で押せる。長押しで演出の早送り。
+// MachineButton.init(要素, 押されたとき, 長押ししたとき), trigger(種類, now), prompt(PUSH を出すか), update(now)
 // =====================================================================
 
 const MachineButton = (() => {
     let el = null;
     let until = 0;
 
-    function init(element, onPress) {
+    // 長押し (LONG_PRESS 秒) で onLong (演出の早送り。ユーザー指定 2026-10-20)
+    const LONG_PRESS = 0.6;
+    let longTimer = null;
+    function init(element, onPress, onLong = null) {
         el = element;
+        const release = () => {
+            el.classList.remove('pressed');
+            clearTimeout(longTimer);
+            longTimer = null;
+        };
         el.addEventListener('pointerdown', e => {
             e.preventDefault();
             el.classList.add('pressed');
             onPress();
+            clearTimeout(longTimer);
+            if (onLong) longTimer = setTimeout(() => { longTimer = null; onLong(); }, LONG_PRESS * 1000);
         });
-        ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => el.addEventListener(t, () => el.classList.remove('pressed')));
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => el.addEventListener(t, release));
     }
 
     function trigger(kind, now) {
@@ -46,5 +56,5 @@ const MachineButton = (() => {
         }
     }
 
-    return { init, trigger, prompt, update };
+    return { init, trigger, prompt, update, LONG_PRESS };
 })();

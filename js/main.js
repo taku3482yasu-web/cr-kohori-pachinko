@@ -150,8 +150,8 @@
     }
 
     function handleMachineEvent(e) {
-        if (e.type === 'bonusStart' && !e.rush) game.stats.firstHits++;
-        if (e.type === 'jitanStart' && e.rushHits === 1) game.rushStartBalls = game.balls;
+        if (e.type === 'bonusStart' && (!e.rush || e.yutime)) game.stats.firstHits++;
+        if ((e.type === 'jitanStart' && e.rushHits === 1) || (e.type === 'bonusStart' && e.yutime)) game.rushStartBalls = game.balls;
         if (e.type === 'rushEnd') {
             e.balls = game.balls - game.rushStartBalls;
             // 突破チャレンジ・RASH が終わったら、回転数と回転率を数え直す (ユーザー指定)
@@ -222,7 +222,7 @@
         if (m.bonus) return 'bonus';
         if (m.small) return 'small';
         if (Machine.inJitan(m)) return 'rush';
-        if (m.rush.active) return 'rush';
+        if (m.rush.active || m.yutime) return 'rush';
         return 'normal';
     }
 
@@ -234,11 +234,13 @@
         }
         if (m.small) return '小当たり  V を狙え！';
         const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);
+        if (m.yutime) return Machine.inJitan(m) ? `遊タイム  時短 残り ${left} 回` : '遊タイム  残り保留';
         if (m.rush.active && m.rush.challenge) return m.challengeRun || (m.spin && m.spin.plan.kind === 'challenge') ? `突破チャレンジ  おにおにと勝負！` : '突破チャレンジ  保留をためろ！';
         const name = CONFIG.show.rash.modes[m.rashMode].name;
         if (Machine.inJitan(m)) return `${name} ${m.rush.hits - 1}連  時短 残り ${left} 回`;
         if (m.rush.active) return `${name} ${m.rush.hits - 1}連  残り保留`;
-        return '通常時';
+        const yt = Machine.yutimeLeft(m);
+        return yt === null ? '通常時' : `通常時  遊タイムまで ${yt} 回`;
     }
 
     // 強さの表示: ハンドル・ゲージ・数字・左打ち/右打ちのボタン (いまの強さに近いほうを光らせる)
@@ -356,20 +358,37 @@
         Sound.unlock();
         Bgm.init(Sound.context);
     }));
-    MachineButton.init($('koori-button'), pressButton);
+    MachineButton.init($('koori-button'), pressButton, skipShow);
     const updateSoundButton = () => { $('sound-button').textContent = `音: ${Sound.muted ? 'OFF' : 'ON'}`; };
     $('sound-button').addEventListener('click', () => { Sound.setMuted(!Sound.muted); updateSoundButton(); });
     updateSoundButton();
 
     document.addEventListener('keydown', e => {
         if (game.paused) return;
-        if (e.code === 'KeyB' && !e.repeat) pressButton();
+        if (e.code === 'KeyB' && !e.repeat) { pressButton(); keyBDown = time; }
+        // B キーの長押しでも早送り (キーを押したままにすると repeat が来る)
+        if (e.code === 'KeyB' && e.repeat && keyBDown !== null && time - keyBDown >= MachineButton.LONG_PRESS) { keyBDown = null; skipShow(); }
         if (e.code === 'Space' && Lcd.storyPlaying() === 'opening') { Lcd.skipStory(); e.preventDefault(); return; }
         if (e.code === 'Space') { game.firing = true; e.preventDefault(); }
         if (e.code === 'ArrowRight') setStrength(game.strength + (e.shiftKey ? 10 : 1));
         if (e.code === 'ArrowLeft') setStrength(game.strength - (e.shiftKey ? 10 : 1));
     });
-    document.addEventListener('keyup', e => { if (e.code === 'Space') game.firing = false; });
+    document.addEventListener('keyup', e => {
+        if (e.code === 'Space') game.firing = false;
+        if (e.code === 'KeyB') keyBDown = null;
+    });
+    let keyBDown = null;   // B キーを押した時刻 (長押しの早送り用)
+
+    // 早送り (ユーザー指定 2026-10-20): 台のボタンの長押しで、いまの変動の演出を結果の手前まで飛ばす (Scenario.skipPoint)。
+    // カスタマイズの「早送り: OFF」では飛ばさない。当たりやすさは変わらない
+    function skipShow() {
+        const m = game.machine;
+        if (game.paused || Customize.get('skip') === 'off' || !m.spin || m.bonus) return;
+        const to = Scenario.skipPoint(m.spin.plan);
+        if (m.spin.elapsed >= to) return;
+        m.spin.elapsed = to;
+        Lcd.show('早送り ▶▶', '#ffffff', time, 0.6);
+    }
 
     $('left-button').addEventListener('click', () => setStrength(CONFIG.launch.presets.left));
     $('right-button').addEventListener('click', () => setStrength(CONFIG.launch.presets.right));

@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------
 // 遊ぶ人が選べる。当たりやすさ・出玉には関係しない (見た目と演出だけ)。選んだ内容はこのブラウザに保存する。
 //   演出: senyomi (先読みの量: なし / チャンス / おすすめ / 熱) / notice (告知: ふつう / 先告知) / furukawa (よくしゃべる / ふつう / しゃべらない) / vibrate (ボタンの振動) / bgm (BGM)
+//   操作: skip (早送り: 台のボタンの長押し) / autoAim (打ち分け)
 //   見た目: theme (盤面の色) / ball (玉の色) / koori (こおりくんの色)
 // Customize.get('theme') で読む。Customize.onChange(fn) で変わったときに呼ばれる。
 // =====================================================================
@@ -19,6 +20,8 @@ const Customize = (() => {
         vibrate: { label: 'ボタンの振動', group: '演出', note: 'スマホの本体の振動',
             choices: { on: 'ON', off: 'OFF' }, default: 'on' },
         bgm: { label: 'BGM', group: '演出', note: '通常時・突破チャレンジ・RASH・大当たり中で曲が変わる (「音: OFF」のときは鳴らない)',
+            choices: { on: 'ON', off: 'OFF' }, default: 'on' },
+        skip: { label: '早送り', group: '操作', note: '台のボタン (B キー) を長押しすると、演出を結果の手前まで飛ばす (2026-10-20)',
             choices: { on: 'ON', off: 'OFF' }, default: 'on' },
         autoAim: { label: '打ち分け', group: '操作', note: '自動: 台の状態に合わせて、強さを左打ち・右打ちに自動で合わせる',
             choices: { off: '手動', on: '自動' }, default: 'off' },

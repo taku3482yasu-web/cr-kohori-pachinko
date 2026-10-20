@@ -74,6 +74,7 @@
             <li>「← 左打ち」「右打ち →」のボタンで、それぞれに向いた強さ（<span id="preset-left"></span> / <span id="preset-right"></span>）に合わせます。いまの強さに合っているほうのボタンが光ります。「カスタマイズ」の<b>打ち分け: 自動</b>にすると、台の状態に合わせて自動で切り替わります</li>
             <li>通常時は<b>左打ち</b>でヘソを狙います。大当たり・時短・小当たりのあいだは画面に「右打ち →」が出るので<b>右打ち</b>にします</li>
             <li><b>こおりくんのボタン</b>（B キーでも）: バトルの「PUSH!」で押します。RASH の2回目からの大当たり中は、押すたびに こおりRASH ⇔ おにおにRASH が切り替わります</li>
+            <li><b>早送り</b>: こおりくんのボタン（B キー）を<b>長押し</b>すると、演出を結果の手前まで飛ばせます（当たりやすさは変わりません。「カスタマイズ」で OFF にできます）</li>
             <li>持ち玉がなくなったら「玉貸し」（+<span id="lend"></span>発）</li>
             <li>遊んでいる途中はこのブラウザに自動で保存され、次に開いたときに「前回から続ける」を選べます</li>
         </ul>
@@ -93,6 +94,7 @@
         <h2 id="spec">スペック</h2>
         <p>はじめに「台選び」でスペックを選びます。右上の「台選び」でいつでも選び直せます（持ち玉ははじめに戻ります）。</p>
         <div class="table-wrap"><table id="spec-table"></table></div>
+        <p><b>遊タイム</b>: 通常時に 1/99 は <b>300回</b>、1/159 は <b>500回</b> まわしても当たらなければ、時短 <span id="yutime-spins"></span> 回の遊タイムに入ります。遊タイム中に右打ちで当たれば（小当たり → V も）<b>そのまま RASH 突入</b>。回数は大当たりで 0 に戻ります（あと何回かは画面の下の「通常時」の表示に出ます）。</p>
         <p class="note">アタッカーの賞球は <span id="attacker-pay"></span> 個。1ラウンドに 10 個入ると閉じます（200個・1300個 はラウンドの入賞数を調整した近い値です）。</p>
 
         <h2 id="setting">設定</h2>
@@ -112,6 +114,11 @@
         <h3>変動の流れ</h3>
         <p>図柄が回る → <b>チャレンジ</b> → 成功すると <b>リーチ</b> → <b>バトル</b>。バトルに勝つと図柄がそろって大当たりです。</p>
         <p>バトルの「PUSH!」のあとに<b>追撃チャンス</b>が出たら、こおりくんが追加ダメージを与えます。出たら勝てる確率がぐんと上がります。</p>
+        <ul>
+            <li><b>ステップアップ予告</b>: 変動の始めにキャラが1段ずつ出てきます（こおりくん・ふるカワ・ともいし・お仲間・おにおに）。<b>3段目まで行けばチャンス</b>。3段目の文字が<b style="color:#ff3a3a">赤</b>ならチャンス、<b style="color:#ffd040">金</b>なら約90%で当たり！</li>
+            <li><b>擬似連</b>: 図柄が「NEXT」で回り直すほどチャンス。擬似4連までいけば激アツです</li>
+            <li><b>全回転</b>: 3つの図柄が同じキャラのまま回ったら大当たり確定！（こおりくん・ナイナイ・アルアル・おにおに・おかがっぱ の5種類）</li>
+        </ul>
         <div class="table-wrap"><table id="challenge-table"></table></div>
         <div class="table-wrap"><table id="battle-table"></table></div>
         <h3>ステージ</h3>
@@ -131,6 +138,7 @@
         <p>RASH 突入の大当たり中に、<b>こおりRASH</b> か <b>おにおにRASH</b> を選びます（選ばなければこおりRASH。当たりやすさは同じです）。</p>
         <h3>こおりRASH</h3>
         <p>バトルで勝てば当たり。相手によって勝ちやすさが違います。目のまわりに靄がかかって<b>目が赤く光る「怪」</b>の状態で出てきたら、勝てる確率が上がります。怪が出る保留は、電チューに入ったときに<b>おどろおどろしい先バレ音が鳴ってボタンが紫に光ります</b>。</p>
+        <p>バトル中にこおりくんのうしろで<b>やすさん・たむさん・だけさんが応援</b>してくれることがあります。人数が多いほどチャンス。</p>
         <p>バトル中に画面が光って<b>お仲間召喚</b>！ やすさん・たむさん・だけさん のだれかが現れたら<b>撃破確定</b>です。</p>
         <p>バトルに負けても、画面が暗転したら…<b>復活</b>のチャンス！「それでも」が虹色になれば、こおりくんが立ち上がって相手を撃破します（1/99 では 900個 の当たり）。</p>
         <div class="table-wrap"><table id="koori-table"></table></div>
@@ -171,8 +179,8 @@
         <p style="margin-top: 32px;"><a href="index.html" class="small-button link-button">← 台にもどる</a></p>
     </main>
 
-    <script src="js/config.js?v=1ac0503d"></script>
-    <script src="js/updates.js?v=a8e173f8"></script>
+    <script src="js/config.js?v=a9aee9c2"></script>
+    <script src="js/updates.js?v=cdbf5899"></script>
     <script>
         (() => {
             const $ = id => document.getElementById(id);
@@ -200,6 +208,7 @@
             $('continue-rate').textContent = specs.map(sp => `${pct(sp.target.continuation)}（${sp.label}）`).join(' / ');
             $('jitan-spins').textContent = specs[0].jitan.spins;
             $('attacker-pay').textContent = c.payout.attacker;
+            $('yutime-spins').textContent = c.specs.s99.yutime.spins;
 
             // スペック (振り分けは重みの割合で出す)
             table('spec-table', ['', ...specs.map(sp => `<span class="gold">${sp.label}</span>`)], [

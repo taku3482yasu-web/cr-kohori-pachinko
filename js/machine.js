@@ -7,6 +7,9 @@
 //   時短: まわすあいだ電サポ (普図が当たりやすく電チューがよく開く)。終われば通常時
 //     初当たりのあとの時短は突破チャレンジ: 電チューの保留がたまったら (challengeBattle.gatherTimeout 秒でも) おにおにとのバトル。
 //     その保留のどれかで当たれば RASH 突入。RASH 中は大当たりのたびに時短 jitan.spins 回
+//   遊タイム (天井。ユーザー指定 2026-10-20): 通常時に spec.yutime.at 回まわしても当たらなければ、時短 spec.yutime.spins 回 (m.yutime)。
+//     遊タイム中に特図2 で当たれば (小当たり → V も) RASH 突入。特図1 の当たりはふつうの初当たり。外れたまま終われば通常時に戻る
+//     数えるのは通常時 (RASH・時短でない) の特図1 の回転数 (m.normalSpins)。大当たりで 0 に戻る
 //   RASH のモード (こおりRASH / おにおにRASH) は m.rashMode。Machine.setRashMode で変える (演出だけが変わる)
 //   保留は特図2 を先に消化する。結果は玉が入ったときに決める (先読みに使える)。
 //   保留の色・ボタン・変動の流れと時間は Scenario (js/scenario.js) が決める。
@@ -47,6 +50,8 @@ const Machine = (() => {
             futsu: { holds: 0, spin: 0, opening: null },  // 普図 (電チュー)
             parts: { denchu: false, attacker: false },
             rush: { active: false, hits: 0, startTime: 0, challenge: false },   // challenge: 突破チャレンジ中 (まだ RUSH に入っていない)
+            normalSpins: 0,           // 遊タイムまでに数える回転数 (通常時の特図1。大当たりで 0 に戻る)
+            yutime: false,            // 遊タイム中
             stats: { spins1: 0, spins2: 0, hits1: 0, hits2: 0, smalls: 0, vHits: 0, rushes: 0, rushEntries: 0, rushHits: 0, bonusRounds: 0 },
             events: []
         };
@@ -90,7 +95,7 @@ const Machine = (() => {
                 m.small.v = true;
                 m.stats.vHits++;
                 emit(m, 'v');
-                startBonus(m, m.small.alloc || weightedPick(m.spec.rushHit, m.rng), true, m.small.promote);
+                startBonus(m, m.small.alloc || weightedPick(m.spec.rushHit, m.rng), true, m.small.promote, 2);
             }
         } else if (id === 'gate') {
             if (m.futsu.holds < m.config.machine.futsu.holdMax) m.futsu.holds++;
@@ -109,6 +114,7 @@ const Machine = (() => {
             emit(m, 'jitanEnd');
         }
         checkRushEnd(m);
+        checkYutimeEnd(m);
         m.parts.attacker = Boolean((m.bonus && m.bonus.phase === 'open') || (m.small && !m.small.v));
         m.parts.denchu = Boolean(m.futsu.opening && m.futsu.opening.open);
     }
@@ -146,6 +152,7 @@ const Machine = (() => {
                 rashMode: m.rashMode,
                 specId: m.specId,
                 rushStreak: m.rush.active && !m.rush.challenge ? m.rush.hits - 1 : 0,   // いまの RASH の連チャン数 (表示の「〇連」)
+                yutime: m.yutime,
                 // RASH の最後の変動 (このあと時短も保留もない)
                 isLast: fig === 2 && m.rush.active && !m.rush.challenge && m.jitanLeft - (jitanSpin ? 1 : 0) <= 0 && m.holds[2].length === 0
             }, m.rng);
@@ -154,6 +161,7 @@ const Machine = (() => {
             if (fig === 1 && !m.rush.active && !inJitan(m)) plan.stage = Scenario.stepStage(m.config, m.stage, result, m.holds[1], m.rng);
             m.spin = { fig, result, plan, duration: plan.duration, elapsed: 0, jitan: jitanSpin };
             m.stats[fig === 1 ? 'spins1' : 'spins2']++;
+            if (fig === 1 && !m.rush.active && !inJitan(m)) m.normalSpins++;
             if (m.spin.jitan) m.jitanLeft--;
             if (fig === 1) changeHolds(m, result);
             emit(m, 'spinStart', { fig, result, plan, duration: plan.duration, jitanLeft: m.jitanLeft });
@@ -173,13 +181,33 @@ const Machine = (() => {
         emit(m, 'spinEnd', { fig, result, plan });
         if (result.kind === 'hit') {
             m.stats[fig === 1 ? 'hits1' : 'hits2']++;
-            startBonus(m, result.alloc, false, plan.promote);
+            startBonus(m, result.alloc, false, plan.promote, fig);
         } else if (result.kind === 'small') {
             m.stats.smalls++;
             // V に入ったらすぐ大当たり (startBonus が閉じる)。V 以外の図柄でそろえた小当たりは、ラウンドの始めに V に昇格する
             m.small = { timer: m.config.machine.small.open, v: false, alloc: result.alloc, promote: plan.promoteV ? { to: 'V', toV: true } : null };
             emit(m, 'smallStart');
-        }
+        } else if (fig === 1) startYutime(m);
+    }
+
+    // 遊タイム: 通常時の回転数が天井に届いたら (外れの変動が止まったとき) 時短に入る
+    function startYutime(m) {
+        const yt = m.spec.yutime;
+        if (!yt || m.yutime || m.rush.active || inJitan(m) || m.normalSpins < yt.at) return;
+        m.yutime = true;
+        m.jitanLeft = yt.spins;
+        m.jitanActive = true;
+        m.stats.yutimes = (m.stats.yutimes || 0) + 1;
+        emit(m, 'yutimeStart', { spins: yt.spins, at: yt.at });
+    }
+
+    // 遊タイムの終わり (当たらなかった): 時短が終わり、特図2 の保留も小当たりも残っていない
+    function checkYutimeEnd(m) {
+        if (!m.yutime || inJitan(m) || m.bonus || m.small) return;
+        if (m.holds[2].length || (m.spin && m.spin.fig === 2)) return;
+        m.yutime = false;
+        m.normalSpins = 0;
+        emit(m, 'yutimeEnd');
     }
 
     // 保留の色・ボタン・突破チャレンジの武器 (特図2 の保留の色はいつも白)
@@ -224,7 +252,8 @@ const Machine = (() => {
 
     // ----- 大当たり -----
     // promote: 昇格する当たり ({ to: 本当の図柄 }。Scenario が決める)。昇格するまで液晶は中身を隠す (promote.done で出す)
-    function startBonus(m, alloc, fromV, promote = null) {
+    // fig: 当たった特図 (遊タイム中の特図2 の当たりは RASH 突入)
+    function startBonus(m, alloc, fromV, promote = null, fig = 1) {
         const cfg = m.config.machine.bonus;
         m.small = null;
         m.spin = null;
@@ -233,7 +262,17 @@ const Machine = (() => {
         m.jitanActive = false;
         m.bonus = { alloc, fromV, round: 0, count: 0, phase: 'opening', timer: cfg.opening, promote: promote ? { ...promote, done: false } : null };
         m.stats.bonusRounds += alloc.rounds;
-        let entry = false;
+        m.normalSpins = 0;
+        let entry = false, yutime = false;
+        if (m.yutime) {
+            m.yutime = false;
+            // 遊タイム中の特図2 の当たり → RASH 突入 (突破チャレンジを突破したときと同じ)
+            if (fig === 2) {
+                m.rush = { active: true, hits: 1, startTime: m.time, challenge: true };
+                m.stats.rushes++;
+                yutime = true;
+            }
+        }
         if (m.rush.active) {
             m.rush.hits++;
             m.stats.rushHits++;
@@ -245,7 +284,7 @@ const Machine = (() => {
             }
         }
         // promote: 出玉を隠す昇格 (奇数への昇格)。V への昇格 (toV) は出玉が変わらないので隠さない
-        emit(m, 'bonusStart', { rounds: alloc.rounds, label: alloc.label, next: alloc.next, fromV, rush: m.rush.active, rushHits: m.rush.hits, entry,
+        emit(m, 'bonusStart', { rounds: alloc.rounds, label: alloc.label, next: alloc.next, fromV, rush: m.rush.active, rushHits: m.rush.hits, entry, yutime,
             promote: Boolean(promote && !promote.toV), promoteV: Boolean(promote && promote.toV) });
     }
 
@@ -347,6 +386,13 @@ const Machine = (() => {
         }
     }
 
+    // 遊タイムまであと何回 (遊タイムのないスペック・RASH 中・遊タイム中は null)
+    function yutimeLeft(m) {
+        const yt = m.spec.yutime;
+        if (!yt || m.yutime || m.rush.active || inJitan(m)) return null;
+        return Math.max(0, yt.at - m.normalSpins);
+    }
+
     // 盤面でどちらを狙うか ('left' / 'right')。時短・大当たり・小当たり・残り保留のあいだは右打ち
     function aim(m) {
         if (m.bonus || m.small || inJitan(m) || m.rush.active) return 'right';
@@ -434,5 +480,5 @@ const Machine = (() => {
         }
     }
 
-    return { create, enter, update, aim, inJitan, setRashMode, setSenyomi, snapshot, restore, debugHold, debugJitan, debugChallenge };
+    return { create, enter, update, aim, inJitan, yutimeLeft, setRashMode, setSenyomi, snapshot, restore, debugHold, debugJitan, debugChallenge };
 })();

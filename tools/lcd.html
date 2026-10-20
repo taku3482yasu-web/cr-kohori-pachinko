@@ -13,6 +13,10 @@
     ?force=blackout  RASH 中のブラックアウト (突発当たり)
     ?story=opening / ?story=ending  オープニング・エンディング
     ?force=rush&promote=1&fast=1  奇数の当たりを偶数で見せて、ラウンド中に昇格
+    ?force=hit&stepup=s3gold&gizi=3  ステップアップ予告 (s1〜s3gold) と擬似連 (0〜3)
+    ?force=hit&zen=okagappa  全回転 (koori / naitei / aruaru / onioni / okagappa)
+    ?force=fail&yutime=1&holds=0  遊タイム (はじめの変動が止まったら遊タイム突入)
+    ?force=koori&hit=2&cheer=3  こおりRASH のお仲間の応援 (0〜3人)
     ?force=reach&pursuit=1  通常時のバトルで追撃チャンス (force=hit で勝ち)
     ?force=koori&hit=2&summon=1  こおりRASH のお仲間召喚
     ?force=koori&vpromote=1  小当たりを V 以外の図柄でそろえて、V入賞 → ラウンドの始めに V に昇格
@@ -62,6 +66,7 @@
     if (params.get('vpromote')) CONFIG.show.promote.vRate = 1;   // 小当たりを V 以外の図柄でそろえる (V入賞も自動で)
     if (params.get('pursuit')) CONFIG.show.pursuit.hitRate = CONFIG.show.pursuit.missRate = 1;   // 通常時のバトルで必ず追撃チャンス
     if (params.get('summon')) { CONFIG.show.summon.rate = 1; CONFIG.show.revival.share = 0; }   // こおりRASH の当たりのバトルで必ずお仲間召喚 (復活にしない)
+    if (params.has('cheer')) CONFIG.show.cheer.win = CONFIG.show.cheer.miss = { [params.get('cheer')]: 1 };   // こおりRASH のお仲間の応援の人数
     const m = Machine.create(CONFIG, params.get('spec') || 's99');
     const lcd = Lcd.init();
     const force = params.get('force') || 'hit';
@@ -101,6 +106,15 @@
     } else if (force === 'small') Machine.debugHold(m, 2, 'small', null);
     else if (force === 'rush') Machine.debugHold(m, 1, 'hit', 'jitan', options);
     else Machine.debugHold(m, 1, force, null, options);
+    // &stepup=s3gold: ステップアップ予告 (s1 / s2 / s3white / s3red / s3gold) / &gizi=3: 擬似連の回数 / &zen=koori: 全回転 (当たりのとき)
+    // &yutime=1: はじめの変動が止まったら遊タイム (force=fail などの外れと使う)
+    if (params.get('yutime')) m.normalSpins = m.spec.yutime.at - 1;
+    const first = m.holds[1][0];
+    if (first) {
+        if (params.get('stepup')) first.forceStepUp = params.get('stepup');
+        if (params.has('gizi')) first.forceGizi = Number(params.get('gizi'));
+        if (params.get('zen')) first.forceZenkaiten = params.get('zen');
+    }
     if (params.get('change')) {
         // 保留変化の確認: 当たりの保留を白で出しておき、変化させる
         const target = params.get('change') === 'next' ? m.holds[1][1] : m.holds[1][0];

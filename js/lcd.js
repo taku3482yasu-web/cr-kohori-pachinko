@@ -2,13 +2,16 @@
 // 液晶 (256x144 のドット絵の画面)
 // ---------------------------------------------------------------------
 // 変動の流れは Scenario が決めた plan.phases どおりに描く (台の m.spin.elapsed に合わせる):
+//   stepup    ステップアップ予告 (plan.stepUp。キャラが1段ずつ出てくる。図柄は回ったまま)
 //   roll      図柄が回る (外れはここで 左 → 右 → 中 の順に止まる)
+//   next      擬似連の「NEXT」(plan.gizi 回。図柄が回り直す)
 //   challenge チャレンジ (宝探し・特訓・お弁当作り)。最後に成功・失敗がわかる。図柄は上に小さく回る
 //   fail      チャレンジ失敗。図柄がばらばらに止まる
 //   reach     チャレンジ成功 → 左右がそろってリーチ。バトルの相手が出てくる
 //   battle    バトル。最後に「PUSH!」(台のボタン)
 //   pursuit   追撃チャンス (plan.pursuit のときだけ)。こおりくんがもう2回攻撃して追加ダメージ
 //   result    撃破なら図柄がそろう (大当たり)、負けなら中の図柄がずれて止まる
+//   全回転 (plan.type 'zenkaiten'): zroll (ふつうに回る) → zenkaiten (3つとも同じキャラの図柄のまま回る) → zend (止まって大当たり)
 // 保留 (こおりくんの体の形。色つき)・ふるカワの吹き出し・大当たり・RASH の表示もここ。
 // 特図2 (突破チャレンジ・こおりRASH・おにおにRASH) は plan.kind で分ける。突破チャレンジとおにおにRASH は js/lcd-rash.js
 // Lcd.event(e) で台 (Machine) のイベントを受け取り、Lcd.draw(now, machine) で描く。
@@ -188,7 +191,12 @@ const Lcd = (() => {
         } else if (e.type === 'spinStart') {
             if (trophy) trophy.until = Math.max(now, trophy.start + summaryTime) + CONFIG.show.settingHint.trophy.minShow;
             spinView = { plan: e.plan, gaugeStop: 0.55 + Math.random() * 0.35, pushedAt: null };
-            if (e.plan.talk) say(e.plan.talk.text, e.plan.talk.color, now);
+            if (e.plan.talk) {
+                say(e.plan.talk.text, e.plan.talk.color, now);
+                // ステップアップ予告のあいだは、文字に重ならないよう予告が終わってからしゃべる
+                const first = e.plan.phases[0];
+                if (bubble && first.name === 'stepup') { bubble.from = now + first.t; bubble.until += first.t; }
+            }
             else if (Customize.get('furukawa') === 'often' && e.fig === 1 && e.plan.type === 'plain') {
                 // よくしゃべる: ふだんは黙っている変動でも、キャラクターの話か豆知識
                 const f = CONFIG.show.furukawa;
@@ -211,7 +219,7 @@ const Lcd = (() => {
             Story.play('ending', now);
         } else if (e.type === 'bonusStart') {
             bonusTalk(e.entry ? 'entry' : e.label >= CONFIG.show.bigLabel && !e.promote ? 'big' : 'small', now, CONFIG.machine.bonus.opening * 0.6);
-            const head = e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
+            const head = e.yutime ? '遊タイムで RASH 突入！' : e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
             show(e.promote ? head : `${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
         } else if (e.type === 'bonusEnd') {
@@ -245,6 +253,13 @@ const Lcd = (() => {
             else if (e.round > 1 && Math.random() < f.bonusRoundRate) bonusTalk('round', now);
         } else if (e.type === 'jitanStart') {
             if (e.challenge) show('突破チャレンジ！', '#7fd3f7', now, 2);
+        } else if (e.type === 'yutimeStart') {
+            // 遊タイム (天井): 虹色で出して、ボタンも虹色に
+            show('遊タイム突入！', 'rainbow', now, 2.5);
+            MachineButton.trigger('rainbow', now);
+            Sound.play('win');
+        } else if (e.type === 'yutimeEnd') {
+            show('通常時へ', '#ffffff', now, 2);
 
         } else if (e.type === 'ending' && e.next === 'normal') {
             show('通常時へ', '#ffffff', now, CONFIG.machine.bonus.ending);
@@ -402,6 +417,10 @@ const Lcd = (() => {
             const done = last && local >= phase.t - 0.5;
             return { stop: [done, done, done], big: false };
         }
+        // 特図1 の予告・擬似連・全回転: 図柄は大きく回ったまま (全回転は drawReels で同じ図柄をそろえて回す)
+        if (n === 'stepup' || n === 'next' || n === 'zroll') return { stop: [false, false, false], big: true };
+        if (n === 'zenkaiten') return { stop: [false, false, false], big: true, zenkaiten: true };
+        if (n === 'zend') return { stop: [true, true, true], big: true };
         if (plan.type === undefined || plan.type === 'plain') {
             // 外れ・特図2: 左 45% → 右 70% → 中 100%
             const r = local / phase.t;
@@ -456,6 +475,7 @@ const Lcd = (() => {
         const digits = plan ? plan.digits : shown;
         const state = plan ? reelState(plan, phase) : { stop: [true, true, true], big: true };
         if (state.hidden) return { reach: false, aligned: false, big: false };
+        if (state.zenkaiten) return drawZenkaitenReels(now, digits[0], phase);
         const layout = state.big ? BIG : SMALL;
         const reach = plan && plan.type === 'reach' && state.stop[0] && state.stop[2] && !state.stop[1];
         const aligned = state.stop.every(Boolean) && digits[0] === digits[1] && digits[1] === digits[2];
@@ -468,6 +488,113 @@ const Lcd = (() => {
             Figures.draw(ctx, digits[i], layout.xs[i], layout.y, layout.w, layout.h, { glow });
         }
         return { reach, aligned, big: state.big };
+    }
+
+    // 全回転: 3つの図柄が同じキャラのまま、そろって回る。だんだんゆっくりになり、最後の ZEN_STOP 秒で止まる
+    const ZEN_STOP = 0.8;
+    function drawZenkaitenReels(now, figure, phase) {
+        const left = phase.t - phase.local;
+        const stopped = left <= ZEN_STOP;
+        const speed = 3 + 9 * Math.max(0, left - ZEN_STOP) / (phase.t - ZEN_STOP);
+        const frac = stopped ? 0 : (phase.local * speed) % 1;
+        const glow = 0.5 + 0.5 * Math.sin(now * 10);
+        for (let i = 0; i < 3; i++) {
+            const x = BIG.xs[i];
+            const { w, h, y } = BIG;
+            if (stopped) {
+                Figures.draw(ctx, figure, x, y, w, h, { glow });
+                continue;
+            }
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x - w / 2 - 1, y - h / 2 - 1, w + 2, h + 2);
+            ctx.clip();
+            Figures.draw(ctx, figure, x, y + frac * h, w, h);
+            Figures.draw(ctx, figure, x, y + frac * h - h, w, h);
+            ctx.restore();
+        }
+        return { reach: false, aligned: stopped, big: true };
+    }
+
+    // 文字が幅に収まるよう小さくして、真ん中にそろえて書く
+    function fitCenter(str, x, y, size, color, maxW, now = 0) {
+        let s = size;
+        ctx.font = `${s}px ${FONT}`;
+        while (s > 7 && ctx.measureText(str).width > maxW) {
+            s--;
+            ctx.font = `${s}px ${FONT}`;
+        }
+        text(str, x, y, s, color, 'center', now);
+    }
+
+    // ----- ステップアップ予告 (ユーザー指定 2026-10-20) -----
+    // 1段ごとに枠が右から入ってくる (左から STEP 1・2・3)。3段目は文字を大きく、色 (白・赤・金) で期待度
+    function drawStepUp(now, plan, phase) {
+        const su = CONFIG.show.stepUp;
+        const s = plan.stepUp;
+        const kind = su.kinds[s.kind];
+        const k = Math.min(s.step, Math.floor(phase.local / su.stepTime) + 1);
+        const local = phase.local - (k - 1) * su.stepTime;
+        const colorOf = j => j === 3 ? su.colors[s.color] : '#ffffff';
+        for (let j = 1; j <= k; j++) {
+            const step = kind.steps[j - 1];
+            const slide = j === k ? Math.max(0, 1 - local / 0.25) : 0;
+            const x = 6 + (j - 1) * 83 + slide * 80;
+            ctx.save();
+            ctx.globalAlpha = 1 - slide * 0.6;
+            ctx.fillStyle = 'rgba(8, 16, 34, 0.9)';
+            ctx.fillRect(x, 30, 78, 76);
+            ctx.fillStyle = j === 3 ? colorOf(3) : '#7fd3f7';
+            ctx.fillRect(x, 30, 78, 2);
+            ctx.fillRect(x, 104, 78, 2);
+            text(`STEP ${j}`, x + 39, 38, 8, j === 3 ? colorOf(3) : '#7fd3f7');
+            drawInfoPortrait(step.who, x + 39, 88, 44, 44, now);
+            fitCenter(step.text, x + 39, 97, 9, colorOf(j), 74);
+            ctx.restore();
+            once(`step${j}`, j < 3 ? 'challenge' : s.color === 'gold' ? 'win' : 'reach');
+        }
+        // 3段目: 文字を大きく。金はきらめく
+        if (k === 3 && local >= 0.3) {
+            band(110, 20, 0.7);
+            const color = s.color === 'gold' && Math.floor(now * 8) % 2 ? '#fff6c0' : colorOf(3);
+            fitCenter(kind.steps[2].text, W / 2, 120, 16, color, W - 16);
+        }
+    }
+
+    // ----- 擬似連 (ユーザー指定 2026-10-20): 「NEXT」で図柄が回り直す -----
+    function drawNext(now, plan, phase) {
+        const count = plan.phases.slice(0, phase.index + 1).filter(ph => ph.name === 'next').length;
+        if (phase.local < 0.3) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.8 - phase.local * 2.5})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+        band(48, 46, 0.6);
+        text('NEXT', W / 2, 64, 26, Math.floor(now * 8) % 2 ? '#ffe066' : '#ff3a3a');
+        text(`擬似${count + 1}連`, W / 2, 85, 12, count >= 3 ? 'rainbow' : count === 2 ? '#ff6a8a' : '#7fd3f7', 'center', now);
+        once(`next${count}`, 'reach');
+    }
+
+    // ----- 全回転 (プレミア。ユーザー指定 2026-10-20) -----
+    function drawZenkaiten(now, plan, phase) {
+        if (phase.name !== 'zenkaiten' && phase.name !== 'zend') return;
+        const kind = CONFIG.show.zenkaiten.kinds[plan.zenkaiten];
+        // 虹色の枠
+        ctx.fillStyle = rainbow(now);
+        ctx.fillRect(0, 0, W, 3);
+        ctx.fillRect(0, H - 3, W, 3);
+        ctx.fillRect(0, 0, 3, H);
+        ctx.fillRect(W - 3, 0, 3, H);
+        if (phase.name === 'zenkaiten') {
+            if (phase.local < 0.3) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.9 - phase.local * 3})`;
+                ctx.fillRect(0, 0, W, H);
+            }
+            band(4, 22, 0.6);
+            text('全回転！！', W / 2, 15, 18, 'rainbow', 'center', now);
+            once('zenkaiten', 'win');
+        }
+        band(108, 18, 0.6);
+        fitCenter(`${kind.name} 全回転`, W / 2, 117, 12, '#ffe066', W - 16);
     }
 
     // ----- チャレンジ (6秒。最後の1秒で成功・失敗) -----
@@ -658,6 +785,7 @@ const Lcd = (() => {
         }
 
         if (enemyAlpha > 0) Characters.drawEnemy(ctx, plan.enemy, ex, ground, { scale, frame, hurt: enemyHurt, alpha: enemyAlpha, kai: plan.kai });
+        if (plan.cheer && phase.name !== 'roll') drawCheer(now, plan, phase, ground);
         if (plan.summon && (phase.name === 'summon' || phase.name === 'result')) drawSummoned(now, plan, phase, ground, frame);
         if (kooriDown) {
             ctx.save();
@@ -724,6 +852,22 @@ const Lcd = (() => {
         if (spinView.played.has(key)) return;
         spinView.played.add(key);
         Sound.play(name);
+    }
+
+    // お仲間の応援 (こおりRASH のバトル。ユーザー指定 2026-10-20): こおりくんのうしろで 1〜3人 がぴょんぴょん跳ねる。
+    // 召喚された仲間は、召喚のあとは応援の列から抜ける (drawSummoned が描く)
+    const CHEER_ORDER = ['yasu', 'tamu', 'dake'];
+    function drawCheer(now, plan, phase, ground) {
+        const summoned = plan.summon && (phase.name === 'summon' || phase.name === 'result') ? plan.summon : null;
+        CHEER_ORDER.slice(0, plan.cheer).forEach((id, i) => {
+            if (id === summoned) return;
+            const hop = Math.abs(Math.sin(now * 6 + i * 1.3)) * 4;
+            Characters.drawCompanion(ctx, id, 10 + i * 14, ground - hop, { scale: 1, frame: Math.floor(now * 4 + i) % 2 });
+        });
+        if (phase.name === 'battle' && !phase.pushing) {
+            const all = plan.cheer >= 3;
+            text(all ? '全員で応援！' : 'がんばれー！', 4, 96, all ? 9 : 8, all ? 'rainbow' : '#ffe066', 'left', now);
+        }
     }
 
     // お仲間召喚の仲間 (やすさん・たむさん・だけさん)。こおりくんと相手のあいだに降りてきて、相手に体当たりする
@@ -889,7 +1033,8 @@ const Lcd = (() => {
             return;
         }
         const size = Characters.size(who);
-        if (size.w) Characters.drawEnemy(ctx, who, cx, footY, { scale: Math.min(maxW / size.w, maxH / size.h), frame });
+        if (Characters.isCompanion(who)) Characters.drawCompanion(ctx, who, cx, footY, { scale: Math.min(maxW / size.w, maxH / size.h), frame });
+        else if (size.w) Characters.drawEnemy(ctx, who, cx, footY, { scale: Math.min(maxW / size.w, maxH / size.h), frame });
     }
 
     function drawInfoCard(now, m) {
@@ -1035,6 +1180,11 @@ const Lcd = (() => {
                 }
             }
             const state = drawReels(now, plan, phase);
+            if (phase && phase.name === 'stepup') drawStepUp(now, plan, phase);
+            if (phase && phase.name === 'next') drawNext(now, plan, phase);
+            if (plan && plan.type === 'zenkaiten' && phase) drawZenkaiten(now, plan, phase);
+            // 擬似連のあと (チャレンジのあいだ) は右上に「擬似〇連」
+            if (plan && plan.gizi && phase && phase.name === 'challenge') text(`擬似${plan.gizi + 1}連`, W - 6, 9, 9, '#ffe066', 'right');
             if (phase && phase.name === 'reach' && phase.local >= 0.6 && phase.local < 1.4) {
                 band(104, 20, 0.6);
                 text('リーチ！', W / 2, 114, 18, Math.floor(now * 6) % 2 ? '#ff6a8a' : '#ffe066');
@@ -1044,6 +1194,11 @@ const Lcd = (() => {
             const onioniSpin = plan && plan.kind === 'onioni' && !(phase && phase.name === 'open');
             if (m.rush.active && !m.rush.challenge && (onioniSpin || !(plan && plan.kind !== 'plain' && plan.fig === 2)) && !(plan && plan.kind === 'blackout')) {
                 text(Machine.inJitan(m) ? `${rashName()} ${m.rush.hits - 1}連  時短 残り ${left}回` : `${rashName()} ${m.rush.hits - 1}連  残り保留`, W / 2, 112, 11, '#7fd3f7');
+            }
+            if (m.yutime) {
+                band(98, 26, 0.5);
+                text('遊タイム', W / 2, 105, 12, 'rainbow', 'center', now);
+                text(Machine.inJitan(m) ? `時短 残り ${left}回  当たれば RASH 突入！` : '残り保留', W / 2, 117, 10, '#ffffff');
             }
         }
 

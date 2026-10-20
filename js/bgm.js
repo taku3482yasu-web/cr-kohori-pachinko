@@ -160,6 +160,7 @@ const Bgm = (() => {
         if (story === 'opening') return 'normal';
         if (m.bonus) return 'bonus';
         if (m.rush.active && m.rush.challenge) return 'challenge';
+        if (m.yutime) return 'kooriRash';   // 遊タイム: 疾走感の曲 (2026-10-20)
         if (m.rush.active) return kaiNow(m) ? 'kai' : m.rashMode === 'onioni' ? 'onioniRash' : 'kooriRash';
         if (m.stage.hi) return m.stage.hi.id === 'fullMoon' ? 'fullMoon' : 'seCastle';   // チャンスステージは、そのステージの曲
         return 'normal';
