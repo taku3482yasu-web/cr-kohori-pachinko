@@ -78,7 +78,7 @@
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
         if (typeof Cabinet !== 'undefined' && !game.cabinet) {
-            game.cabinet = (Cabinet.create($('cabinet-art'), canvas), true);
+            game.cabinet = (Cabinet.create($('cabinet-art'), canvas, { outline: BoardView.outline(game.board), width: CONFIG.board.width }), true);
             // 筐体の 下の PUSH: 押すと 台の ボタンを 押したのと 同じ (長押しの 早送りも)
             const push = $('cabinet-push'), kb = $('koori-button');
             ['pointerdown', 'pointerup', 'pointercancel', 'pointerleave'].forEach(type => push.addEventListener(type, e => {

@@ -78,13 +78,8 @@ const BoardView = (() => {
         const grad = g.createLinearGradient(0, 0, 0, b.height);
         grad.addColorStop(0, COLORS.boardTop);
         grad.addColorStop(1, COLORS.boardBottom);
-        // レールの 外は 赤黒い 枠 (鋲つき)
-        g.fillStyle = COLORS.accentDark;
-        g.fillRect(0, 0, b.width, b.height);
-        g.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        g.fillRect(0, 0, b.width, b.height);
-        g.fillStyle = 'rgba(255, 255, 255, 0.18)';
-        for (let x = 8; x < b.width; x += 24) { g.fillRect(x, 6, 1.5, 1.5); g.fillRect(x, b.height - 8, 1.5, 1.5); }
+        // レールの 外は 透明 (筐体の 絵が 盤面の 丸い 形に 合わせて 枠を 描く。2026-10-23 ユーザー指定: 四角の 空きを なくす)
+        g.clearRect(0, 0, b.width, b.height);
         g.fillStyle = grad;
         g.beginPath();
         board.rails.outer.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
@@ -191,9 +186,9 @@ const BoardView = (() => {
         g.textAlign = 'center';
         g.lineWidth = 3;
         g.strokeStyle = '#ffffff';
-        g.strokeText('こおりくん', b.center.x, f.shoulder - 3);
+        g.strokeText('こおりくん', b.center.x, f.shoulder - 6);   // 液晶を 大きく したので 少し 上
         g.fillStyle = COLORS.accent;
-        g.fillText('こおりくん', b.center.x, f.shoulder - 3);
+        g.fillText('こおりくん', b.center.x, f.shoulder - 6);
 
         // ワープ入口
         const w = b.warp;
@@ -329,6 +324,7 @@ const BoardView = (() => {
         const { ctx, board } = view;
         const b = board.config;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, view.canvas.width, view.canvas.height);   // レールの 外は 透明
         ctx.drawImage(view.base, 0, 0);
         ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
 
@@ -380,5 +376,11 @@ const BoardView = (() => {
         return [(clientX - rect.left) / rect.width * view.board.config.width, (clientY - rect.top) / rect.height * view.board.config.height];
     }
 
-    return { create, draw, redraw, toBoard, SCALE };
+    // 盤面の 形 (レールの 外の ふち。筐体が この 形に 合わせて 枠を 描く): 盤面の 座標の 点の 列
+    function outline(board) {
+        const o = board.rails.outer, b = board.config;
+        return [...o, [o[o.length - 1][0], b.bottomY + 4], [o[0][0], b.bottomY + 4]];
+    }
+
+    return { create, draw, redraw, toBoard, outline, SCALE };
 })();

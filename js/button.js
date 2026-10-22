@@ -61,7 +61,7 @@ const MachineButton = (() => {
         }
     }
     // いまの 光り方 (筐体の PUSH が 使う)
-    const state = () => ({ kind: lit, lit: Boolean(lit), push: Boolean(el && el.classList.contains('push')) });
+    const state = () => ({ kind: lit, lit: Boolean(lit), push: Boolean(el && el.classList.contains('push')), pressed: Boolean(el && el.classList.contains('pressed')) });
 
     return { init, trigger, prompt, update, state, LONG_PRESS };
 })();
