@@ -77,6 +77,7 @@
         game.board = Board.build(CONFIG, board);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
+        if (typeof Cabinet !== 'undefined' && !game.cabinet) game.cabinet = (Cabinet.create($('cabinet-art'), canvas), true);
         game.spinsBase = saved ? saved.spinsBase : 0;
         game.stats = saved ? { ...saved.stats } : { launched: 0, launchedLeft: 0, foul: 0, foulLeft: 0, heso: 0, gate: 0, denchu: 0, attacker: 0, general: 0, warp: 0, out: 0, paid: 0, firstHits: 0 };
         Lcd.reset(game.machine);
@@ -300,7 +301,10 @@
             }
         } else acc = 0;
         const lcdCanvas = Lcd.draw(time, game.machine);
-        BoardView.draw(game.view, game.world, lcdCanvas, Lcd.gimmick(), time);
+        const gimmick = Lcd.gimmick();
+        BoardView.draw(game.view, game.world, lcdCanvas, gimmick, time);
+        // 台の筐体: 状態で 光り方・役物が かわる (js/cabinet.js)
+        if (game.cabinet) Cabinet.draw(time, { mode: modeClass(game.machine), premium: Boolean(game.machine.bonus && game.machine.bonus.alloc && game.machine.bonus.alloc.premium), gimmick, balls: game.balls });
         // BGM: 台の状態で曲を変える。消音・BGM OFF・窓を開いているあいだは止める
         Bgm.play(Bgm.trackFor(game.machine, Lcd.storyPlaying()));
         Bgm.setPaused(Sound.muted || Customize.get('bgm') === 'off' || game.paused);

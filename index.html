@@ -15,11 +15,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
-    <link rel="stylesheet" href="css/style.css?v=616d7184">
+    <link rel="stylesheet" href="css/style.css?v=b9d7267a">
 </head>
 <body>
     <main class="machine">
-        <canvas id="board" class="board" aria-label="パチンコの盤面"></canvas>
+        <!-- 台の筐体 (2026-10-23 ユーザー指定: 台のデザインを一新。js/cabinet.js が まわりを 描く) -->
+        <div class="cabinet" id="cabinet">
+            <canvas id="cabinet-art" class="cabinet-art" aria-hidden="true"></canvas>
+            <canvas id="board" class="board" aria-label="パチンコの盤面"></canvas>
+        </div>
 
         <section class="controls">
             <div class="machine-bar">
@@ -231,6 +235,7 @@
     <script src="js/bgm.js?v=e052e534"></script>
     <script src="js/scenario.js?v=41ecf4bd"></script>
     <script src="js/machine.js?v=61cdc634"></script>
+    <script src="js/cabinet.js?v=deb43f4b"></script>
     <script src="js/render.js?v=a534e713"></script>
     <script src="js/figures.js?v=7b763032"></script>
     <script src="js/button.js?v=b0532f78"></script>
@@ -241,8 +246,8 @@
     <script src="js/save.js?v=8ec28e8e"></script>
     <script src="js/customize.js?v=5d84e024"></script>
     <script src="js/records.js?v=462bca1b"></script>
-    <script src="js/updates.js?v=10e18e0a"></script>
+    <script src="js/updates.js?v=af0dd4f0"></script>
     <script src="js/panels.js?v=8366ac93"></script>
-    <script src="js/main.js?v=d1516ae8"></script>
+    <script src="js/main.js?v=1b405950"></script>
 </body>
 </html>
