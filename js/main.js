@@ -231,7 +231,7 @@
         if (m.bonus) {
             const b = m.bonus;
             if (b.promote && !b.promote.done) return `大当たり  ${b.round}R`;   // 昇格するまで中身を隠す
-            return `大当たり ${b.alloc.label}個  ${b.round}/${b.alloc.rounds}R`;
+            return `${b.alloc.premium ? b.alloc.name : '大当たり'} ${b.alloc.label}個  ${b.round}/${b.alloc.rounds}R`;
         }
         if (m.small) return '小当たり  V を狙え！';
         const left = m.jitanLeft + (m.spin && m.spin.jitan ? 1 : 0);

@@ -164,6 +164,10 @@ const CONFIG = {
     //   当たれば RASH 突入 (突破率は challengeSmallRate で合わせる)。RASH 中は大当たりのたびに時短 jitan.spins 回
     //   (時短が終わったあとの残り保留でも小当たりを引ける。tools/simulate.html で測って合わせる)
     // payout: スペックごとの賞球 (config.payout より優先。書いた入賞口だけ変わる)
+    // premium: プレミアボーナス (ユーザー指定 2026-10-22)。RASH 中 (突破チャレンジ・遊タイムは除く) の大当たり・小当たりの rate (約3%) が
+    //   rushHit の代わりにこの振り分けになる。継続率は変わらない (時短へ)。知らせ方は RASH のモードで決まっていて、そのボーナスでしか出ない:
+    //   こおりRASH は 怪 のバトル / おにおにRASH は ゴールド金面犬がとなりに座る違和感 / おかピポRASH は ブラックアウト。どれも盤面の役物が落ちてくる
+    //   1800ボーナス は 12R x 10C = 1800個、2600ボーナス は 16R x 11C = 2640個 (賞球 15 でちょうどにならないため)
     specs: {
         s99: {
             label: '1/99',
@@ -178,6 +182,7 @@ const CONFIG = {
                 { weight: 50, label: 200, rounds: 2, count: 7, next: 'jitan' },    // 200個
                 { weight: 50, label: 900, rounds: 6, next: 'jitan' }               // 900個
             ],
+            premium: { rate: 0.03, name: '1800ボーナス', label: 1800, rounds: 12, next: 'jitan', premium: true },
             challengeSmallRate: 1 / 6.7,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/7 で 47〜48%)
             jitan: { challengeSpins: 1, spins: 6 },
             // 遊タイム (天井。ユーザー指定 2026-10-20): 通常時に at 回まわして当たらなければ、時短 spins 回 (回数は Claude が決めた。RASH 突入 約98%)
@@ -197,6 +202,7 @@ const CONFIG = {
             rushHit: [
                 { weight: 100, label: 1300, rounds: 9, next: 'jitan' }   // 1300個
             ],
+            premium: { rate: 0.03, name: '2600ボーナス', label: 2600, rounds: 16, count: 11, next: 'jitan', premium: true },
             challengeSmallRate: 1 / 6.7,   // 突破チャレンジ中に電チューに入った保留の小当たり (突破率 50% に合わせる。1/7 で 47〜48%)
             jitan: { challengeSpins: 1, spins: 6 },
             yutime: { at: 500, spins: 30 },   // 遊タイム (ユーザー指定 2026-10-20)
@@ -363,6 +369,7 @@ const CONFIG = {
         //   minStreak: RASH が この連チャン数 (表示の「〇連」) 以上のときだけ出る。アルアルは RASH で1回以上連チャンしてから (ユーザー指定の「1G連以上」)
         //   kai: 怪の状態 (ユーザー指定 2026-10-19。アルアル以外)。目のまわりに靄がかかり、目が赤く光る。名前は「〇〇・怪」(ひびきまくりは「ひびかない・怪」)。
         //     成功率が上がる (期待度アップ)。hit は当たりのときの重み、win は成功率 (Claude が決めた)。minStreak は怪だけの登場の条件
+        //     2026-10-22 ユーザー指定で、怪はプレミアボーナス (specs.*.premium) 確定にした (win はすべて 1。ふつうの当たり・外れでは出ない)。
         //     怪になるかは玉が電チューに入ったときに決め、入賞時の音 (先バレ音) が鳴ってボタンが紫に光る (ユーザー指定)。
         //     そのため怪の保留はブラックアウトにせず、必ずバトルにする (怪の保留になる割合は成功率から自動で計算する)
         //   どの相手が出るかは演出だけで、当たりやすさ・継続率は変わらない (外れのバトルの重みは成功率から自動で計算する)
@@ -370,11 +377,11 @@ const CONFIG = {
             timing: { roll: 1, battle: 5, result: 2 },
             lastShare: 0.02,   // RASH の変動のうち「最後の保留」になる割合 (測った値。外れのバトルの割合の計算に使う)
             enemies: {
-                okagappa: { name: 'おかがっぱ', hit: 6, win: 0.06, map: 'ongagawa', kai: { name: 'おかがっぱ・怪', hit: 3, win: 0.3 } },
-                hibikimakuri: { name: 'ひびきまくり', hit: 8, win: 0.1, map: 'ebisucho', kai: { name: 'ひびかない・怪', hit: 3, win: 0.35 } },
-                shibata: { name: 'シバター', hit: 12, win: 0.15, map: 'ebisucho', kai: { name: 'シバター・怪', hit: 4, win: 0.45 } },
-                sasaki: { name: 'Mr.SASAKI', hit: 20, win: 0.35, map: 'tsugakuro', kai: { name: 'Mr.SASAKI・怪', hit: 6, win: 0.6 } },
-                onioni: { name: 'おにおに', hit: 30, win: 0.7, map: 'castleHall', kai: { name: 'おにおに・怪', hit: 8, win: 0.9 } },
+                okagappa: { name: 'おかがっぱ', hit: 6, win: 0.06, map: 'ongagawa', kai: { name: 'おかがっぱ・怪', hit: 3, win: 1 } },
+                hibikimakuri: { name: 'ひびきまくり', hit: 8, win: 0.1, map: 'ebisucho', kai: { name: 'ひびかない・怪', hit: 3, win: 1 } },
+                shibata: { name: 'シバター', hit: 12, win: 0.15, map: 'ebisucho', kai: { name: 'シバター・怪', hit: 4, win: 1 } },
+                sasaki: { name: 'Mr.SASAKI', hit: 20, win: 0.35, map: 'tsugakuro', kai: { name: 'Mr.SASAKI・怪', hit: 6, win: 1 } },
+                onioni: { name: 'おにおに', hit: 30, win: 0.7, map: 'castleHall', kai: { name: 'おにおに・怪', hit: 8, win: 1 } },
                 goldDog: { name: 'ゴールド金面犬', hit: 14, win: 1, map: 'goldHall', kai: { name: 'ゴールド金面犬・怪', hit: 3, win: 1, minStreak: 2 } },   // 怪は連チャンしてから (ユーザー指定)
                 aruaru: { name: 'シーシャ・ナイテイ・アルアル', hit: 10, win: 1, map: 'goldHall', minStreak: 2 }
             }
@@ -439,7 +446,8 @@ const CONFIG = {
                 fullMoon: { name: '急に満月の夜になる', weight: 5, talk: '急に満月の夜になってたね！' },
                 shake: { name: '画面がゆれる', weight: 5, talk: '画面がゆれてたよ！' },
                 okagappaWalk: { name: 'おかがっぱが横切る', weight: 5, talk: 'おかがっぱが横切ってたよ！' },
-                goldDogSit: { name: 'ゴールド金面犬がとなりに座っている', weight: 5, talk: '金面犬がとなりに座ってたよ！' }
+                // 2026-10-22 ユーザー指定で、プレミアボーナス (specs.*.premium) のときだけ出す (重みは使わない)
+                goldDogSit: { name: 'ゴールド金面犬がとなりに座っている', weight: 0, premium: true, talk: '金面犬がとなりに座ってたよ！' }
             }
             // labels: スペックごとに、この違和感が出る当たりの出玉 (図柄 8・9 は 1/99 で 900個 確定。ユーザー指定)
         },
@@ -554,7 +562,8 @@ const CONFIG = {
         },
         // 盤面の役物 (ユーザー指定 2026-10-20、数値は Claude が決めた): ふだんは液晶の枠の屋根に小さいこおりくんが座っていて、
         //   バトルの始めに液晶の前へ落ちてきて虹色に光る (time 秒で戻る)。リーチの変動の中で、出たら当たる割合が reliability
-        gimmick: { hit: 0.25, reliability: 0.7, time: 2 },
+        //   2026-10-22 ユーザー指定で 当たり確定 (reliability 1。前は 約70%)。RASH 中はプレミアボーナス (specs.*.premium) の知らせでも落ちてくる
+        gimmick: { hit: 0.25, reliability: 1, time: 2 },
         // リーチの発展 (SP → SPSP。ユーザー指定 2026-10-20、数値は Claude が決めた): バトルは相手で SPリーチ / SPSPリーチ (最終決戦) に分かれる。
         //   SPSP の相手のバトルの rate は、はじめ SPリーチ の相手 (from のどれか) が出てきて、「発展！！」(time 秒) で SPSP の相手に変わる
         //   どの相手と戦うかは前と同じなので、成功率は変わらない (発展したら SPSP の成功率)
@@ -730,6 +739,7 @@ const CONFIG = {
     //     / bestBalls (1回の RASH の最高出玉) / blackouts / renchan (〇G連確定) / promotes (昇格) / endings / holdChanges (保留変化)
     //     / kaiWins (こおりRASH で怪の相手に勝った) / revivals (こおりRASH の復活) / pursuitWins (通常時のバトルで追撃チャンスから撃破)
     //     / bestGizi (擬似連の最高。擬似〇連の〇) / yutimes (遊タイムに入った) / develops (SPSP への発展) / gimmicks (盤面の役物の落下)
+    //     / premiums (プレミアボーナス。1800ボーナス・2600ボーナス)
     //   'seen:グループ' (見た種類の数) / 'seen:グループ:id' (その演出を見た回数) / 'win:グループ:id' (そのバトルに勝った回数)
     collection: {
         achievements: [
@@ -759,6 +769,7 @@ const CONFIG = {
             { id: 'summon', name: 'お仲間召喚', desc: 'こおりRASH で お仲間召喚 を見る', stat: 'seen:summon', value: 1 },
             { id: 'allSummons', name: '3人そろって', desc: 'お仲間召喚で やすさん・たむさん・だけさん を全員見る', stat: 'seen:summon', value: 'all' },
             { id: 'aruaruRash',name: 'お兄さん登場', desc: 'こおりRASH で シーシャ・ナイテイ・アルアル と戦う', stat: 'seen:kooriRash:aruaru', value: 1 },
+            { id: 'premium', name: 'プレミアボーナス', desc: 'RASH 中に 1800ボーナス か 2600ボーナス を引く', stat: 'premiums', value: 1 },
             { id: 'blackout', name: 'ブラックアウト', desc: 'RASH 中にブラックアウトを見る', stat: 'blackouts', value: 1 },
             { id: 'renchan', name: '連チャン確定', desc: '〇G連確定 を見る', stat: 'renchan', value: 1 },
             { id: 'promote', name: '昇格', desc: '大当たりのラウンド中に図柄が昇格する', stat: 'promotes', value: 1 },

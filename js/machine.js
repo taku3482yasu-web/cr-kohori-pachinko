@@ -12,6 +12,8 @@
 //     数えるのは通常時 (RASH・時短でない) の特図1 の回転数 (m.normalSpins)。大当たりで 0 に戻る
 //   RASH のモード (こおりRASH / おにおにRASH / おかピポRASH) は m.rashMode。Machine.setRashMode で変える (演出だけが変わる)
 //     おかピポRASH は RASH の 5連目から (modes.*.minStreak。Machine.rashModes / nextRashMode)。RASH が終わる・次の RASH に入ると defaultMode に戻る
+//   プレミアボーナス (ユーザー指定 2026-10-22): RASH 中の大当たり・小当たりの spec.premium.rate (約3%) は、出玉が spec.premium になる。
+//     玉が電チューに入ったときに決める (こおりRASH の怪の先バレに使う)。知らせ方は Scenario が RASH のモードで決める
 //   保留は特図2 を先に消化する。結果は玉が入ったときに決める (先読みに使える)。
 //   保留の色・ボタン・変動の流れと時間は Scenario (js/scenario.js) が決める。
 //
@@ -74,6 +76,13 @@ const Machine = (() => {
         return { kind: 'miss' };
     }
 
+    // プレミアボーナス: RASH に入ってから (突破チャレンジ・遊タイムは除く) の大当たり・小当たりの premium.rate
+    function drawPremium(m, result) {
+        const pr = m.spec.premium;
+        if (!pr || result.kind === 'miss' || !m.rush.active || m.rush.challenge || m.yutime) return;
+        if (m.rng() < pr.rate) result.alloc = pr;
+    }
+
     // ----- 玉が入った -----
     function enter(m, id) {
         const holdMax = m.config.machine.holdMax;
@@ -85,6 +94,7 @@ const Machine = (() => {
             // 突破チャレンジのバトルが始まってから入った保留 (電チューの開き残り・飛んでいた玉) は「おまけ」 (ユーザー指定 2026-10-19):
             // 見た目では保留を増やさず、バトルの決着のあとに「もうひとつおまけに！」で1ラウンドとして結果を見せる
             if (fig === 2 && m.rush.challenge && !inJitan(m)) result.extra = true;
+            if (fig === 2) drawPremium(m, result);
             addExtras(m, fig, result);
             m.holds[fig].push(result);
             emit(m, 'hold', { fig, result, count: m.holds[fig].length });
@@ -285,6 +295,7 @@ const Machine = (() => {
         m.challengeRun = null;
         m.jitanLeft = 0;
         m.jitanActive = false;
+        if (alloc.premium) m.stats.premiums = (m.stats.premiums || 0) + 1;
         m.bonus = { alloc, fromV, round: 0, count: 0, phase: 'opening', timer: cfg.opening, promote: promote ? { ...promote, done: false } : null };
         m.stats.bonusRounds += alloc.rounds;
         m.normalSpins = 0;
@@ -310,7 +321,7 @@ const Machine = (() => {
             }
         }
         // promote: 出玉を隠す昇格 (奇数への昇格)。V への昇格 (toV) は出玉が変わらないので隠さない
-        emit(m, 'bonusStart', { rounds: alloc.rounds, label: alloc.label, next: alloc.next, fromV, rush: m.rush.active, rushHits: m.rush.hits, entry, yutime,
+        emit(m, 'bonusStart', { rounds: alloc.rounds, label: alloc.label, next: alloc.next, premium: alloc.premium ? alloc.name : null, fromV, rush: m.rush.active, rushHits: m.rush.hits, entry, yutime,
             promote: Boolean(promote && !promote.toV), promoteV: Boolean(promote && promote.toV) });
     }
 
@@ -455,11 +466,14 @@ const Machine = (() => {
     // ----- デバッグ用 -----
     // 保留を1つ足す (結果を決めて)。allocNext: 'jitan' / 'normal' でその振り分けを選ぶ (null ならふつうに抽選)
     // kind: 'hit' / 'small' / 'reach' (リーチ外れ) / 'fail' (チャレンジ失敗)。options.enemy でバトルの相手、options.holdColor で保留の色
+    //   options.premium: 特図2 の当たりをプレミアボーナスにする
     function debugHold(m, fig, kind, allocNext, options = {}) {
         const list = fig === 1 ? m.spec.firstHit : m.spec.rushHit;
         const pool = allocNext ? list.filter(a => a.next === allocNext) : list;
         const result = kind === 'hit' ? { kind, alloc: weightedPick(pool.length ? pool : list, m.rng) }
             : kind === 'reach' || kind === 'fail' ? { kind: 'miss', force: kind } : { kind };
+        // options.premium: プレミアボーナス (怪の先バレは addExtras で決めるので、その前に)
+        if (options.premium && fig === 2 && result.kind !== 'miss' && m.spec.premium) result.alloc = m.spec.premium;
         addExtras(m, fig, result);
         if (options.enemy) result.forceEnemy = options.enemy;
         if (options.holdColor) { result.holdColor = result.shownColor = options.holdColor; result.change = null; }

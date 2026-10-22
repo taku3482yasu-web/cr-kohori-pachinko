@@ -18,6 +18,8 @@
 //   'onioni' おにおにRASH (wait → anomaly → open、外れは roll だけ)
 //   'okapipo' おかピポRASH (外れは roll だけ。当たりは p.okaNotice ごとに roll → pnotice (一発告知) → pipo (おかピポ大量発生)、
 //     金色のおかがっぱは roll → pgold → pface (顔が大量発生)、告知なしは roll → pgun (おかがっぱ群) → palign)
+//   プレミアボーナス (result.alloc.premium。ユーザー指定 2026-10-22): p.premium にボーナスの名前。こおりRASH は怪のバトル、
+//     おにおにRASH は違和感 goldDogSit、おかピポRASH はブラックアウトで知らせ、どれも p.gimmickPhase の場面の始めに盤面の役物が落ちてくる
 // =====================================================================
 
 const Scenario = (() => {
@@ -158,7 +160,8 @@ const Scenario = (() => {
             weapon = weighted(Object.fromEntries(Object.entries(weapons).map(([id, w]) => [id, win ? w.hit : w.miss])), rng);
         }
         // こおりRASH の怪 (ユーザー指定 2026-10-19): 怪の相手が出る保留は、入賞時の音 (先バレ音) が鳴ってボタンが紫に光る
-        const kai = Boolean(ctx.koori && ctx.rash && !ctx.challenge && rng() < kaiRate(config, ctx.spec, win, ctx.streak));
+        // 2026-10-22 ユーザー指定で、怪はプレミアボーナスの保留だけ (Machine が alloc を決めてから呼ぶ)
+        const kai = Boolean(ctx.koori && ctx.rash && !ctx.challenge && win && result.alloc && result.alloc.premium);
         if (kai) return { holdColor: 'white', button: 'purple', weapon, voice: true, rashHold, kai };
         return { holdColor: 'white', button, weapon, voice, rashHold, kai };
     }
@@ -198,26 +201,20 @@ const Scenario = (() => {
         return table;
     }
 
-    // こおりRASH の保留が怪になる割合 (玉が入ったときに決める)。相手ごとの成功率を守る値:
-    //   当たり: 当たりの重みのうち怪の分 / 外れ: 外れで怪の相手が出る量 (missBattleMass) の合計 ÷ 外れの確率
-    function kaiRate(config, spec, win, streak) {
-        const enemies = kooriEnemies(config, streak);
-        const list = Object.values(enemies);
-        if (win) return list.filter(e => e.kai).reduce((a, e) => a + e.hit, 0) / list.reduce((a, e) => a + e.hit, 0);
-        const h2 = spec.hitRate + spec.smallRate;
-        const mass = missBattleMass(config.show, spec, enemies, h2);
-        const kaiMass = Object.entries(mass).filter(([id]) => enemies[id].kai).reduce((a, [, x]) => a + x, 0);
-        return Math.min(1, kaiMass / (1 - h2));
+    // こおりRASH の保留が怪になる割合 (玉が入ったときに決める)。2026-10-22 から怪はプレミアボーナス確定:
+    //   当たり: プレミアボーナスの割合 / 外れ: 0
+    function kaiRate(config, spec, win) {
+        return win && spec.premium ? spec.premium.rate : 0;
     }
 
     // 復活になる割合: こおりRASH の当たりのうち share (20%) にするため、起きられる当たり
-    // (ブラックアウトでない・確定の相手でない・出玉が合う) の中での割合
+    // (プレミアボーナス (怪) でない・ブラックアウトでない・確定の相手でない・出玉が合う) の中での割合
     function revivalRate(config, spec, specId, streak) {
         const rv = config.show.revival;
-        const enemies = Object.values(kooriEnemies(config, streak));
+        const enemies = Object.values(kooriEnemies(config, streak)).filter(e => !e.kai);
         const totalHit = enemies.reduce((a, e) => a + e.hit, 0);
-        const notSure = enemies.filter(e => e.win < 1).reduce((a, e) => a + e.hit, 0) / totalHit;
-        const notBlackout = 1 - config.show.blackout.rate * (1 - kaiRate(config, spec, true, streak));
+        const notSure = enemies.filter(e => e.win < 1).reduce((a, e) => a + e.hit, 0) / totalHit * (1 - kaiRate(config, spec, true));
+        const notBlackout = 1 - config.show.blackout.rate;
         const label = rv.labels[specId];
         const allocs = spec.rushHit;
         const labelShare = label
@@ -241,7 +238,8 @@ const Scenario = (() => {
     // 当たりの図柄 (そろって見せる図柄)。奇数のうち promote.rate は偶数で見せて、ラウンド中に昇格させる (p.promote に本当の図柄)
     function shownHitDigit(show, result, fig, rng, p) {
         const real = hitDigit(show, result, fig, rng);
-        if (Figures_isOdd(real) && rng() < show.promote.rate) {
+        // プレミアボーナスは知らせ方で中身がわかるので昇格しない
+        if (Figures_isOdd(real) && !(result.alloc && result.alloc.premium) && rng() < show.promote.rate) {
             p.promote = { to: real };
             return pickFrom(show.hitFigures.even, rng);
         }
@@ -478,12 +476,26 @@ const Scenario = (() => {
         const plain = kind === 'hit' ? f2.hit : kind === 'small' ? f2.small : f2.miss;
 
         const bo = show.blackout;
+        // プレミアボーナス (RASH に入ってから。Machine が決める)
+        const premium = win && spin.rush && !spin.inChallenge && !spin.yutime && result.alloc && result.alloc.premium ? result.alloc.name : null;
+        if (premium) p.premium = premium;
         // RASH に入ってから (突破チャレンジ中は出さない)
-        const kaiHold = Boolean(result.kai) && spin.rashMode === 'koori';   // 怪の保留 (先バレしたので必ず怪のバトル)
+        // 怪の保留 (先バレしたので必ず怪のバトル)。プレミアボーナスはこおりRASH ならいつも怪 (おにおにRASH で入ってから切り替えたときも)
+        const kaiHold = (Boolean(result.kai) || Boolean(premium)) && spin.rashMode === 'koori';
+        const blackout = () => {
+            p.kind = 'blackout';
+            p.phases = [{ name: 'dark', t: bo.timing.dark }, { name: 'bokoori', t: bo.timing.koori },
+                { name: 'atari', t: bo.timing.atari }, { name: 'itadaki', t: bo.timing.itadaki }];
+            p.reveal = { phase: 'itadaki', at: 0.1 };
+        };
         if (spin.yutime) {
             // 遊タイム: 演出なし (当たれば RASH 突入。液晶は遊タイムの表示)
             p.kind = 'plain';
             p.phases = [{ name: 'roll', t: plain }];
+        } else if (premium && spin.rashMode === 'okapipo') {
+            // おかピポRASH のプレミアボーナス: ブラックアウト (おかピポRASH ではふだんブラックアウトは起きない)
+            blackout();
+            p.gimmickPhase = 'bokoori';
         } else if (spin.rush && !spin.inChallenge && spin.rashMode === 'okapipo') {
             // おかピポRASH: 当たりだけ演出 (ブラックアウトもなし)。外れは何も起きない
             //   金色のおかがっぱ (一発告知) / 告知なしのおかがっぱ群 / 一発告知 → おかピポ大量発生
@@ -504,12 +516,9 @@ const Scenario = (() => {
                     p.reveal = { phase: 'pipo', at: 0.4 };
                 }
             } else p.phases = [{ name: 'roll', t: plain }];
-        } else if (spin.rush && !spin.inChallenge && win && !kaiHold && result.force !== 'revival' && (result.force === 'blackout' || rng() < bo.rate)) {
-            // ブラックアウト (突発当たり): モードに関係なく
-            p.kind = 'blackout';
-            p.phases = [{ name: 'dark', t: bo.timing.dark }, { name: 'bokoori', t: bo.timing.koori },
-                { name: 'atari', t: bo.timing.atari }, { name: 'itadaki', t: bo.timing.itadaki }];
-            p.reveal = { phase: 'itadaki', at: 0.1 };
+        } else if (spin.rush && !spin.inChallenge && win && !kaiHold && !premium && result.force !== 'revival' && (result.force === 'blackout' || rng() < bo.rate)) {
+            // ブラックアウト (突発当たり): こおりRASH・おにおにRASH (プレミアボーナスは それぞれの知らせ方にする)
+            blackout();
         } else if (spin.challenge) {
             // 突破チャレンジ: 1ラウンド目の前に登場、決着のラウンドは長く
             const { run, index } = spin.challenge;
@@ -534,12 +543,13 @@ const Scenario = (() => {
             const enemies = Object.fromEntries(Object.entries(available).filter(([, e]) => e.kai === kaiHold));
             const h2 = spec.hitRate + spec.smallRate;
             const mass = missBattleMass(show, spec, enemies, h2);
-            // ふつうの保留の外れ: 当たりのうちブラックアウトになる分はバトルにならず、最後の保留 (lastShare) は外れでも必ずバトルになるので、
-            // そのぶんを差し引いて外れのバトルの割合を決める (相手の成功率を守るため)。怪の保留の外れは必ずバトル
-            const fullMass = missBattleMass(show, spec, available, h2);
-            const plainMass = Object.entries(fullMass).filter(([id]) => !available[id].kai).reduce((a, [, x]) => a + x, 0);
+            // ふつうの保留の外れ: 当たりのうちプレミアボーナス (怪) とブラックアウトになる分はふつうの相手のバトルにならず、
+            // 最後の保留 (lastShare) は外れでも必ずバトルになるので、そのぶんを差し引いて外れのバトルの割合を決める (相手の成功率を守るため)
+            const plainEnemies = Object.fromEntries(Object.entries(available).filter(([, e]) => !e.kai));
+            const plainHit = h2 * (1 - kaiRate(config, spec, true));
+            const plainMass = Object.values(missBattleMass(show, spec, plainEnemies, plainHit)).reduce((a, x) => a + x, 0);
             const need = plainMass * (1 - show.blackout.rate) - show.kooriRash.lastShare;
-            const plainMissShare = (1 - h2) * (1 - kaiRate(config, spec, false, streak));
+            const plainMissShare = 1 - h2;
             const fakeRate = Math.min(1, Math.max(0, need) / plainMissShare);
             if (win || kaiHold || spin.isLast || result.force === 'reach' || rng() < fakeRate) {
                 const t = show.kooriRash.timing;
@@ -556,6 +566,7 @@ const Scenario = (() => {
                 p.enemy = p.enemyInfo.base;   // 描くキャラクター
                 p.kai = p.enemyInfo.kai;
                 p.phases = [{ name: 'roll', t: t.roll }, { name: 'battle', t: t.battle }, { name: 'result', t: t.result }];
+                if (premium) p.gimmickPhase = 'battle';   // プレミアボーナス (怪): バトルの始めに盤面の役物
                 const f = show.furukawa;
                 const replies = p.kai ? f.replies.kai : f.replies[p.enemy];
                 p.reply = replies ? pickFrom(replies, rng) : null;
@@ -591,9 +602,12 @@ const Scenario = (() => {
             if (win) {
                 const t = show.onioniRash.timing;
                 // labels のある違和感 (図柄 8・9) は、出玉が合う当たりでだけ選ぶ (1/99 は 900個)
+                // premium のある違和感 (ゴールド金面犬がとなりに座る) は、プレミアボーナスのときだけ (そのときは必ず)
                 const fits = x => !x.labels || !x.labels[spin.specId] || (result.alloc && result.alloc.label === x.labels[spin.specId]);
-                p.pattern = result.forcePattern || weighted(Object.fromEntries(Object.entries(show.onioniRash.patterns)
-                    .map(([id, x]) => [id, fits(x) ? x.weight : 0])), rng);
+                const patterns = Object.entries(show.onioniRash.patterns);
+                p.pattern = result.forcePattern || (premium ? patterns.find(([, x]) => x.premium)[0]
+                    : weighted(Object.fromEntries(patterns.map(([id, x]) => [id, fits(x) && !x.premium ? x.weight : 0])), rng));
+                if (premium) p.gimmickPhase = 'anomaly';   // 違和感の始めに盤面の役物
                 if (p.pattern === 'figure8' || p.pattern === 'figure9') p.oddFigure = p.pattern === 'figure8' ? 8 : 9;
                 p.phases = [{ name: 'wait', t: t.wait }, { name: 'anomaly', t: t.anomaly }, { name: 'open', t: t.open }];
                 p.reveal = { phase: 'open', at: 0.3 };

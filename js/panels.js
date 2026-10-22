@@ -228,7 +228,7 @@ const Panels = (() => {
         ['spins', '総回転数', '回'], ['hits', '大当たり', '回'], ['entries', 'RASH 突入', '回'], ['bestStreak', 'RASH の最高連チャン', '連'],
         ['bestBalls', '1回の RASH の最高出玉', '発'], ['endings', 'エンディング', '回'], ['blackouts', 'ブラックアウト', '回'],
         ['renchan', '〇G連確定', '回'], ['promotes', '昇格', '回'], ['holdChanges', '保留変化', '回'], ['kaiWins', '怪の相手に勝った', '回'], ['revivals', '復活', '回'], ['pursuitWins', '追撃チャンスから撃破', '回'],
-        ['bestGizi', '擬似連の最高', '連'], ['yutimes', '遊タイム', '回'], ['develops', 'SPSP への発展', '回'], ['gimmicks', '役物の落下', '回']
+        ['bestGizi', '擬似連の最高', '連'], ['yutimes', '遊タイム', '回'], ['develops', 'SPSP への発展', '回'], ['gimmicks', '役物の落下', '回'], ['premiums', 'プレミアボーナス', '回']
     ];
 
     function renderCollection() {

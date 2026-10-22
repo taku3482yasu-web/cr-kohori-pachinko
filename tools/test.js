@@ -127,7 +127,8 @@ function run(game, specId, setting, hours, mode = 'koori') {
         kooriBattles: {}, earlyStreak: 0,               // こおりRASH の相手ごとの [バトル, 勝ち] と、連チャン数が足りないのに出た相手
         kai: { holds: 0, battles: 0, mismatch: 0 },     // 怪の保留・怪のバトル・保留とバトルが合わない (先バレしたのに怪でない など)
         revival: { hits: 0, revivals: 0, wrongLabel: 0, sure: 0, lose: 0, labels: {} },  // こおりRASH の当たり・復活・出玉の振り分け
-        onioni: { hits: 0, patterns: {}, wrongLabel: 0, missPattern: 0 }   // おにおにRASH の当たり・違和感ごとの回数・出玉が合わない・外れの違和感
+        onioni: { hits: 0, patterns: {}, wrongLabel: 0, missPattern: 0 },  // おにおにRASH の当たり・違和感ごとの回数・出玉が合わない・外れの違和感
+        premium: { wins: 0, premiums: 0, wrongShow: 0, bonuses: 0, wrongBonus: 0 }   // RASH の当たり・プレミアボーナス・知らせ方が合わない・大当たり
     };
     const ctx = () => ({ balls, launched, spins1: m.stats.spins1 });
     const record = e => {
@@ -205,6 +206,19 @@ function run(game, specId, setting, hours, mode = 'koori') {
                 }
             }
             if (e.type === 'hold' && e.fig === 2 && e.result.kai) log.kai.holds++;
+            // プレミアボーナス: RASH の当たりの約3%。こおりRASH は怪、おにおにRASH は金面犬がとなりに座る (どちらもプレミアボーナスのときだけ)
+            if (e.type === 'spinStart' && e.fig === 2 && m.rush.active && !m.rush.challenge && e.plan.win) {
+                const pr = log.premium;
+                pr.wins++;
+                if (e.plan.premium) pr.premiums++;
+                const shown = m.rashMode === 'koori' ? Boolean(e.plan.kai) : m.rashMode === 'onioni' ? e.plan.pattern === 'goldDogSit' : e.plan.kind === 'blackout';
+                if (shown !== Boolean(e.plan.premium) || (e.plan.premium && !e.plan.gimmickPhase)) pr.wrongShow++;
+            }
+            if (e.type === 'bonusStart' && e.premium) {
+                log.premium.bonuses++;
+                const spec = CONFIG.specs[specId];
+                if (e.premium !== spec.premium.name || !m.bonus || m.bonus.alloc.label !== spec.premium.label) log.premium.wrongBonus++;
+            }
             // おにおにRASH: 違和感は当たりだけ。図柄 8・9 は出玉が合う当たりだけ (1/99 は 900個)
             if (e.type === 'spinStart' && e.plan.kind === 'onioni') {
                 const o = log.onioni;
@@ -564,7 +578,7 @@ test('群予告・こおりカットイン・役物・発展: こおり群・お
         assert(rate('cutin:red') > 0.8, `${specId} のカットインの赤が 80% 以下 (${pct(rate('cutin:red'))})`);
         assertBetween(rate('cutin:gold'), 0.92, 0.98, `${specId} のカットインの金`);
         assert(rate('cutin:blue') < rate('cutin:green') && rate('cutin:green') < rate('cutin:red'), `${specId} のカットインの色の順`);
-        assertBetween(rate('gimmick'), 0.6, 0.8, `${specId} の役物`);
+        assertEqual(rate('gimmick'), 1, `${specId} の役物 (当たり確定)`);
     }
 });
 
@@ -748,6 +762,58 @@ test('おにおにRASH: 違和感は当たりだけで全種類出て、図柄 8
     assert([...CONFIG.show.hitFigures.odd, ...CONFIG.show.hitFigures.even].every(n => n <= 7), '当たりの図柄に 8・9');
 });
 
+test('プレミアボーナス: RASH の当たりの約3%で、出玉は 1/99 1800個・1/159 2600個。怪・金面犬がとなりに座る・おかピポRASH のブラックアウトで知らせる', () => {
+    for (const { specId, log } of runs) {
+        const pr = log.premium;
+        assert(pr.wins > 500, `${specId} の RASH の当たりが少ない (${pr.wins})`);
+        assertBetween(pr.premiums / pr.wins, 0.02, 0.04, `${specId} のプレミアボーナスの割合`);
+        assertEqual(pr.wrongShow, 0, `${specId} でプレミアボーナスと怪が合わない`);
+        assert(pr.bonuses > 0, `${specId} でプレミアボーナスの大当たりがない`);
+        assertEqual(pr.wrongBonus, 0, `${specId} でプレミアボーナスの名前・出玉が違う`);
+    }
+    // 出玉: ラウンド x カウント x 賞球 が表示の個数に近い (少し多い)
+    for (const [specId, want] of [['s99', 1800], ['s159', 2600]]) {
+        const pr = CONFIG.specs[specId].premium;
+        const balls = pr.rounds * (pr.count || CONFIG.machine.bonus.count) * CONFIG.payout.attacker;
+        assertEqual(pr.label, want, `${specId} のプレミアボーナスの個数`);
+        assertBetween(balls, want, want * 1.05, `${specId} のプレミアボーナスの出玉`);
+        assertEqual(pr.next, 'jitan', `${specId} のプレミアボーナスのあとは時短`);
+    }
+    // 知らせ方 (モードごと)。突破チャレンジ・遊タイムではプレミアボーナスにならない
+    const game = loadGame(SEED + 40);
+    const { Scenario, Machine } = game;
+    for (const specId of ['s99', 's159']) {
+        const spec = CONFIG.specs[specId];
+        for (const kind of ['hit', 'small']) {
+            const ctx = { rash: true, challenge: false, okapipo: false, streak: 3, spec };
+            const result = { kind, alloc: spec.premium };
+            Object.assign(result, Scenario.hold2(CONFIG, result, { ...ctx, koori: true }, game.rng));
+            assert(result.kai && result.voice && result.button === 'purple', `${specId} のこおりRASH のプレミアボーナスで怪の先バレがない`);
+            const spin = mode => ({ fig: 2, result, holdsLeft: 0, rush: true, rashMode: mode, specId, rushStreak: 3 });
+            const koori = Scenario.plan(CONFIG, spec, spin('koori'), game.rng);
+            assert(koori.kind === 'rashBattle' && koori.kai && koori.premium === spec.premium.name && !koori.revival && !koori.summon, `${specId} のこおりRASH`);
+            const onioni = Scenario.plan(CONFIG, spec, spin('onioni'), game.rng);
+            assert(onioni.pattern === 'goldDogSit' && onioni.gimmickPhase === 'anomaly', `${specId} のおにおにRASH`);
+            const oka = Scenario.plan(CONFIG, spec, spin('okapipo'), game.rng);
+            assert(oka.kind === 'blackout' && oka.gimmickPhase === 'bokoori', `${specId} のおかピポRASH`);
+            // ふつうの当たりでは怪・金面犬がとなりに座る・おかピポRASH のブラックアウトは出ない
+            for (let i = 0; i < 300; i++) {
+                const plain = { kind, alloc: spec.rushHit[0] };
+                Object.assign(plain, Scenario.hold2(CONFIG, plain, { ...ctx, koori: true }, game.rng));
+                if (plain.kai) throw new Error('ふつうの当たりで怪の先バレ');
+                if (Scenario.plan(CONFIG, spec, { ...spin('koori'), result: plain }, game.rng).kai) throw new Error('ふつうの当たりで怪');
+                if (Scenario.plan(CONFIG, spec, { ...spin('onioni'), result: plain }, game.rng).pattern === 'goldDogSit') throw new Error('ふつうの当たりで金面犬がとなりに座る');
+                if (Scenario.plan(CONFIG, spec, { ...spin('okapipo'), result: plain }, game.rng).kind !== 'okapipo') throw new Error('おかピポRASH のふつうの当たりでブラックアウト');
+            }
+        }
+        // 突破チャレンジ中は抽選しない
+        const m = Machine.create(CONFIG, specId, () => 0);
+        m.rush = { active: true, hits: 1, startTime: 0, challenge: true };
+        Machine.enter(m, 'denchu');
+        assert(!(m.holds[2][0].alloc && m.holds[2][0].alloc.premium), `${specId} の突破チャレンジでプレミアボーナス`);
+    }
+});
+
 test('チャンスステージ: きっかけの保留を消化したら、元とは別の通常ステージへ', () => {
     const { Scenario } = base;
     const cycle = CONFIG.show.stages.cycle;
@@ -769,7 +835,7 @@ test('おにおにRASH の違和感: ラウンドの始めにふるカワが教�
     for (const [id, p] of Object.entries(CONFIG.show.onioniRash.patterns)) {
         assert(p.talk && p.talk.length > 0, `「${p.name}」のひとことがない`);
         assert(p.talk.length <= 18, `「${p.name}」のひとことが長い (${p.talk.length}文字)`);
-        assert(p.weight > 0, `「${p.name}」の重み`);
+        assert(p.weight > 0 || p.premium, `「${p.name}」の重み`);
         void id;
     }
     assert(Object.keys(CONFIG.show.onioniRash.patterns).length >= 24, '違和感の数');

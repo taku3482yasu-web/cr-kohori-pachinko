@@ -11,6 +11,7 @@
     ?force=onioni&pattern=zoom  おにおにRASH の当たり (open / rainbow / flip / upsideDown / mono / zoom / koori / tomoishi / naitei)
     &rashhold=black (または spin)  RASH 中の当たりの保留を黒い保留・回る保留に (残り保留に1つ足す)
     ?force=blackout  RASH 中のブラックアウト (突発当たり)
+    ?force=koori&premium=1  RASH 中のプレミアボーナス (koori: 怪のバトル / onioni: 金面犬がとなりに座る / okapipo: ブラックアウト。役物は盤面に描くので index.html で)
     ?story=opening / ?story=ending  オープニング・エンディング
     ?force=rush&promote=1&fast=1  奇数の当たりを偶数で見せて、ラウンド中に昇格
     ?force=hit&stepup=s3gold&gizi=3  ステップアップ予告 (s1〜s3gold) と擬似連 (0〜3)
@@ -96,7 +97,7 @@
         Machine.debugJitan(m);
         Machine.setRashMode(m, force);
         m.holds[1].length = 0;
-        Machine.debugHold(m, 2, params.get('lose') ? 'reach' : params.get('hit') ? 'hit' : 'small', null, { enemy: options.enemy, pattern: params.get('pattern') || undefined });
+        Machine.debugHold(m, 2, params.get('lose') ? 'reach' : params.get('hit') ? 'hit' : 'small', null, { enemy: options.enemy, pattern: params.get('pattern') || undefined, premium: Boolean(params.get('premium')) });
         if (params.get('oka')) m.holds[2][0].forceOkaNotice = params.get('oka');   // &oka=gimmick: おかピポRASH の一発告知 (gold / gun / shake / voice / rainbow / gimmick)
         if (params.get('hit')) m.rush.hits = Number(params.get('hit'));   // 何連目か
         if (params.get('rashhold')) m.holds[2].push({ kind: 'small', holdColor: 'white', rashHold: params.get('rashhold') });

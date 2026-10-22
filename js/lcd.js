@@ -225,7 +225,12 @@ const Lcd = (() => {
         } else if (e.type === 'bonusStart') {
             bonusTalk(e.entry ? 'entry' : e.label >= CONFIG.show.bigLabel && !e.promote ? 'big' : 'small', now, CONFIG.machine.bonus.opening * 0.6);
             const head = e.yutime ? '遊タイムで RASH 突入！' : e.entry ? 'RASH 突入！' : e.fromV ? 'V入賞！' : '大当たり！';
-            show(e.promote ? head : `${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
+            if (e.premium) {
+                // プレミアボーナス (ユーザー指定 2026-10-22): 虹色で「〇〇ボーナス！」
+                show(`${e.premium}！ ${e.label}個`, 'rainbow', now, CONFIG.machine.bonus.opening);
+                MachineButton.trigger('rainbow', now);
+                Sound.play('win');
+            } else show(e.promote ? head : `${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
             if (e.fromV) Sound.play('v');
         } else if (e.type === 'bonusEnd') {
             if (infoStart !== null) infoBase = infoIndex(now) + 1;
@@ -1078,6 +1083,7 @@ const Lcd = (() => {
     // ----- 盤面の役物 (ユーザー指定 2026-10-20) -----
     // 当たりの見込みが高いリーチで、バトルの始めに屋根のこおりくんが液晶の前へ落ちてくる。進み具合 (0〜1) を返す (盤面が描く。js/render.js)
     // おかピポRASH の一発告知 (役物) では、一発告知の場面 (pnotice) で落ちてくる
+    // RASH 中のプレミアボーナス (2026-10-22) では、plan.gimmickPhase の場面の始めから (次の場面にまたがってもよい)
     function gimmick() {
         const plan = spinView && spinView.plan;
         const phase = currentPhase;
@@ -1085,8 +1091,15 @@ const Lcd = (() => {
             once('gimmick', 'hurt');
             return Math.min(0.99, phase.local / phase.t);
         }
-        if (!plan || !plan.gimmick || !phase || phase.name !== 'battle') return null;
-        const t = phase.local / CONFIG.show.gimmick.time;
+        if (!plan || !phase) return null;
+        let elapsed;
+        if (plan.gimmickPhase) {
+            const from = plan.phases.findIndex(ph => ph.name === plan.gimmickPhase);
+            if (from < 0 || phase.index < from) return null;
+            elapsed = plan.phases.slice(from, phase.index).reduce((a, ph) => a + ph.t, 0) + phase.local;
+        } else if (plan.gimmick && phase.name === 'battle') elapsed = phase.local;
+        else return null;
+        const t = elapsed / CONFIG.show.gimmick.time;
         if (t >= 1) return null;
         once('gimmick', 'hurt');
         if (t > 0.25) once('gimmickWin', 'win');
@@ -1221,7 +1234,8 @@ const Lcd = (() => {
         band(0, H, 0.45);
         Figures.draw(ctx, shown[0], 22, 30, 26, 30, { glow: 0.5 });
         const hidden = b.promote && !b.promote.done && !b.promote.toV;   // V への昇格は出玉を隠さない
-        text(hidden ? '大当たり' : `${b.alloc.label}個 大当たり`, W / 2 + 14, 13, 14, '#ffe066');
+        if (b.alloc.premium && !hidden) text(b.alloc.name, W / 2 + 14, 13, 14, 'rainbow', 'center', now);   // プレミアボーナス
+        else text(hidden ? '大当たり' : `${b.alloc.label}個 大当たり`, W / 2 + 14, 13, 14, '#ffe066');
         // ROUND と COUNT は1行に (下に紹介のカードを出すため)
         text(hidden ? `ROUND ${Math.max(1, b.round)}` : `ROUND ${Math.max(1, b.round)} / ${b.alloc.rounds}`, W / 2 - 6, 31, 15, '#ffffff');
         if (b.phase === 'open') text(`COUNT ${b.count} / ${b.alloc.count || CONFIG.machine.bonus.count}`, W - 38, 31, 10, '#7fd3f7');

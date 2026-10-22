@@ -113,6 +113,7 @@ const Collection = (() => {
         else if (e.type === 'bonusStart') {
             add(r, 'hits');
             if (e.entry) add(r, 'entries');
+            if (e.premium) add(r, 'premiums');
             if (e.rush) best('bestStreak', e.rushHits - 1);   // RASH の連チャンは当たるたびに (終わるのを待たない)
             if (e.rush && e.rushHits - 1 === config.show.story.endingAt) add(r, 'endings');
             pendingPromote = e.promote;
@@ -163,6 +164,7 @@ const Collection = (() => {
         } else if (p.kind === 'onioni' && p.pattern) see('anomaly', p.pattern);
         else if (p.kind === 'okapipo' && p.okaNotice) see('okapipo', p.okaNotice);
         else if (p.kind === 'blackout') add(data.records, 'blackouts');
+        if (p.gimmickPhase) add(data.records, 'gimmicks');   // プレミアボーナスの知らせの役物
     }
 
     // 実績の値: 記録 / 'seen:グループ' (見た種類の数) / 'seen:グループ:id' / 'win:グループ:id'
