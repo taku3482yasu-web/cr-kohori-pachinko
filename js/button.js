@@ -12,6 +12,7 @@
 const MachineButton = (() => {
     let el = null;
     let until = 0;
+    let lit = null;   // いま 光って いる 種類 (筐体の PUSH も 同じ 色に する)
 
     // 長押し (LONG_PRESS 秒) で onLong (演出の早送り。ユーザー指定 2026-10-20)
     const LONG_PRESS = 0.6;
@@ -39,6 +40,9 @@ const MachineButton = (() => {
         void el.offsetWidth;   // アニメーションを最初からやり直す
         el.classList.add('fx-' + kind);
         until = now + CONFIG.show.button.time;
+        lit = kind;
+        // 先バレ: 筐体の 右の 丸い ランプも 赤・紫・虹に 光る (2026-10-23 ユーザー指定。js/cabinet.js)
+        if (typeof Cabinet !== 'undefined') Cabinet.lamp(kind, now);
         if (kind === 'beep') Sound.play('button');
         if (kind === 'shake' && navigator.vibrate && Customize.get('vibrate') === 'on') {
             try { navigator.vibrate([90, 40, 90, 40, 160]); } catch (e) { /* 振動できない環境 */ }
@@ -53,8 +57,11 @@ const MachineButton = (() => {
         if (el && until && now >= until) {
             el.classList.remove('fx-red', 'fx-shake', 'fx-beep', 'fx-rainbow', 'fx-purple');
             until = 0;
+            lit = null;
         }
     }
+    // いまの 光り方 (筐体の PUSH が 使う)
+    const state = () => ({ kind: lit, lit: Boolean(lit), push: Boolean(el && el.classList.contains('push')) });
 
-    return { init, trigger, prompt, update, LONG_PRESS };
+    return { init, trigger, prompt, update, state, LONG_PRESS };
 })();

@@ -27,7 +27,7 @@ const Customize = (() => {
         autoAim: { label: '打ち分け', group: '操作', note: '自動: 台の状態に合わせて、強さを左打ち・右打ちに自動で合わせる',
             choices: { off: '手動', on: '自動' }, default: 'off' },
         theme: { label: '盤面の色', group: '見た目', note: '',
-            choices: { ice: '氷', sunset: '夕焼け', sakura: '夜桜', gold: '黄金' }, default: 'ice' },
+            choices: { crimson: '紅', ice: '氷', sunset: '夕焼け', sakura: '夜桜', gold: '黄金' }, default: 'crimson' },
         ball: { label: '玉の色', group: '見た目', note: '',
             choices: { silver: '銀', gold: '金' }, default: 'silver' },
         koori: { label: 'こおりくんの色', group: '見た目', note: '液晶の図柄・ボタンの色も変わる',
@@ -36,10 +36,16 @@ const Customize = (() => {
 
     // 盤面の色 (render.js の COLORS を上書き)
     const THEMES = {
-        ice: {},
-        sunset: { boardTop: '#4a1e3a', boardBottom: '#1a0a1a', snow: 'rgba(255, 200, 150, 0.35)', frame: '#6a2a2a', frameLight: '#ffb070', frameDark: '#2a0a0a', stage: '#ffd8a0', stageShade: '#e08040' },
-        sakura: { boardTop: '#1a0f2a', boardBottom: '#0a0614', snow: 'rgba(255, 180, 210, 0.5)', frame: '#5a2a4a', frameLight: '#ff9ec8', frameDark: '#200a18', stage: '#ffd0e4', stageShade: '#d06a9a' },
-        gold: { boardTop: '#3a2a08', boardBottom: '#140c02', snow: 'rgba(255, 230, 120, 0.4)', frame: '#6a4a10', frameLight: '#ffe066', frameDark: '#201402', stage: '#fff0a0', stageShade: '#c8a030' }
+        // 紅 (2026-10-23 からの ふつう。render.js の BASE_COLORS)。氷は 前の ふつうの 色
+        crimson: {},
+        ice: { boardTop: '#0d2a4a', boardBottom: '#071528', snow: 'rgba(200, 235, 255, 0.35)', rail: '#c8d4e0', railShadow: '#56657a', frame: '#1b3a6b', frameLight: '#7fd3f7', frameDark: '#0b1a33',
+            stage: '#bff0ff', stageShade: '#4aa8e0', accent: '#7fd3f7', accentDark: '#0b1a33', skyline: '#081830', window: '#bff0ff', deco: 'rgba(127, 211, 247, 0.1)' },
+        sunset: { boardTop: '#4a1e3a', boardBottom: '#1a0a1a', snow: 'rgba(255, 200, 150, 0.35)', frame: '#6a2a2a', frameLight: '#ffb070', frameDark: '#2a0a0a', stage: '#ffd8a0', stageShade: '#e08040',
+            accent: '#ff9a4a', accentDark: '#2a0a0a', skyline: '#1a0810', window: '#ffd080', deco: 'rgba(255, 176, 112, 0.1)' },
+        sakura: { boardTop: '#1a0f2a', boardBottom: '#0a0614', snow: 'rgba(255, 180, 210, 0.5)', frame: '#5a2a4a', frameLight: '#ff9ec8', frameDark: '#200a18', stage: '#ffd0e4', stageShade: '#d06a9a',
+            accent: '#ff7ab0', accentDark: '#200a18', skyline: '#10061a', window: '#ffd0e4', deco: 'rgba(255, 158, 200, 0.1)' },
+        gold: { boardTop: '#3a2a08', boardBottom: '#140c02', snow: 'rgba(255, 230, 120, 0.4)', frame: '#6a4a10', frameLight: '#ffe066', frameDark: '#201402', stage: '#fff0a0', stageShade: '#c8a030',
+            accent: '#ffd84a', accentDark: '#201402', skyline: '#140c02', window: '#fff0a0', deco: 'rgba(255, 224, 102, 0.1)' }
     };
     const BALLS = {
         silver: {},

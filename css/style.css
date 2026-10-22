@@ -56,6 +56,9 @@ body {
     aspect-ratio: 460 / 770;
 }
 .cabinet-art { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* 筐体の 下の PUSH (js/main.js が 位置を 合わせる。見た目は cabinet.js が 描く) */
+.cabinet-push { position: absolute; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; touch-action: none; }
+.cabinet-push:active { box-shadow: inset 0 0 0 3px rgba(255, 230, 102, 0.6); }
 .cabinet .board {
     position: absolute;
     left: 13%;

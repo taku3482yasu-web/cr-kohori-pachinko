@@ -560,7 +560,8 @@ const CONFIG = {
             },
             lines: { blue: 'いくぞ！', green: 'いくぞ！！', red: '絶対勝つ！！', gold: '内定ツラヌク！！！' }
         },
-        // 盤面の役物 (ユーザー指定 2026-10-20、数値は Claude が決めた): ふだんは液晶の枠の屋根に小さいこおりくんが座っていて、
+        // 盤面の役物 (ユーザー指定 2026-10-20、数値は Claude が決めた。2026-10-23 に 見た目を 氷の メダルに 新しく した: render.js の drawGimmick):
+        //   ふだんは液晶の枠の屋根に小さい役物が乗っていて、
         //   バトルの始めに液晶の前へ落ちてきて虹色に光る (time 秒で戻る)。リーチの変動の中で、出たら当たる割合が reliability
         //   2026-10-22 ユーザー指定で 当たり確定 (reliability 1。前は 約70%)。RASH 中はプレミアボーナス (specs.*.premium) の知らせでも落ちてくる
         gimmick: { hit: 0.25, reliability: 1, time: 2 },
@@ -763,7 +764,7 @@ const CONFIG = {
             { id: 'hibikiGun', name: 'ひびきまくり群', desc: 'ひびきまくり群 (当たり確定) を見る', stat: 'seen:gun:hibiki', value: 1 },
             { id: 'goldCutin', name: '金のカットイン', desc: 'こおりカットインの金を見る', stat: 'seen:cutin:gold', value: 1 },
             { id: 'develop', name: '最終決戦', desc: 'SPリーチから SPSPリーチ に発展する', stat: 'develops', value: 1 },
-            { id: 'gimmick', name: '役物落下', desc: '盤面の こおりくん が落ちてくるのを見る', stat: 'gimmicks', value: 1 },
+            { id: 'gimmick', name: '役物落下', desc: '盤面の 氷のメダル が落ちてくるのを見る', stat: 'gimmicks', value: 1 },
             { id: 'yutime', name: '遊タイム', desc: '遊タイムに入る', stat: 'yutimes', value: 1 },
             { id: 'pursuit', name: '追撃成功', desc: '通常時のバトルで、追撃チャンスから撃破する', stat: 'pursuitWins', value: 1 },
             { id: 'summon', name: 'お仲間召喚', desc: 'こおりRASH で お仲間召喚 を見る', stat: 'seen:summon', value: 1 },

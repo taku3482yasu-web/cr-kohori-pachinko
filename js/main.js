@@ -77,7 +77,15 @@
         game.board = Board.build(CONFIG, board);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
-        if (typeof Cabinet !== 'undefined' && !game.cabinet) game.cabinet = (Cabinet.create($('cabinet-art'), canvas), true);
+        if (typeof Cabinet !== 'undefined' && !game.cabinet) {
+            game.cabinet = (Cabinet.create($('cabinet-art'), canvas), true);
+            // 筐体の 下の PUSH: 押すと 台の ボタンを 押したのと 同じ (長押しの 早送りも)
+            const push = $('cabinet-push'), kb = $('koori-button');
+            ['pointerdown', 'pointerup', 'pointercancel', 'pointerleave'].forEach(type => push.addEventListener(type, e => {
+                e.preventDefault();
+                kb.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: e.pointerId, pointerType: e.pointerType }));
+            }));
+        }
         game.spinsBase = saved ? saved.spinsBase : 0;
         game.stats = saved ? { ...saved.stats } : { launched: 0, launchedLeft: 0, foul: 0, foulLeft: 0, heso: 0, gate: 0, denchu: 0, attacker: 0, general: 0, warp: 0, out: 0, paid: 0, firstHits: 0 };
         Lcd.reset(game.machine);
@@ -304,7 +312,13 @@
         const gimmick = Lcd.gimmick();
         BoardView.draw(game.view, game.world, lcdCanvas, gimmick, time);
         // 台の筐体: 状態で 光り方・役物が かわる (js/cabinet.js)
-        if (game.cabinet) Cabinet.draw(time, { mode: modeClass(game.machine), premium: Boolean(game.machine.bonus && game.machine.bonus.alloc && game.machine.bonus.alloc.premium), gimmick, balls: game.balls });
+        if (game.cabinet) {
+            Cabinet.draw(time, { mode: modeClass(game.machine), premium: Boolean(game.machine.bonus && game.machine.bonus.alloc && game.machine.bonus.alloc.premium), gimmick, balls: game.balls, button: MachineButton.state() });
+            // 筐体の PUSH の 位置を 絵に 合わせる (下の 段が せまい スマホでは 出さない)
+            const r = Cabinet.pushRect(), push = $('cabinet-push');
+            push.hidden = !r;
+            if (r) Object.assign(push.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+        }
         // BGM: 台の状態で曲を変える。消音・BGM OFF・窓を開いているあいだは止める
         Bgm.play(Bgm.trackFor(game.machine, Lcd.storyPlaying()));
         Bgm.setPaused(Sound.muted || Customize.get('bgm') === 'off' || game.paused);

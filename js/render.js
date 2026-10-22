@@ -8,13 +8,16 @@
 
 const BoardView = (() => {
     const SCALE = 2;
+    // ふつうの 盤面の 色 (2026-10-23 ユーザー指定: 台の デザインを ルパン三世の 台の つくりに 合わせる。黒と 赤の「紅」)。
+    //   accent: 赤い 飾り / accentDark: 盤面の まわりの 枠 / skyline: 液晶の 下の 街並み / window: 街の 窓 / deco: 回路の 線
     const BASE_COLORS = {
-        boardTop: '#0d2a4a', boardBottom: '#071528',
-        snow: 'rgba(200, 235, 255, 0.35)',
-        rail: '#c8d4e0', railShadow: '#56657a',
+        boardTop: '#2a0812', boardBottom: '#0a0205',
+        snow: 'rgba(255, 150, 170, 0.22)',
+        rail: '#e8eaf0', railShadow: '#5a5a66',
         nail: '#d8dee8', nailShade: '#7a8698', nailLight: '#ffffff',
-        frame: '#1b3a6b', frameLight: '#7fd3f7', frameDark: '#0b1a33',
-        stage: '#bff0ff', stageShade: '#4aa8e0',
+        frame: '#3a0610', frameLight: '#ff4a5a', frameDark: '#120204',
+        stage: '#ffd0d8', stageShade: '#c8102e',
+        accent: '#ff3a4a', accentDark: '#3a0410', skyline: '#14060a', window: '#ffb84a', deco: 'rgba(255, 90, 110, 0.12)',
         pocket: '#ffcc33', pocketDark: '#a06a10',
         denchu: '#ff6a8a', attacker: '#ff3355', attackerOpen: '#ffe066',
         gate: '#9cff8a', warp: '#ffffff',
@@ -75,8 +78,13 @@ const BoardView = (() => {
         const grad = g.createLinearGradient(0, 0, 0, b.height);
         grad.addColorStop(0, COLORS.boardTop);
         grad.addColorStop(1, COLORS.boardBottom);
-        g.fillStyle = '#05070d';
+        // レールの 外は 赤黒い 枠 (鋲つき)
+        g.fillStyle = COLORS.accentDark;
         g.fillRect(0, 0, b.width, b.height);
+        g.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        g.fillRect(0, 0, b.width, b.height);
+        g.fillStyle = 'rgba(255, 255, 255, 0.18)';
+        for (let x = 8; x < b.width; x += 24) { g.fillRect(x, 6, 1.5, 1.5); g.fillRect(x, b.height - 8, 1.5, 1.5); }
         g.fillStyle = grad;
         g.beginPath();
         board.rails.outer.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
@@ -88,6 +96,58 @@ const BoardView = (() => {
         const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
         g.fillStyle = COLORS.snow;
         for (let i = 0; i < 260; i++) g.fillRect(Math.floor(rnd() * b.width), Math.floor(rnd() * b.height), 1, 1);
+        // 回路・地図の ような うすい 線 (透明な 盤面の 飾り。2026-10-23)
+        g.save();
+        g.beginPath();
+        board.rails.outer.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+        g.lineTo(board.rails.outer[board.rails.outer.length - 1][0], b.bottomY + 4);
+        g.lineTo(board.rails.outer[0][0], b.bottomY + 4);
+        g.clip();
+        g.strokeStyle = COLORS.deco;
+        g.fillStyle = COLORS.deco;
+        g.lineWidth = 1;
+        for (let i = 0; i < 46; i++) {
+            let x = Math.floor(rnd() * b.width), y = Math.floor(rnd() * b.height);
+            g.beginPath();
+            g.moveTo(x, y);
+            for (let k = 0; k < 3; k++) {
+                if (rnd() < 0.5) x += (rnd() < 0.5 ? -1 : 1) * (8 + rnd() * 26); else y += (rnd() < 0.5 ? -1 : 1) * (8 + rnd() * 26);
+                g.lineTo(x, y);
+            }
+            g.stroke();
+            g.fillRect(x - 1, y - 1, 2, 2);
+        }
+        // 透明な 板の 光の すじ
+        const shine = g.createLinearGradient(0, 0, b.width, b.height);
+        shine.addColorStop(0, 'rgba(255,255,255,0)');
+        shine.addColorStop(0.3, 'rgba(255,255,255,0.06)');
+        shine.addColorStop(0.36, 'rgba(255,255,255,0)');
+        shine.addColorStop(0.62, 'rgba(255,255,255,0.04)');
+        shine.addColorStop(0.66, 'rgba(255,255,255,0)');
+        g.fillStyle = shine;
+        g.fillRect(0, 0, b.width, b.height);
+        g.restore();
+        // 液晶の 下の 街並み (SEタウン。窓が 光る)
+        const lc = b.lcd;
+        for (let x = lc.x - 6; x < lc.x + lc.w + 6;) {
+            const bw = 6 + Math.floor(rnd() * 9), bh = 6 + Math.floor(rnd() * 14);
+            g.fillStyle = COLORS.skyline;
+            g.fillRect(x, 244 - bh, bw - 1, bh);
+            g.fillStyle = COLORS.window;
+            for (let wy = 244 - bh + 2; wy < 242; wy += 3) for (let wx = x + 1; wx < x + bw - 2; wx += 2) if (rnd() < 0.35) g.fillRect(wx, wy, 1, 1);
+            x += bw;
+        }
+        // 右下の ダイヤ (氷の 結晶)
+        const dx = 318, dy = 452, ds = 9;
+        g.strokeStyle = 'rgba(255, 220, 230, 0.75)';
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(dx - ds, dy - ds * 0.3); g.lineTo(dx - ds * 0.5, dy - ds * 0.8); g.lineTo(dx + ds * 0.5, dy - ds * 0.8); g.lineTo(dx + ds, dy - ds * 0.3); g.lineTo(dx, dy + ds); g.closePath();
+        g.fillStyle = COLORS.deco;
+        g.fill();
+        g.moveTo(dx - ds, dy - ds * 0.3); g.lineTo(dx + ds, dy - ds * 0.3);
+        g.moveTo(dx - ds * 0.5, dy - ds * 0.8); g.lineTo(dx, dy + ds); g.lineTo(dx + ds * 0.5, dy - ds * 0.8);
+        g.stroke();
 
         // 右打ちの通り道に色をつける
         g.fillStyle = 'rgba(255, 80, 110, 0.07)';
@@ -95,7 +155,9 @@ const BoardView = (() => {
         [...b.rightDivider, [b.width - 20, 372], [b.width - 20, 228]].forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
         g.fill();
 
-        // レール
+        // レール (外の レールには 赤い 帯を そえる)
+        line(g, board.rails.outer, 9, COLORS.accentDark);
+        line(g, board.rails.outer, 5, COLORS.accent);
         line(g, board.rails.outer, 3, COLORS.railShadow);
         line(g, board.rails.outer, 1.6, COLORS.rail);
         line(g, board.rails.inner, 3, COLORS.railShadow);
@@ -123,12 +185,15 @@ const BoardView = (() => {
         line(g, framePath, 1.5, COLORS.frameLight);
         g.fillStyle = COLORS.frameDark;
         g.fillRect(b.lcd.x - 2, b.lcd.y - 2, b.lcd.w + 4, b.lcd.h + 4);
-        // 枠の上の飾り: 「こおり」の文字
-        g.fillStyle = COLORS.frameLight;
-        // 小さすぎるとドット文字の「こ」がつぶれるので 12px
-        g.font = '12px "DotGothic16", "MS Gothic", monospace';
+        // 枠の上の飾り: 赤い ロゴ「こおりくん」に 白い ふち (ルパン三世の 台の 液晶の 上の ロゴの ように。2026-10-23)
+        // 小さすぎるとドット文字の「こ」がつぶれるので 12px 以上
+        g.font = 'bold 15px "DotGothic16", "MS Gothic", monospace';
         g.textAlign = 'center';
-        g.fillText('P こおりくん', b.center.x, f.shoulder - 3);
+        g.lineWidth = 3;
+        g.strokeStyle = '#ffffff';
+        g.strokeText('こおりくん', b.center.x, f.shoulder - 3);
+        g.fillStyle = COLORS.accent;
+        g.fillText('こおりくん', b.center.x, f.shoulder - 3);
 
         // ワープ入口
         const w = b.warp;
@@ -179,28 +244,84 @@ const BoardView = (() => {
         g.restore();
     }
 
-    // 盤面の役物 (ユーザー指定 2026-10-20): ふだんは液晶の枠の屋根の上に小さいこおりくんが座っている。
-    // t (0〜1。Lcd.gimmick) のあいだ、液晶の前へ落ちてきて大きくなり、虹色に光ってぶるぶる震え、最後に屋根へ戻る
+    // 盤面の役物 (2026-10-23 ユーザー指定で 新しく した。ルパン三世の 台の ロゴの 役物の ように 落ちて 回る):
+    //   ふだんは 液晶の 枠の 屋根の 上に 氷の 結晶の メダル (表: こおりくん / 裏: おにおに) が 乗っている。
+    //   t (0〜1。Lcd.gimmick) の あいだ、液晶の 前へ 落ちてきて 大きくなり、くるくる 回って 虹色に 光り、光の すじが 出る。最後に 屋根へ もどる
+    //   (役物が 動く ときと 当たり確定の 意味は 前の こおりくんの 役物と 同じ)
+    function hexPath(ctx, cx, cy, r, sx) {
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = Math.PI / 6 + i * Math.PI / 3;
+            const x = cx + Math.cos(a) * r * sx, y = cy + Math.sin(a) * r;
+            if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.closePath();
+    }
     function drawGimmick(ctx, b, t, now) {
         const f = b.lcdFrame;
         const cx = (f.left + f.right) / 2;
-        const restY = f.top - 15;        // 屋根の上 (足もと)
-        const downY = b.lcd.y + b.lcd.h * 0.8;
+        const restY = f.top - 9;                  // 屋根の 上 (メダルの まんなか)
+        const downY = b.lcd.y + b.lcd.h * 0.5;    // 液晶の まんなか
         let k = 0;   // 0: 屋根の上 / 1: 液晶の前
-        if (t !== null) k = t < 0.2 ? (t / 0.2) ** 2 : t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2;
-        const scale = 1 + k * 3;
-        const size = 16 * scale;
-        const shake = t !== null && t >= 0.2 && t < 0.8 ? Math.sin(now * 50) * 1.5 : 0;
-        const footY = restY + (downY - restY) * k;
-        const x = cx - size / 2 + shake;
-        const y = footY - size;
-        if (k > 0.5) {
-            // 虹色の後光
-            ctx.fillStyle = `hsla(${(now * 360) % 360}, 90%, 60%, 0.45)`;
-            ctx.fillRect(x - 8, y - 8, size + 16, size + 16);
+        if (t !== null) k = t < 0.18 ? (t / 0.18) ** 2 : t < 0.82 ? 1 : 1 - (t - 0.82) / 0.18;
+        const r = 9 + k * 30;
+        const cy = restY + (downY - restY) * k;
+        // 回る (横に つぶれて 見える。裏は おにおに)
+        const spin = t !== null && t >= 0.18 && t < 0.82 ? (t - 0.18) / 0.64 * Math.PI * 6 : 0;
+        const sx = Math.cos(spin);
+        const back = sx < 0;
+        const hue = (now * 360) % 360;
+        if (k > 0.4) {
+            // 光の すじと 虹色の 輪
+            ctx.save();
+            ctx.globalAlpha = Math.min(1, (k - 0.4) / 0.4);
+            for (let i = 0; i < 16; i++) {
+                const a = i / 16 * Math.PI * 2 + now * 1.5;
+                ctx.strokeStyle = `hsla(${hue + i * 22}, 95%, 65%, 0.55)`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(a) * r * 1.1, cy + Math.sin(a) * r * 1.1);
+                ctx.lineTo(cx + Math.cos(a) * r * 2.4, cy + Math.sin(a) * r * 2.4);
+                ctx.stroke();
+            }
+            ctx.fillStyle = `hsla(${hue}, 90%, 60%, 0.35)`;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
         }
+        // メダル: 銀の ふち (光る ときは 虹色)・氷の 面 (裏は 赤)
+        const w = Math.max(0.08, Math.abs(sx));
+        hexPath(ctx, cx, cy, r, w);
+        ctx.fillStyle = k > 0.4 ? `hsl(${hue}, 90%, 70%)` : '#e8eaf0';
+        ctx.fill();
+        hexPath(ctx, cx, cy, r * 0.84, w);
+        const face = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+        face.addColorStop(0, back ? '#ff8a8a' : '#ffffff');
+        face.addColorStop(0.5, back ? COLORS.accent : '#bff0ff');
+        face.addColorStop(1, back ? COLORS.accentDark : '#4aa8e0');
+        ctx.fillStyle = face;
+        ctx.fill();
+        // 顔 (表: こおりくん / 裏: おにおに)。横に つぶす
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(w, 1);
         ctx.imageSmoothingEnabled = false;
-        drawSprite(ctx, SPRITES.koori, 'walk1', x, y, scale);
+        if (back && typeof Characters !== 'undefined' && Characters.has('onioni')) {
+            const sz = Characters.size('onioni');
+            Characters.drawEnemy(ctx, 'onioni', 0, r * 0.62, { scale: (r * 1.25) / sz.h, frame: 0 });
+        } else {
+            const s = (r * 1.15) / 16;
+            drawSprite(ctx, SPRITES.koori, 'walk1', -8 * s, -8 * s - r * 0.05, s);
+        }
+        ctx.restore();
+        // ふだんの メダルの きらり
+        if (k === 0) {
+            const a = (Math.sin(now * 2) + 1) / 2;
+            ctx.fillStyle = `rgba(255,255,255,${a})`;
+            ctx.fillRect(cx + r * 0.3, cy - r * 0.6, 1, 4);
+            ctx.fillRect(cx + r * 0.3 - 1.5, cy - r * 0.6 + 1.5, 4, 1);
+        }
     }
 
     // lcdCanvas: 液晶の絵 (256x144)。玉と部品は view.world から。gimmick: 役物の進み具合 (0〜1、動いていないときは null)

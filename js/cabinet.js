@@ -1,23 +1,27 @@
 // =====================================================================
-// 台の筐体 (2026-10-23 ユーザー指定: 台の デザインを 一新。フォルダの 画像を 参考に)
+// 台の筐体 (2026-10-23 ユーザー指定: 台の デザインを 一新。ルパン三世の 台の つくりを 参考に)
 // ---------------------------------------------------------------------
 // 盤面 (canvas#board) の まわりに 筐体を 描く (canvas.cabinet-art。盤面の 下に 重ねる)。
 // 参考に した つくり (実機の 絵は 写さず、こおりくんの 台として 新しく 描く):
-//   - 上の パネル: タイトルの ロゴと、左右の 丸い スピーカー
-//   - 氷の 透明な 枠と、流れる LED の ライン (台の 状態で 色が かわる)
-//   - 役物: 上に こおりくんの 大きな 頭、右に おにおにの 金棒 (光る 長い 棒)
-//   - 下: 玉の 受け皿 (持ち玉で 玉が ふえる)・スピーカーの 網・ハンドルの 飾り
-// 台の 状態 (mode: normal / rush / small / bonus、premium、gimmick 役物が 動く 0〜1) で 光り方と 役物が かわる。
+//   - 黒い 本体と、左上・右上の 赤い ハウジングに 入った 丸い スピーカー
+//   - 上の まんなかの イラストの パネル (こおりくん・おにおに・ふるカワと ロゴ)
+//   - 左右の 透明な 結晶の 飾り、赤い 枠に そって 流れる LED
+//   - 右: 上から つきだす 白く 光る 管と、その 下の 丸い ランプ。ランプは 先バレで 赤・紫・虹に 光る (lamp)
+//   - 下: まんなかの 赤黒の PUSH ユニット (押せる。#cabinet-push が 台の ボタンに つなぐ)・左右の スピーカーの 網
+// 台の 状態 (mode: normal / rush / small / bonus、premium、gimmick 役物が 動く 0〜1、button 台の ボタンの 光り方) で 光り方が かわる。
 // 大きさは 画面に 合わせて かわる (盤面の 位置を 測って 描く)。
 // =====================================================================
 
 const Cabinet = (() => {
     const FONT = '"DotGothic16", "MS Gothic", monospace';
+    const LAMP_TIME = 3;   // 先バレの ランプが 光って いる 秒
     let cv = null, g = null, wrap = null, boardEl = null;
     let W = 0, H = 0, dpr = 1;
     const B = { x: 0, y: 0, w: 0, h: 0 };   // 盤面の 位置 (筐体の 中の CSS px)
+    let lampState = null;                  // { kind: red / purple / rainbow, at }
     // LED の 色 (台の 状態ごと)
-    const LED = { normal: ['#7fd3f7', '#e8f8ff'], small: ['#ffe066', '#fff4b0'], rush: ['#ff4a6a', '#ffd84a'] };
+    const LED = { normal: ['#7fd3f7', '#e8f8ff'], small: ['#ffe066', '#fff4b0'], rush: ['#ff3a4a', '#ffd84a'] };
+    const RED = '#c8102e', RED_LIGHT = '#ff3a4a', RED_DARK = '#5a0410';
 
     function create(canvas, board) {
         cv = canvas;
@@ -37,10 +41,16 @@ const Cabinet = (() => {
         cv.height = Math.max(1, Math.round(H * dpr));
         Object.assign(B, { x: boardEl.offsetLeft, y: boardEl.offsetTop, w: boardEl.offsetWidth, h: boardEl.offsetHeight });
     }
+    // 先バレ: 右の 丸い ランプを 光らせる (button.js の trigger から。red / purple / rainbow)
+    function lamp(kind, now) {
+        if (kind === 'red' || kind === 'purple' || kind === 'rainbow') lampState = { kind, at: now };
+    }
+    const lampOn = t => (lampState && t - lampState.at >= 0 && t - lampState.at < LAMP_TIME ? lampState : null);
 
     // ----- 道具 -----
-    const hsl = (h, s = 90, l = 62) => `hsl(${((h % 360) + 360) % 360}, ${s}%, ${l}%)`;
+    const hsl = (h, s = 90, l = 62, a = 1) => `hsla(${((h % 360) + 360) % 360}, ${s}%, ${l}%, ${a})`;
     function rr(x, y, w, h, r) {
+        r = Math.max(0, Math.min(r, w / 2, h / 2));
         g.beginPath();
         g.moveTo(x + r, y);
         g.arcTo(x + w, y, x + w, y + h, r);
@@ -49,358 +59,390 @@ const Cabinet = (() => {
         g.arcTo(x, y, x + w, y, r);
         g.closePath();
     }
-    const grad = (x0, y0, x1, y1, stops) => {
+    const lin = (x0, y0, x1, y1, stops) => {
         const gr = g.createLinearGradient(x0, y0, x1, y1);
         stops.forEach(([o, c]) => gr.addColorStop(o, c));
         return gr;
     };
-    // いまの LED の 色 (i: 何番目の 光, t: 時間)
+    const rad = (x, y, r0, r1, stops) => {
+        const gr = g.createRadialGradient(x, y, r0, x, y, r1);
+        stops.forEach(([o, c]) => gr.addColorStop(o, c));
+        return gr;
+    };
+    const rainbowish = st => st.mode === 'bonus' || st.premium;
     function ledColor(st, i, t) {
-        if (st.mode === 'bonus' || st.premium) return hsl(i * 18 - t * 240, 95, st.premium ? 70 : 62);
+        if (rainbowish(st)) return hsl(i * 18 - t * 240, 95, st.premium ? 72 : 62);
         const [a, b] = LED[st.mode] || LED.normal;
         return (Math.floor(i / 3 + t * (st.mode === 'rush' ? 6 : 2)) % 2) ? a : b;
     }
+    const side = () => B.x;                      // 盤面の 左の 枠の 幅
+    const rside = () => W - (B.x + B.w);         // 右の 枠の 幅
+    const bottomTop = () => B.y + B.h;           // 下の 段の 上
 
     // ----- 部品 -----
-    // 筐体の 体 (こい 紺に 氷の 光)
-    function body(st, t) {
-        const top = B.y * 0.34;
-        rr(1, top, W - 2, H - top - 1, Math.min(28, W * 0.06));
-        g.fillStyle = grad(0, top, 0, H, [[0, '#14294a'], [0.5, '#0b1a33'], [1, '#050c18']]);
+    // 黒い 本体
+    function body() {
+        const top = B.y * 0.18;
+        rr(1, top, W - 2, H - top - 1, Math.min(26, W * 0.05));
+        g.fillStyle = lin(0, top, W, H, [[0, '#1c1c24'], [0.5, '#0c0c12'], [1, '#050508']]);
         g.fill();
         g.lineWidth = 2;
-        g.strokeStyle = '#2a4a78';
+        g.strokeStyle = '#2a2a34';
         g.stroke();
-    }
-    // 左右の 氷の 枠 (透明な 水色の 結晶。ななめの 面)
-    function iceFrame(st, t) {
-        const side = B.x;
-        if (side < 6) return;
-        const y0 = B.y - side * 0.4, y1 = B.y + B.h + side * 0.2;
-        for (const [x, dir] of [[0, 1], [W, -1]]) {
+        // 黒い 面の 細かい 凹凸 (ななめの 線)
+        g.save();
+        rr(1, top, W - 2, H - top - 1, Math.min(26, W * 0.05));
+        g.clip();
+        g.strokeStyle = 'rgba(255,255,255,.035)';
+        g.lineWidth = 1;
+        for (let x = -H; x < W; x += 9) {
             g.beginPath();
-            g.moveTo(x, y0 + side);
-            g.lineTo(x + dir * side * 0.95, y0);
-            g.lineTo(x + dir * side * 0.95, y1);
-            g.lineTo(x + dir * side * 0.35, y1 + side * 0.6);
-            g.lineTo(x, y1);
-            g.closePath();
-            g.fillStyle = grad(x, 0, x + dir * side, 0, [[0, 'rgba(160,220,255,.10)'], [0.6, 'rgba(190,240,255,.30)'], [1, 'rgba(120,190,240,.12)']]);
+            g.moveTo(x, H);
+            g.lineTo(x + H, 0);
+            g.stroke();
+        }
+        g.restore();
+    }
+    // 赤い 枠: 盤面の まわりの 赤い ふち と、左上・右上の スピーカーの ハウジング
+    function redFrame(st, t) {
+        const s = side();
+        // 盤面を かこむ 赤い ふち (上が まるい)
+        const pad = Math.max(4, s * 0.28);
+        rr(B.x - pad, B.y - pad * 1.2, B.w + pad * 2, B.h * 0.78, Math.min(B.w * 0.35, 120));
+        g.fillStyle = lin(0, B.y, 0, B.y + B.h * 0.78, [[0, RED_LIGHT], [0.25, RED], [1, RED_DARK]]);
+        g.fill();
+        // ハウジング (スピーカーの 入れもの)
+        const hr = Math.min(B.y * 0.52, B.w * 0.16);
+        for (const [cx, dir] of [[B.x + hr * 0.55, -1], [B.x + B.w - hr * 0.55, 1]]) {
+            const cy = B.y - hr * 0.15;
+            g.beginPath();
+            g.ellipse(cx, cy, hr * 1.15, hr * 1.05, dir * 0.25, 0, Math.PI * 2);
+            g.fillStyle = lin(cx - hr, cy - hr, cx + hr, cy + hr, [[0, '#ff5a6a'], [0.45, RED], [1, RED_DARK]]);
             g.fill();
-            // 結晶の 面の 線
-            g.strokeStyle = 'rgba(220,245,255,.35)';
-            g.lineWidth = 1;
-            for (let k = 0; k < 6; k++) {
-                const yy = y0 + (y1 - y0) * (k + 0.5) / 6;
-                g.beginPath();
-                g.moveTo(x + dir * 2, yy);
-                g.lineTo(x + dir * side * 0.9, yy - side * 0.5);
-                g.stroke();
+            g.strokeStyle = 'rgba(0,0,0,.5)';
+            g.lineWidth = 2;
+            g.stroke();
+            speaker(cx, cy, hr * 0.72, st, t);
+        }
+        // 赤い 枠の ふちの LED (流れる)
+        const n = 40;
+        for (let i = 0; i < n; i++) {
+            const k = i / (n - 1);
+            const y = B.y + B.h * 0.7 * (1 - k);
+            for (const x of [B.x - pad * 0.55, B.x + B.w + pad * 0.55]) {
+                const on = (i + Math.floor(t * (st.mode === 'normal' ? 8 : 18))) % 6 < 2;
+                g.fillStyle = on ? ledColor(st, i, t) : 'rgba(255,255,255,.12)';
+                g.fillRect(x - 1, y - 1, 2, 2);
             }
         }
     }
-    // 流れる LED の ライン (枠の 外側に そって)
-    function leds(st, t) {
-        const side = B.x;
-        if (side < 6) return;
-        const n = 26, y0 = B.y - side * 0.2, y1 = B.y + B.h;
-        const r = Math.max(1.5, side * 0.07);
-        for (const xr of [side * 0.55, W - side * 0.55]) {
-            for (let i = 0; i < n; i++) {
-                const y = y0 + (y1 - y0) * i / (n - 1);
-                const wave = 0.35 + 0.65 * Math.max(0, Math.sin((i / n) * Math.PI * 4 - t * (st.mode === 'normal' ? 3 : 8)));
-                g.globalAlpha = wave;
-                g.fillStyle = ledColor(st, i, t);
-                g.shadowColor = g.fillStyle;
-                g.shadowBlur = r * 4;
-                g.beginPath();
-                g.arc(xr, y, r, 0, Math.PI * 2);
-                g.fill();
-            }
-        }
-        g.shadowBlur = 0;
+    function speaker(cx, cy, r0, st, t) {
+        g.beginPath();
+        g.arc(cx, cy, r0, 0, Math.PI * 2);
+        g.fillStyle = rad(cx - r0 * 0.3, cy - r0 * 0.3, r0 * 0.1, r0, [[0, '#3a3a44'], [1, '#08080c']]);
+        g.fill();
+        // 網の 点
+        g.fillStyle = '#1e1e26';
+        const step = Math.max(2, r0 / 4.5);
+        for (let y = -r0; y <= r0; y += step) for (let x = -r0; x <= r0; x += step) if (x * x + y * y < (r0 * 0.82) ** 2) g.fillRect(cx + x - 0.7, cy + y - 0.7, 1.4, 1.4);
+        // まわりの 光の 輪 (状態の 色)
+        g.strokeStyle = rainbowish(st) ? hsl(t * 200 + cx) : (LED[st.mode] || LED.normal)[0];
+        g.lineWidth = Math.max(1.2, r0 * 0.08);
+        g.globalAlpha = 0.45 + 0.4 * Math.sin(t * 5 + cx);
+        g.beginPath();
+        g.arc(cx, cy, r0 * 1.02, 0, Math.PI * 2);
+        g.stroke();
         g.globalAlpha = 1;
     }
-    // 盤面の 枠 (銀の ふち + 状態の 色の 光)
-    function bezel(st, t) {
-        const p = Math.max(3, B.w * 0.012);
-        const glow = st.mode === 'bonus' || st.premium ? hsl(t * 200) : (LED[st.mode] || LED.normal)[0];
-        g.shadowColor = glow;
-        g.shadowBlur = 18 + 8 * Math.sin(t * 4);
-        rr(B.x - p, B.y - p, B.w + p * 2, B.h + p * 2, Math.min(18, B.w * 0.04));
-        g.fillStyle = grad(B.x, B.y, B.x + B.w, B.y + B.h, [[0, '#e8f0f8'], [0.4, '#7a8aa0'], [0.7, '#dfe8f2'], [1, '#56657a']]);
-        g.fill();
-        g.shadowBlur = 0;
-    }
-    // 上の パネル: タイトルと スピーカー
+    // 上の まんなかの イラストの パネル (こおりくん・おにおに・ふるカワと ロゴ)
     function topPanel(st, t) {
-        const ph = B.y * 0.62;           // パネルの 高さ
-        const py = B.y - ph - B.y * 0.06;
-        if (ph < 18) return;
-        const px = B.x * 0.7, pw = W - px * 2;
-        rr(px, py, pw, ph, ph * 0.3);
-        g.fillStyle = grad(0, py, 0, py + ph, [[0, '#1f3a6b'], [1, '#0b1a33']]);
-        g.fill();
-        g.strokeStyle = '#7fd3f7';
-        g.lineWidth = 1.5;
-        g.stroke();
-        // スピーカー (左右の 丸)
-        const sr = ph * 0.42;
-        for (const cx of [px + sr * 1.2, px + pw - sr * 1.2]) speaker(cx, py + ph / 2, sr, st, t);
-        // タイトル (ドットの 字。グラデーションで 光らせる)
-        const cx = W / 2, size = Math.min(ph * 0.46, pw * 0.085);
+        const hr = Math.min(B.y * 0.52, B.w * 0.16);
+        const px = B.x + hr * 1.05, pw = B.w - hr * 2.1;   // ハウジングに 少し かぶせて 広く
+        const py = B.y * 0.16, ph = B.y * 0.78;
+        if (pw < 40 || ph < 20) return;
+        const cx = px + pw / 2, cy = py + ph / 2;
+        g.save();
+        rr(px, py, pw, ph, ph * 0.12);
+        g.clip();
+        // ピンクと 水色の まんがの 地 + 集中線
+        g.fillStyle = lin(px, py, px + pw, py + ph, [[0, '#ffd0e0'], [0.5, '#ffe8f0'], [1, '#bfe8ff']]);
+        g.fillRect(px, py, pw, ph);
+        g.strokeStyle = 'rgba(255,120,160,.25)';
+        g.lineWidth = 1;
+        for (let i = 0; i < 28; i++) {
+            const a = i / 28 * Math.PI * 2 + t * 0.2;
+            g.beginPath();
+            g.moveTo(cx + Math.cos(a) * ph * 0.3, cy + Math.sin(a) * ph * 0.3);
+            g.lineTo(cx + Math.cos(a) * pw, cy + Math.sin(a) * pw);
+            g.stroke();
+        }
+        // キャラ: 左に こおりくん、右に おにおに (パネルの 下から のぞく)。ロゴの 上に ふるカワ
+        const s = ph * 0.62 / 16;
+        if (typeof SPRITES !== 'undefined' && SPRITES.koori) drawSprite(g, SPRITES.koori, Math.floor(t * 2) % 2 ? 'walk1' : 'walk2', px + pw * 0.02, py + ph - 16 * s * 0.92, s);
+        if (typeof Characters !== 'undefined' && Characters.has('onioni')) {
+            const sz = Characters.size('onioni');
+            const sc = (ph * 0.78) / sz.h;
+            Characters.drawEnemy(g, 'onioni', px + pw - sz.w * sc * 0.55, py + ph * 1.04, { scale: sc, frame: Math.floor(t * 2) % 2 });
+        }
+        if (typeof SPRITES !== 'undefined' && SPRITES.furukawa) drawSprite(g, SPRITES.furukawa, Math.floor(t * 3) % 2 ? 'talk' : 'idle', cx - 8 * s * 0.4, py + ph * 0.02, s * 0.4);
+        g.restore();
+        // ロゴ (赤い ドットの 字に 白い ふち)
+        const size = Math.min(ph * 0.3, pw * 0.1);
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.font = `bold ${Math.round(size)}px ${FONT}`;
-        const shine = (Math.sin(t * 2) + 1) / 2;
-        g.lineWidth = Math.max(2, size * 0.16);
-        g.strokeStyle = '#05070d';
-        g.strokeText('Pこおりくん', cx, py + ph * 0.42);
-        g.fillStyle = grad(0, py, 0, py + ph * 0.7, [[0, '#ffffff'], [0.5 - shine * 0.2, '#bff0ff'], [1, '#4aa8e0']]);
-        g.fillText('Pこおりくん', cx, py + ph * 0.42);
-        g.font = `${Math.round(size * 0.42)}px ${FONT}`;
-        g.fillStyle = '#ffe680';
-        g.fillText('～内定ツラヌキ物語～', cx, py + ph * 0.8);
-        g.textAlign = 'left';
-    }
-    function speaker(cx, cy, r, st, t) {
-        g.beginPath();
-        g.arc(cx, cy, r, 0, Math.PI * 2);
-        g.fillStyle = '#0a0f1a';
-        g.fill();
-        // 光の 輪
-        g.strokeStyle = st.mode === 'bonus' || st.premium ? hsl(t * 200 + cx) : (LED[st.mode] || LED.normal)[0];
-        g.lineWidth = Math.max(1.5, r * 0.14);
-        g.globalAlpha = 0.6 + 0.4 * Math.sin(t * 5 + cx);
-        g.stroke();
-        g.globalAlpha = 1;
-        // 網の 点
-        g.fillStyle = '#26324a';
-        const step = Math.max(2, r / 4);
-        for (let y = -r; y <= r; y += step) for (let x = -r; x <= r; x += step) if (x * x + y * y < (r * 0.75) ** 2) g.fillRect(cx + x - 0.6, cy + y - 0.6, 1.2, 1.2);
-    }
-    // 役物: こおりくんの 大きな 頭 (パネルの 上から のぞく)。役物が 動くと とびだして 目が 光る
-    function kooriHead(st, t) {
-        if (typeof SPRITES === 'undefined' || !SPRITES.koori || B.y < 30) return;
-        const size = Math.min(B.y * 0.78, W * 0.24);
-        const s = size / 16;
-        const pop = st.gimmick != null ? Math.sin(Math.min(1, st.gimmick * 3) * Math.PI / 2) : 0;
-        const bob = Math.sin(t * 2.2) * s * 0.5;
-        const x = B.x * 0.2, y = Math.max(2, B.y * 0.04) + s + bob - pop * s * 2;
+        g.lineWidth = Math.max(3, size * 0.24);
+        g.strokeStyle = '#ffffff';
+        g.strokeText('Pこおりくん', cx, py + ph * 0.5);
+        g.fillStyle = lin(0, py + ph * 0.3, 0, py + ph * 0.7, [[0, RED_LIGHT], [1, '#8a0a1a']]);
+        g.fillText('Pこおりくん', cx, py + ph * 0.5);
+        // 「内定ツラヌキ物語」の スタンプ
+        const ss = size * 0.42;
+        g.font = `bold ${Math.round(ss)}px ${FONT}`;
+        const label = '内定ツラヌキ物語';
+        const lw = g.measureText(label).width + ss;
         g.save();
-        if (st.mode === 'bonus' || pop > 0) { g.shadowColor = '#bff0ff'; g.shadowBlur = 20; }
-        drawSprite(g, SPRITES.koori, Math.floor(t * 2) % 2 ? 'walk1' : 'walk2', x, y, s);
-        g.restore();
-        // 目が 光る (先読み・役物・大当たり)
-        if (pop > 0 || st.mode === 'bonus') {
-            g.fillStyle = `rgba(255,255,255,${0.5 + 0.5 * Math.sin(t * 20)})`;
-            g.fillRect(x + 5 * s, y + 5 * s, s, s * 2);
-            g.fillRect(x + 10 * s, y + 5 * s, s, s * 2);
-        }
-    }
-    // 役物: おにおにの 金棒 (右に 立つ 光る 棒)。大当たりで 虹色、役物が 動くと 大きく 光る
-    function club(st, t) {
-        const side = W - (B.x + B.w);
-        if (side < 14) return;
-        const cw = side * 0.5, cx = B.x + B.w + side * 0.5;
-        const top = B.y * 0.15, bottom = B.y + B.h * 0.82;
-        const pop = st.gimmick != null ? 1 : 0;
-        // 棒 (黒と 赤)
-        rr(cx - cw / 2, top, cw, bottom - top, cw / 2);
-        g.fillStyle = grad(cx - cw / 2, 0, cx + cw / 2, 0, [[0, '#2a0a0a'], [0.35, '#a01818'], [0.6, '#e04040'], [1, '#3a0a0a']]);
+        g.translate(cx, py + ph * 0.82);
+        g.rotate(-0.05);
+        rr(-lw / 2, -ss * 0.75, lw, ss * 1.5, ss * 0.5);
+        g.fillStyle = '#ffe066';
         g.fill();
-        // 光る 芯
-        const core = st.mode === 'bonus' || st.premium ? hsl(t * 220) : st.mode === 'rush' ? '#ffd84a' : '#ff8a6a';
-        g.shadowColor = core;
-        g.shadowBlur = 14 + pop * 20 + 6 * Math.sin(t * 6);
-        rr(cx - cw * 0.14, top + cw, cw * 0.28, bottom - top - cw * 2, cw * 0.14);
-        g.fillStyle = core;
-        g.globalAlpha = 0.75 + 0.25 * Math.sin(t * 8);
-        g.fill();
-        g.globalAlpha = 1;
-        g.shadowBlur = 0;
-        // 金の 鋲 (金棒の いぼ)
-        const n = Math.max(4, Math.floor((bottom - top) / (cw * 1.3)));
-        for (let i = 0; i < n; i++) {
-            const y = top + cw + (bottom - top - cw * 2) * (i + 0.5) / n;
-            for (const d of [-1, 1]) {
-                const x = cx + d * cw * 0.5;
-                g.beginPath();
-                g.arc(x, y, cw * 0.2, 0, Math.PI * 2);
-                g.fillStyle = grad(x - cw * 0.2, y - cw * 0.2, x + cw * 0.2, y + cw * 0.2, [[0, '#fff4b0'], [0.6, '#ffd84a'], [1, '#a06a10']]);
-                g.fill();
-            }
-        }
-        // 先の 光る 玉
-        g.beginPath();
-        g.arc(cx, top + cw * 0.5, cw * 0.55, 0, Math.PI * 2);
-        g.fillStyle = core;
-        g.shadowColor = core;
-        g.shadowBlur = 16 + pop * 16;
-        g.fill();
-        g.shadowBlur = 0;
-        // 根もとの おにおにの メダル
-        const mr = side * 0.42, my = bottom + mr * 0.6;
-        g.beginPath();
-        g.arc(cx, my, mr, 0, Math.PI * 2);
-        g.fillStyle = grad(cx - mr, my - mr, cx + mr, my + mr, [[0, '#ffe680'], [1, '#a06a10']]);
-        g.fill();
-        if (typeof Characters !== 'undefined' && Characters.has('onioni')) {
-            const sz = Characters.size ? Characters.size('onioni') : { w: 32, h: 40 };
-            const sc = (mr * 1.5) / Math.max(sz.w || 32, sz.h || 40);
-            Characters.drawEnemy(g, 'onioni', cx, my + mr * 0.72, { scale: sc, frame: Math.floor(t * 2) % 2 });
-        }
-    }
-    // 下: 受け皿・スピーカーの 網・ハンドルの 飾り
-    function tray(st, t) {
-        const y0 = B.y + B.h + Math.max(6, B.h * 0.02);
-        const th = H - y0 - 4;
-        if (th < 16) return;
-        // 受け皿 (曲がった 皿に 玉)
-        const tx = W * 0.16, tw = W * 0.68, ty = y0 + th * 0.12, tHt = th * 0.42;
-        rr(tx, ty, tw, tHt, tHt * 0.5);
-        g.fillStyle = grad(0, ty, 0, ty + tHt, [[0, '#2a3a5a'], [1, '#101a2e']]);
-        g.fill();
-        g.strokeStyle = '#7fd3f7';
+        g.strokeStyle = '#a04a00';
         g.lineWidth = 1.5;
         g.stroke();
-        // 玉 (持ち玉で ふえる。いちばん多くて 2 段)
-        const br = Math.max(2, tHt * 0.18);
-        const count = Math.min(Math.floor((st.balls || 0) / 25), Math.floor((tw - br * 4) / (br * 2.1)) * 2);
-        for (let i = 0; i < count; i++) {
-            const row = i % 2, col = Math.floor(i / 2);
-            const x = tx + br * 2 + col * br * 2.1 + row * br, y = ty + tHt - br * (1.4 + row * 1.7);
-            g.beginPath();
-            g.arc(x, y, br, 0, Math.PI * 2);
-            g.fillStyle = grad(x - br, y - br, x + br, y + br, [[0, '#ffffff'], [0.5, '#c8d0da'], [1, '#6a7688']]);
-            g.fill();
-        }
-        // スピーカーの 網 (左右)
-        const gy = ty + tHt + th * 0.08, gh = th - (gy - y0) - th * 0.06;
-        for (const gx of [W * 0.05, W * 0.71]) {
-            rr(gx, gy, W * 0.24, gh, gh * 0.3);
-            g.fillStyle = '#0a0f1a';
-            g.fill();
-            g.fillStyle = '#26324a';
-            for (let y = gy + 3; y < gy + gh - 2; y += 4) for (let x = gx + 4; x < gx + W * 0.24 - 3; x += 4) g.fillRect(x, y, 1.5, 1.5);
-        }
-        // まんなかの 氷の しるし
-        const ex = W / 2, ey = gy + gh / 2, er = Math.min(gh * 0.45, W * 0.06);
-        g.save();
-        g.translate(ex, ey);
-        g.rotate(Math.PI / 4);
-        g.fillStyle = grad(-er, -er, er, er, [[0, '#ffffff'], [0.5, '#bff0ff'], [1, '#4aa8e0']]);
-        g.shadowColor = '#bff0ff';
-        g.shadowBlur = 8 + 6 * Math.sin(t * 3);
-        g.fillRect(-er / 1.5, -er / 1.5, er * 1.33, er * 1.33);
+        g.fillStyle = '#7a2a00';
+        g.fillText(label, 0, 1);
         g.restore();
-        // ハンドルの 飾り (右下の オレンジの 玉)
-        const hr = Math.min(th * 0.22, W * 0.045);
+        // ふち
+        rr(px, py, pw, ph, ph * 0.12);
+        g.strokeStyle = '#2a2a34';
+        g.lineWidth = 2;
+        g.stroke();
+        g.textAlign = 'left';
+    }
+    // 左右の 透明な 結晶の 飾り (光る)
+    function crystals(st, t) {
+        const s = side();
+        if (s < 8) return;
+        const glow = rainbowish(st) ? hsl(t * 120, 90, 70) : st.mode === 'rush' ? '#ff9ab0' : '#c8b0ff';
+        const cluster = (x, y, size, dir) => {
+            for (let k = 0; k < 4; k++) {
+                const h = size * (1 - k * 0.18), w = size * 0.32;
+                const ox = x + dir * k * w * 0.6, oy = y + k * size * 0.12;
+                g.beginPath();
+                g.moveTo(ox, oy - h);
+                g.lineTo(ox + w / 2, oy - h * 0.7);
+                g.lineTo(ox + w / 2, oy);
+                g.lineTo(ox - w / 2, oy);
+                g.lineTo(ox - w / 2, oy - h * 0.7);
+                g.closePath();
+                g.fillStyle = lin(ox, oy - h, ox, oy, [[0, 'rgba(255,255,255,.9)'], [0.4, glow], [1, 'rgba(80,40,160,.35)']]);
+                g.globalAlpha = 0.55 + 0.3 * Math.sin(t * 3 + k + y);
+                g.fill();
+                g.globalAlpha = 1;
+            }
+        };
+        cluster(s * 0.35, B.y + B.h * 0.28, s * 1.4, 1);
+        cluster(s * 0.35, B.y + B.h * 0.62, s * 1.1, 1);
+        if (rside() >= 8) cluster(W - rside() * 0.35, B.y + B.h * 0.9, rside() * 1.1, -1);
+    }
+    // 右: 白く 光る 管 (上から つきだす) と、黒い つかみ
+    function tube(st, t) {
+        const r = rside();
+        if (r < 12) return;
+        const cx = B.x + B.w + r * 0.55, tw = Math.max(5, r * 0.36);
+        const top = 4, bottom = B.y + B.h * 0.5;
+        // 黒い つかみ (上と 下で 管を はさむ)
+        g.fillStyle = '#121218';
+        rr(cx - tw * 0.9, top - 2, tw * 1.8, tw * 1.6, tw * 0.5);
+        g.fill();
+        rr(cx - tw * 0.9, bottom - tw * 2.2, tw * 1.8, tw * 2.4, tw * 0.5);
+        g.fill();
+        // 管
+        const flash = st.gimmick != null ? 1 : 0;
+        const core = rainbowish(st) ? hsl(t * 220, 95, 75) : st.mode === 'rush' ? '#ff8a9a' : '#ffffff';
+        g.shadowColor = rainbowish(st) ? core : st.mode === 'rush' ? '#ff3a4a' : '#bff0ff';
+        g.shadowBlur = 10 + flash * 24 + 4 * Math.sin(t * 4);
+        rr(cx - tw / 2, top + tw * 1.2, tw, bottom - top - tw * 3.2, tw / 2);
+        g.fillStyle = lin(cx - tw / 2, 0, cx + tw / 2, 0, [[0, 'rgba(200,220,235,.9)'], [0.45, core], [1, 'rgba(160,180,200,.9)']]);
+        g.fill();
+        g.shadowBlur = 0;
+        // 中を 光が 流れる
+        const L = bottom - top - tw * 3.2;
+        for (let i = 0; i < 3; i++) {
+            const k = (t * (st.mode === 'normal' ? 0.5 : 1.4) + i / 3) % 1;
+            g.fillStyle = 'rgba(255,255,255,.9)';
+            g.fillRect(cx - tw * 0.2, top + tw * 1.2 + L * k * 0.9, tw * 0.4, tw * 1.2);
+        }
+    }
+    // 右の 丸い ランプ (先バレで 赤・紫・虹)。管の 下に つく
+    function lampDraw(st, t) {
+        const r = rside();
+        if (r < 12) return;
+        const cx = B.x + B.w + r * 0.55, cy = B.y + B.h * 0.5 + r * 0.25;
+        const R = Math.min(r * 0.62, B.w * 0.09);
+        // 赤い 入れもの
         g.beginPath();
-        g.arc(W - hr * 1.8, H - hr * 1.6, hr, 0, Math.PI * 2);
-        g.fillStyle = grad(W - hr * 2.8, H - hr * 2.6, W - hr, H - hr, [[0, '#ffd0a0'], [0.5, '#ff7a2a'], [1, '#a03a0a']]);
+        g.arc(cx, cy, R * 1.25, 0, Math.PI * 2);
+        g.fillStyle = lin(cx - R, cy - R, cx + R, cy + R, [[0, '#ff5a6a'], [0.5, RED], [1, RED_DARK]]);
+        g.fill();
+        // 銀の 輪
+        g.beginPath();
+        g.arc(cx, cy, R * 1.02, 0, Math.PI * 2);
+        g.fillStyle = lin(cx - R, cy - R, cx + R, cy + R, [[0, '#ffffff'], [0.5, '#8a96a6'], [1, '#d8e0ea']]);
+        g.fill();
+        // ガラスの 丸 (光って いないときは 暗い)
+        const on = lampOn(t);
+        let fill;
+        if (on) {
+            const e = t - on.at;
+            const blink = 0.65 + 0.35 * Math.sin(e * 18);
+            const c = on.kind === 'rainbow' ? hsl(e * 540, 95, 62) : on.kind === 'purple' ? `rgba(190,80,255,${blink})` : `rgba(255,40,60,${blink})`;
+            const edge = on.kind === 'purple' ? '#3a0a5a' : on.kind === 'rainbow' ? hsl(e * 540 + 120, 90, 40) : '#5a0410';
+            fill = rad(cx - R * 0.25, cy - R * 0.25, R * 0.05, R * 0.9, [[0, '#ffffff'], [0.35, c], [1, edge]]);
+            g.shadowColor = on.kind === 'rainbow' ? hsl(e * 540) : on.kind === 'purple' ? '#be50ff' : '#ff2838';
+            g.shadowBlur = 24;
+        } else fill = rad(cx - R * 0.3, cy - R * 0.3, R * 0.05, R * 0.9, [[0, '#6a7488'], [0.4, '#1a2234'], [1, '#05070d']]);
+        g.beginPath();
+        g.arc(cx, cy, R * 0.86, 0, Math.PI * 2);
+        g.fillStyle = fill;
+        g.fill();
+        g.shadowBlur = 0;
+        // 光の すじ (光って いるとき)
+        if (on) {
+            g.strokeStyle = on.kind === 'rainbow' ? hsl(t * 300, 95, 75, 0.6) : on.kind === 'purple' ? 'rgba(220,160,255,.5)' : 'rgba(255,150,160,.5)';
+            g.lineWidth = 1.5;
+            for (let i = 0; i < 12; i++) {
+                const a = i / 12 * Math.PI * 2 + t * 2;
+                g.beginPath();
+                g.moveTo(cx + Math.cos(a) * R * 1.3, cy + Math.sin(a) * R * 1.3);
+                g.lineTo(cx + Math.cos(a) * R * 2, cy + Math.sin(a) * R * 2);
+                g.stroke();
+            }
+        }
+        // 映りこみ
+        g.fillStyle = 'rgba(255,255,255,.55)';
+        g.beginPath();
+        g.ellipse(cx - R * 0.3, cy - R * 0.38, R * 0.28, R * 0.14, -0.5, 0, Math.PI * 2);
+        g.fill();
+    }
+    // 盤面の 窓の ふち (黒と 銀、内側に 状態の 色の 光)
+    function bezel(st, t) {
+        const p = Math.max(3, B.w * 0.012);
+        const glow = rainbowish(st) ? hsl(t * 200) : (LED[st.mode] || LED.normal)[0];
+        g.shadowColor = glow;
+        g.shadowBlur = 14 + 6 * Math.sin(t * 4);
+        rr(B.x - p, B.y - p, B.w + p * 2, B.h + p * 2, Math.min(18, B.w * 0.04));
+        g.fillStyle = lin(B.x, B.y, B.x + B.w, B.y + B.h, [[0, '#d8dee8'], [0.45, '#4a4a56'], [0.7, '#c8ccd8'], [1, '#2a2a34']]);
+        g.fill();
+        g.shadowBlur = 0;
+    }
+    // 下の 段: まんなかの PUSH ユニット・左右の スピーカーの 網・ハンドルの 飾り・玉の 列
+    function bottom(st, t) {
+        const y0 = bottomTop() + Math.max(4, B.h * 0.015);
+        const bh = H - y0 - 4;
+        if (bh < 24) return;
+        // 左右の スピーカーの 網 (黒い メッシュに 状態の 色の ライン)
+        for (const [gx, gw] of [[W * 0.06, W * 0.28], [W * 0.66, W * 0.28]]) {
+            const gy = y0 + bh * 0.28, gh = bh * 0.5;
+            rr(gx, gy, gw, gh, gh * 0.35);
+            g.fillStyle = '#08080c';
+            g.fill();
+            g.fillStyle = '#1e1e26';
+            for (let y = gy + 3; y < gy + gh - 2; y += 4) for (let x = gx + 4; x < gx + gw - 3; x += 4) g.fillRect(x, y, 1.6, 1.6);
+            g.strokeStyle = ledColor(st, gx, t);
+            g.lineWidth = 1.5;
+            g.globalAlpha = 0.7;
+            g.beginPath();
+            g.moveTo(gx + gw * 0.1, gy - 3);
+            g.lineTo(gx + gw * 0.9, gy - 3);
+            g.stroke();
+            g.globalAlpha = 1;
+        }
+        // まんなかの PUSH ユニット (赤黒の 曲がった 台座と 丸い ボタン)
+        const ux = W / 2, uw = W * 0.24, uy = y0 - bh * 0.05;
+        g.beginPath();
+        g.moveTo(ux - uw * 0.5, H - 4);
+        g.bezierCurveTo(ux - uw * 0.55, uy + bh * 0.4, ux - uw * 0.3, uy + bh * 0.1, ux - uw * 0.22, uy);
+        g.lineTo(ux + uw * 0.22, uy);
+        g.bezierCurveTo(ux + uw * 0.3, uy + bh * 0.1, ux + uw * 0.55, uy + bh * 0.4, ux + uw * 0.5, H - 4);
+        g.closePath();
+        g.fillStyle = lin(ux - uw / 2, 0, ux + uw / 2, 0, [[0, '#0c0c10'], [0.3, '#2a2a34'], [0.5, RED], [0.7, '#2a2a34'], [1, '#0c0c10']]);
+        g.fill();
+        // 丸い PUSH ボタン (台の ボタンの 光り方に 合わせる)
+        const p = pushRect();
+        if (p) {
+            const br = p.w / 2, by = p.y + br;
+            const bs = st.button || {};
+            let face = lin(ux - br, by - br, ux + br, by + br, [[0, '#ffffff'], [0.5, '#c8d0da'], [1, '#6a7688']]);
+            if (bs.kind && bs.lit) {
+                const c = bs.kind === 'rainbow' ? hsl(t * 400, 95, 65) : bs.kind === 'purple' ? '#be50ff' : bs.kind === 'red' ? '#ff3a4a' : '#ffe066';
+                face = rad(ux, by, br * 0.1, br, [[0, '#ffffff'], [0.5, c], [1, c]]);
+                g.shadowColor = c;
+                g.shadowBlur = 20;
+            } else if (bs.push) {
+                g.shadowColor = '#ffe066';
+                g.shadowBlur = 10 + 10 * Math.abs(Math.sin(t * 6));
+            }
+            g.beginPath();
+            g.arc(ux, by, br, 0, Math.PI * 2);
+            g.fillStyle = face;
+            g.fill();
+            g.shadowBlur = 0;
+            g.strokeStyle = '#2a2a34';
+            g.lineWidth = 2;
+            g.stroke();
+            g.font = `bold ${Math.round(br * 0.5)}px ${FONT}`;
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.fillStyle = bs.push && Math.floor(t * 4) % 2 ? RED : '#2a2a34';
+            g.fillText('PUSH', ux, by + 1);
+            g.textAlign = 'left';
+        }
+        // 玉の 列 (持ち玉 25 発ごとに 1 つ。左右の 網の 上)
+        const ballR = Math.max(1.6, bh * 0.05);
+        const max = Math.floor((W * 0.28 - ballR * 4) / (ballR * 2.2));
+        const n = Math.min(max * 2, Math.floor((st.balls || 0) / 25));
+        for (let i = 0; i < n; i++) {
+            const leftSide = i % 2 === 0, k = Math.floor(i / 2);
+            const x = leftSide ? W * 0.06 + ballR * 2 + k * ballR * 2.2 : W * 0.94 - ballR * 2 - k * ballR * 2.2;
+            const y = y0 + bh * 0.14;
+            g.beginPath();
+            g.arc(x, y, ballR, 0, Math.PI * 2);
+            g.fillStyle = lin(x - ballR, y - ballR, x + ballR, y + ballR, [[0, '#ffffff'], [0.5, '#c8d0da'], [1, '#6a7688']]);
+            g.fill();
+        }
+        // ハンドルの 飾り (右下の オレンジの 玉)
+        const hr = Math.min(bh * 0.14, W * 0.04);
+        g.beginPath();
+        g.arc(W - hr * 2, H - hr * 1.8, hr, 0, Math.PI * 2);
+        g.fillStyle = lin(W - hr * 3, H - hr * 2.8, W - hr, H - hr, [[0, '#ffd0a0'], [0.5, '#ff7a2a'], [1, '#a03a0a']]);
         g.fill();
     }
 
-    // 上の 角から つきだす 氷の 結晶の 羽 (左は こおりくんの うしろ、右は 金棒の うしろ)
-    function wings(st, t) {
-        const h = B.y * 0.9;
-        if (h < 30) return;
-        const glow = st.mode === 'bonus' || st.premium ? hsl(t * 160, 90, 75) : '#bff0ff';
-        for (const [x0, dir] of [[W * 0.02, 1], [W * 0.98, -1]]) {
-            for (let k = 0; k < 4; k++) {
-                const len = h * (1.05 - k * 0.18), base = B.y * 0.7;
-                const tipX = x0 + dir * W * (0.02 + k * 0.07), tipY = Math.max(1, base - len);
-                g.beginPath();
-                g.moveTo(x0 + dir * W * k * 0.05, base);
-                g.lineTo(tipX, tipY);
-                g.lineTo(x0 + dir * W * (0.1 + k * 0.07), base);
-                g.closePath();
-                g.fillStyle = grad(tipX, tipY, tipX, base, [[0, 'rgba(255,255,255,.95)'], [0.35, 'rgba(170,230,255,.8)'], [1, 'rgba(60,140,220,.35)']]);
-                g.fill();
-                g.strokeStyle = glow;
-                g.globalAlpha = 0.5 + 0.3 * Math.sin(t * 3 + k);
-                g.lineWidth = 1;
-                g.stroke();
-                g.globalAlpha = 1;
-            }
-        }
-    }
-    // おにおにの 赤の ライン (体の ふちに そって)
-    function redLine(st, t) {
-        const top = B.y * 0.34;
-        g.strokeStyle = st.mode === 'rush' ? '#ff4a6a' : '#c02838';
-        g.lineWidth = Math.max(2, W * 0.008);
-        g.globalAlpha = 0.85;
-        g.beginPath();
-        g.moveTo(W * 0.03, H * 0.55);
-        g.lineTo(W * 0.03, top + W * 0.06);
-        g.quadraticCurveTo(W * 0.03, top + 3, W * 0.12, top + 3);
-        g.moveTo(W * 0.97, H * 0.55);
-        g.lineTo(W * 0.97, top + W * 0.06);
-        g.quadraticCurveTo(W * 0.97, top + 3, W * 0.88, top + 3);
-        g.stroke();
-        g.globalAlpha = 1;
-    }
-    // パネルの ふちを まわる LED
-    function panelLeds(st, t) {
-        const ph = B.y * 0.62, py = B.y - ph - B.y * 0.06, px = B.x * 0.7, pw = W - px * 2;
-        if (ph < 18) return;
-        const n = 30;
-        for (let i = 0; i < n; i++) {
-            const x = px + ph * 0.3 + (pw - ph * 0.6) * i / (n - 1);
-            const on = (i + Math.floor(t * (st.mode === 'normal' ? 6 : 14))) % 5 === 0;
-            g.fillStyle = on ? ledColor(st, i, t) : 'rgba(255,255,255,.15)';
-            g.fillRect(x - 1.5, py + 1, 3, 2);
-            g.fillRect(x - 1.5, py + ph - 3, 3, 2);
-        }
-    }
-    // 盤面の まわりの 氷の 飾りと きらめき
-    function frost(st, t) {
-        const corners = [[B.x, B.y, 1, 1], [B.x + B.w, B.y, -1, 1], [B.x, B.y + B.h, 1, -1], [B.x + B.w, B.y + B.h, -1, -1]];
-        const sz = Math.max(8, B.w * 0.07);
-        for (const [x, y, dx, dy] of corners) {
-            g.beginPath();
-            g.moveTo(x - dx * sz * 0.3, y - dy * sz * 0.3);
-            g.lineTo(x + dx * sz, y - dy * sz * 0.1);
-            g.lineTo(x + dx * sz * 0.2, y + dy * sz * 0.2);
-            g.lineTo(x - dx * sz * 0.1, y + dy * sz);
-            g.closePath();
-            g.fillStyle = 'rgba(220,245,255,.8)';
-            g.fill();
-        }
-        // きらめき (★)
-        for (let i = 0; i < 6; i++) {
-            const k = (t * 0.4 + i / 6) % 1;
-            const x = B.x + ((i * 97) % 100) / 100 * B.w, y = B.y - 4 + (i % 2 ? B.h + 8 : 0);
-            const a = Math.sin(k * Math.PI);
-            g.globalAlpha = a;
-            g.fillStyle = '#ffffff';
-            g.fillRect(x - 0.5, y - 4 * a, 1, 8 * a);
-            g.fillRect(x - 4 * a, y - 0.5, 8 * a, 1);
-        }
-        g.globalAlpha = 1;
+    // 下の PUSH の 位置 (#cabinet-push を 重ねる)。下の 段が せまい (スマホ) ときは null
+    function pushRect() {
+        const y0 = bottomTop() + Math.max(4, B.h * 0.015), bh = H - y0 - 4;
+        if (bh < 24) return null;
+        const uw = W * 0.24, br = Math.min(uw * 0.34, bh * 0.3), by = y0 - bh * 0.05 + br * 0.9;
+        return { x: W / 2 - br, y: by - br, w: br * 2, h: br * 2 };
     }
 
-    // 毎フレーム。st: { mode, premium, gimmick, balls }
+    // 毎フレーム。st: { mode, premium, gimmick, balls, button: { kind, lit, push } }
     function draw(t, st) {
         if (!cv) return;
         if (cv.width !== Math.round(wrap.clientWidth * dpr) || boardEl.offsetWidth !== B.w) resize();
         g.setTransform(dpr, 0, 0, dpr, 0, 0);
         g.clearRect(0, 0, W, H);
-        body(st, t);
-        wings(st, t);
-        redLine(st, t);
-        iceFrame(st, t);
-        leds(st, t);
+        body();
+        crystals(st, t);
+        redFrame(st, t);
         topPanel(st, t);
-        panelLeds(st, t);
-        club(st, t);
-        tray(st, t);
+        bottom(st, t);
+        tube(st, t);
         bezel(st, t);
-        frost(st, t);
-        kooriHead(st, t);
+        lampDraw(st, t);
     }
 
-    return { create, draw, resize };
+    return { create, draw, resize, lamp, pushRect, LAMP_TIME };
 })();
