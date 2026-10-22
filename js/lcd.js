@@ -179,8 +179,11 @@ const Lcd = (() => {
             if (e.result.voice) {
                 // 入賞時の音 (録音) が鳴って、ボタンが赤く光る
                 Sound.playVoice(Boolean(e.result.kai));   // 怪の先バレは おどろおどろしい音
-                MachineButton.trigger(e.result.kai ? 'purple' : 'red', now);   // こおりRASH の怪の先バレは紫
+                // こおりRASH の怪の先バレは紫。先バレの 赤・紫は 長めに 光らせる (2026-10-23 ユーザー指定)
+                MachineButton.trigger(e.result.kai ? 'purple' : 'red', now, CONFIG.show.voiceButtonTime);
             } else if (e.result.button) MachineButton.trigger(e.result.button, now);
+            // レバブル (保留が 入ったとき。カスタマイズで あり のとき)
+            if (e.result.leverBuru && Customize.get('leverBuru') !== 'off') MachineButton.buru(now);
         } else if (e.type === 'holdChange') {
             // 保留変化: ピキーン！
             holdFx = { result: e.result, current: e.current, start: now };
@@ -230,7 +233,10 @@ const Lcd = (() => {
                 show(`${e.premium}！ ${e.label}個`, 'rainbow', now, CONFIG.machine.bonus.opening);
                 MachineButton.trigger('rainbow', now);
                 Sound.play('win');
-            } else show(e.promote ? head : `${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
+            } else {
+                show(e.promote ? head : `${head} ${e.label}個`, '#ffe066', now, CONFIG.machine.bonus.opening);
+                MachineButton.trigger('rainbow', now);   // 当たったら ボタンが 虹色 (2026-10-23 ユーザー指定)
+            }
             if (e.fromV) Sound.play('v');
         } else if (e.type === 'bonusEnd') {
             if (infoStart !== null) infoBase = infoIndex(now) + 1;
@@ -862,7 +868,8 @@ const Lcd = (() => {
             const pushed = spinView.pushedAt !== null;
             if (!pushed) {
                 band(66, 26, 0.5);
-                text('PUSH！', W / 2, 79, 22, Math.floor(now * 8) % 2 ? '#ffe066' : '#ff3a3a');
+                if (spinView.plan.lever) text('レバーを押せ！', W / 2, 79, 18, 'rainbow', 'center', now);   // レバー (90% 越え)
+                else text('PUSH！', W / 2, 79, 22, Math.floor(now * 8) % 2 ? '#ffe066' : '#ff3a3a');
             } else {
                 ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, 0.8 - (now - spinView.pushedAt) * 2)})`;
                 ctx.fillRect(0, 0, W, H);
@@ -1417,8 +1424,13 @@ const Lcd = (() => {
         if (!m) return canvas;
         phaseSounds(plan, phase);
 
-        // バトル中は PUSH の案内を台のボタンにも出す
-        MachineButton.prompt(Boolean(phase && phase.pushing && spinView.pushedAt === null));
+        // バトル中は PUSH の案内を台のボタンにも出す (レバーの ときは「レバーを押せ！」)
+        MachineButton.prompt(Boolean(phase && phase.pushing && spinView.pushedAt === null), Boolean(plan && plan.lever));
+        // レバブル (変動中: リーチに なったとき 1 回)
+        if (plan && plan.leverBuru && phase && phase.name === 'reach' && !spinView.buru) {
+            spinView.buru = true;
+            if (Customize.get('leverBuru') !== 'off') MachineButton.buru(now);
+        }
 
         if (m.bonus) {
             drawBonus(now, m);

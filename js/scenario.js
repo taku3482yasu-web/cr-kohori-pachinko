@@ -34,6 +34,16 @@ const Scenario = (() => {
     }
 
     const pickFrom = (list, rng) => list[Math.floor(rng() * list.length)];
+    // 見た目だけの 演出 (レバー・レバブル) の 乱数。台の 抽選の 乱数 (rng) とも Math.random とも 別 (テストの 種を 決めた 乱数の 並びを かえない。2026-10-23)
+    const fxRandom = (() => {
+        let x = (Date.now() ^ 0x9e3779b9) >>> 0 || 1;
+        return () => {
+            x ^= x << 13; x >>>= 0;
+            x ^= x >>> 17;
+            x ^= x << 5; x >>>= 0;
+            return x / 4294967296;
+        };
+    })();
 
     // ----- 保留 (玉がヘソに入ったとき) -----
     // level: 先読みの量 (config.show.senyomi.levels のキー)。当たりは占有率 occ で先読みを出す。
@@ -43,8 +53,13 @@ const Scenario = (() => {
         const show = config.show;
         const sy = show.senyomi;
         const lv = sy.levels[level] || sy.levels.recommend;
-        if (lv.occ <= 0) return { holdColor: 'white', shownColor: 'white', button: null, hiStage: false, voice: false };
         const hit = result.kind === 'hit';
+        // レバブル (保留が 入ったとき。カスタマイズで 見せるかを 決める): 出たら 当たる 割合が leverBuru.holdReliability
+        const lb = show.leverBuru;
+        const hh = spec.hitRate;
+        //   見た目だけの 演出なので、台の 抽選の 乱数 (rng) は 使わない (使うと ほかの 演出・振り分けの 乱数の 並びが かわる。fxRandom)
+        const leverBuru = Boolean(lb) && fxRandom() < (hit ? lb.holdHit : Math.min(1, lb.holdHit * hh * (1 - lb.holdReliability) / lb.holdReliability / (1 - hh)));
+        if (lv.occ <= 0) return { holdColor: 'white', shownColor: 'white', button: null, hiStage: false, voice: false, leverBuru };
         const weights = show.holdColors[hit ? 'hit' : 'miss'];
         const colored = Object.fromEntries(Object.entries(weights).filter(([c]) => c !== 'white'));
         // 虹色は当たりのときだけ
@@ -85,7 +100,7 @@ const Scenario = (() => {
             change = rng() < sy.change.self ? 'self' : 'next';
             changed = true;   // 保留変化した保留は、外れでも必ずチャレンジ演出に入る
         }
-        return { holdColor, shownColor, change, changed, button, hiStage, voice };
+        return { holdColor, shownColor, change, changed, button, hiStage, voice, leverBuru };
     }
 
     // ----- 通常時のステージ (背景) -----
@@ -330,6 +345,13 @@ const Scenario = (() => {
                 if (p.cutin) p.phases.splice(battleAt(), 0, { name: 'cutin', t: show.cutin.time });
                 const gm = show.gimmick;
                 p.gimmick = Boolean(result.forceGimmick || rng() < (hit ? gm.hit : revealRate(gm.hit, gm.reliability, hReach)));
+                // レバー PUSH (2026-10-23 ユーザー指定): ボタンの かわりに レバー。出たら 当たる 割合が lever.reliability (90% 越え)
+                const lvr = show.lever;
+                //   (レバー・レバブルは 見た目だけの 演出なので fxRandom。台の 抽選の 乱数の 並びを かえない)
+                p.lever = Boolean(result.forceLever || (lvr && fxRandom() < (hit ? lvr.hit : revealRate(lvr.hit, lvr.reliability, hReach))));
+                // レバブル (変動中: リーチに なったとき)
+                const lbs = show.leverBuru;
+                p.leverBuru = Boolean(lbs && fxRandom() < (hit ? lbs.spinHit : revealRate(lbs.spinHit, lbs.spinReliability, hReach)));
                 if (hit) p.digits = Array(3).fill(shownHitDigit(show, result, fig, rng, p));
                 else p.digits = missDigits(true, rng);
                 const f = show.furukawa;

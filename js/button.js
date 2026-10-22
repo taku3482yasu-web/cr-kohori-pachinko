@@ -34,12 +34,13 @@ const MachineButton = (() => {
         ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => el.addEventListener(t, release));
     }
 
-    function trigger(kind, now) {
+    // time: 光らせて おく 秒 (省略すると config.show.button.time)
+    function trigger(kind, now, time = CONFIG.show.button.time) {
         if (!el) return;
         el.classList.remove('fx-red', 'fx-shake', 'fx-beep', 'fx-rainbow', 'fx-purple');
         void el.offsetWidth;   // アニメーションを最初からやり直す
         el.classList.add('fx-' + kind);
-        until = now + CONFIG.show.button.time;
+        until = now + time;
         lit = kind;
         // 先バレ: 筐体の 右の 丸い ランプも 赤・紫・虹に 光る (2026-10-23 ユーザー指定。js/cabinet.js)
         if (typeof Cabinet !== 'undefined') Cabinet.lamp(kind, now);
@@ -49,11 +50,30 @@ const MachineButton = (() => {
         }
     }
 
-    function prompt(on) {
-        if (el) el.classList.toggle('push', on);
+    // lever: ボタンの かわりに「レバーを押せ！」(2026-10-23 ユーザー指定。台の ボタン・筐体の レバーの どちらを 押しても よい)
+    function prompt(on, lever = false) {
+        if (!el) return;
+        el.classList.toggle('push', on);
+        el.classList.toggle('lever', on && lever);
+    }
+    // レバブル: レバーが ぶるぶる 震える (筐体の レバー・スマホは 台の ボタン・本体の 振動)
+    let buruUntil = 0;
+    function buru(now) {
+        if (!el) return;
+        el.classList.remove('fx-buru');
+        void el.offsetWidth;
+        el.classList.add('fx-buru');
+        buruUntil = now + CONFIG.show.leverBuru.time;
+        if (navigator.vibrate && Customize.get('vibrate') === 'on') {
+            try { navigator.vibrate([60, 30, 60, 30, 60, 30, 120]); } catch (e) { /* 振動できない環境 */ }
+        }
     }
 
     function update(now) {
+        if (el && buruUntil && now >= buruUntil) {
+            el.classList.remove('fx-buru');
+            buruUntil = 0;
+        }
         if (el && until && now >= until) {
             el.classList.remove('fx-red', 'fx-shake', 'fx-beep', 'fx-rainbow', 'fx-purple');
             until = 0;
@@ -61,7 +81,8 @@ const MachineButton = (() => {
         }
     }
     // いまの 光り方 (筐体の PUSH が 使う)
-    const state = () => ({ kind: lit, lit: Boolean(lit), push: Boolean(el && el.classList.contains('push')), pressed: Boolean(el && el.classList.contains('pressed')) });
+    const state = () => ({ kind: lit, lit: Boolean(lit), push: Boolean(el && el.classList.contains('push')), pressed: Boolean(el && el.classList.contains('pressed')),
+        lever: Boolean(el && el.classList.contains('lever')), buru: Boolean(buruUntil) });
 
-    return { init, trigger, prompt, update, state, LONG_PRESS };
+    return { init, trigger, prompt, buru, update, state, LONG_PRESS };
 })();

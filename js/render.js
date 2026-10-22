@@ -332,7 +332,8 @@ const BoardView = (() => {
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(lcdCanvas, b.lcd.x, b.lcd.y, b.lcd.w, b.lcd.h);
         }
-        drawGimmick(ctx, b, gimmick, now);
+        // 盤面の 役物は 筐体 (js/cabinet.js) が 大きく 描く ときは 描かない (view.noGimmick。2026-10-23 ユーザー指定)
+        if (!view.noGimmick) drawGimmick(ctx, b, gimmick, now);
 
         // 電チューの羽根・アタッカーのふた
         Object.entries(board.parts).forEach(([id, part]) => {

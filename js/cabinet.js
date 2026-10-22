@@ -434,10 +434,17 @@ const Cabinet = (() => {
         g.moveTo(cx + baseW * 0.32, baseY - 2);
         g.quadraticCurveTo(cx + baseW * 0.2, baseY - bh * 0.26, cx + baseW * 0.12, baseY - bh * 0.32);
         g.stroke();
-        // レバーの 棒 (上へ 細くなる。押すと 少し 沈む)
+        // レバーの 棒 (上へ 細くなる。押すと 少し 沈む)。レバブルで ぶるぶる、「レバーを押せ！」で 虹色に 光る (2026-10-23)
         const bs = st.button || {};
         const sink = bs.pressed ? capR * 0.25 : 0;
         const capY = L.capY + sink;
+        const jig = bs.buru ? Math.sin(t * 90) * capR * 0.14 : 0;
+        g.save();
+        g.translate(jig, bs.buru ? Math.cos(t * 70) * capR * 0.05 : 0);
+        if (bs.lever) {
+            g.shadowColor = hsl(t * 400, 95, 60);
+            g.shadowBlur = 26;
+        }
         const sw0 = baseW * 0.3, sw1 = capR * 0.9;
         const sy0 = baseY - bh * 0.32;
         g.beginPath();
@@ -446,8 +453,10 @@ const Cabinet = (() => {
         g.lineTo(cx + sw1 * 0.55, capY + capR * 0.2);
         g.bezierCurveTo(cx + sw1 * 0.5, capY + capR, cx + sw0 * 0.55, (sy0 + capY) / 2, cx + sw0 / 2, sy0);
         g.closePath();
-        g.fillStyle = lin(cx - sw0 / 2, 0, cx + sw0 / 2, 0, [[0, '#1a1a20'], [0.35, RED_DARK], [0.5, RED_LIGHT], [0.65, RED_DARK], [1, '#1a1a20']]);
+        g.fillStyle = bs.lever ? lin(0, capY, 0, sy0, [[0, hsl(t * 400, 95, 65)], [0.5, hsl(t * 400 + 120, 95, 55)], [1, hsl(t * 400 + 240, 95, 45)]])
+            : lin(cx - sw0 / 2, 0, cx + sw0 / 2, 0, [[0, '#1a1a20'], [0.35, RED_DARK], [0.5, RED_LIGHT], [0.65, RED_DARK], [1, '#1a1a20']]);
         g.fill();
+        g.shadowBlur = 0;
         // 棒の 黒い ふち
         g.strokeStyle = '#08080c';
         g.lineWidth = 1.5;
@@ -458,7 +467,12 @@ const Cabinet = (() => {
         g.fillStyle = '#2a2a34';
         g.fill();   // ボタンの 側面
         let face = lin(cx - capR, capY - capR, cx + capR, capY + capR, [[0, '#ffffff'], [0.5, '#c8d0da'], [1, '#6a7688']]);
-        if (bs.kind && bs.lit) {
+        if (bs.lever) {
+            const c = hsl(t * 400, 95, 65);
+            face = rad(cx, capY, capR * 0.1, capR, [[0, '#ffffff'], [0.5, c], [1, hsl(t * 400 + 180, 95, 55)]]);
+            g.shadowColor = c;
+            g.shadowBlur = 26;
+        } else if (bs.kind && bs.lit) {
             const c = bs.kind === 'rainbow' ? hsl(t * 400, 95, 65) : bs.kind === 'purple' ? '#be50ff' : bs.kind === 'red' ? '#ff3a4a' : '#ffe066';
             face = rad(cx, capY, capR * 0.1, capR, [[0, '#ffffff'], [0.5, c], [1, c]]);
             g.shadowColor = c;
@@ -484,6 +498,19 @@ const Cabinet = (() => {
         g.fillStyle = bs.push && Math.floor(t * 4) % 2 ? RED : '#2a2a34';
         g.fillText('PUSH', 0, 1);
         g.restore();
+        g.restore();   // ぶるぶる の 位置を もどす
+        // 「レバーを押せ！」: ボタンの 上に ▼ が 点滅
+        if (bs.lever && Math.floor(t * 6) % 2) {
+            g.font = `bold ${Math.round(capR * 0.9)}px ${FONT}`;
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.lineWidth = 3;
+            g.strokeStyle = '#000000';
+            g.strokeText('▼', cx, capY - capR * 1.15);
+            g.fillStyle = '#ffe066';
+            g.fillText('▼', cx, capY - capR * 1.15);
+            g.textAlign = 'left';
+        }
         // ハンドルの 飾り (右下の オレンジの 玉)
         const hr = Math.min(bh * 0.14, W * 0.04);
         g.beginPath();
@@ -497,6 +524,101 @@ const Cabinet = (() => {
         const L = cv && lever(windowPoints());
         if (!L) return null;
         return { x: L.cx - L.capR * 1.1, y: L.capY - L.capR * 0.7, w: L.capR * 2.2, h: L.capR * 1.6 };
+    }
+
+    // ----- 役物: 氷の 結晶の メダル (表: こおりくん / 裏: おにおに) -----
+    // ふだんは 窓の 上の ふちに 大きく かかって 乗っている (2026-10-23 ユーザー指定: もとから 大きく 上に)。
+    // 役物が 動く (st.gimmick: 0〜1。Lcd.gimmick) と、液晶の 前へ 落ちてきて さらに 大きくなり、くるくる 回って
+    // 表と 裏が 入れかわり、虹色に 光って 光の すじが 出る。最後に 上へ もどる (当たり確定の 意味は 前と 同じ)
+    function hexPath(cx, cy, r, sx) {
+        g.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = Math.PI / 6 + i * Math.PI / 3;
+            const x = cx + Math.cos(a) * r * sx, y = cy + Math.sin(a) * r;
+            if (i) g.lineTo(x, y); else g.moveTo(x, y);
+        }
+        g.closePath();
+    }
+    function medal(pts, st, t) {
+        const restR = B.w * 0.12, downR = B.w * 0.18;
+        const restX = B.x + B.w / 2, restY = winTop(pts) - restR * 0.05;
+        const lcd = (shape && shape.lcd) || { x: 90, y: 118, w: 180, h: 101 };
+        const downX = X(lcd.x + lcd.w / 2), downY = Y(lcd.y + lcd.h / 2);
+        const gt = st.gimmick;
+        let k = 0;   // 0: 上 / 1: 液晶の 前
+        if (gt != null) k = gt < 0.18 ? (gt / 0.18) ** 2 : gt < 0.82 ? 1 : 1 - (gt - 0.82) / 0.18;
+        // 落ちきった ところで 少し はねる
+        const bounce = gt != null && gt >= 0.18 && gt < 0.26 ? Math.sin((gt - 0.18) / 0.08 * Math.PI) * restR * 0.25 : 0;
+        const r = restR + (downR - restR) * k;
+        const cx = restX + (downX - restX) * k, cy = restY + (downY - restY) * k - bounce;
+        const spin = gt != null && gt >= 0.18 && gt < 0.82 ? (gt - 0.18) / 0.64 * Math.PI * 6 : 0;
+        const sx = Math.cos(spin), back = sx < 0;
+        const hue = (t * 360) % 360;
+        if (k > 0.4) {
+            g.save();
+            g.globalAlpha = Math.min(1, (k - 0.4) / 0.4);
+            for (let i = 0; i < 16; i++) {
+                const a = i / 16 * Math.PI * 2 + t * 1.5;
+                g.strokeStyle = hsl(hue + i * 22, 95, 65, 0.6);
+                g.lineWidth = Math.max(3, r * 0.08);
+                g.beginPath();
+                g.moveTo(cx + Math.cos(a) * r * 1.1, cy + Math.sin(a) * r * 1.1);
+                g.lineTo(cx + Math.cos(a) * r * 2.3, cy + Math.sin(a) * r * 2.3);
+                g.stroke();
+            }
+            g.fillStyle = hsl(hue, 90, 60, 0.35);
+            g.beginPath();
+            g.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
+            g.fill();
+            g.restore();
+        }
+        // 影 (上に 乗っている とき)
+        const w = Math.max(0.08, Math.abs(sx));
+        if (k === 0) {
+            g.shadowColor = 'rgba(0,0,0,.6)';
+            g.shadowBlur = 10;
+            g.shadowOffsetY = 4;
+        }
+        hexPath(cx, cy, r, w);
+        g.fillStyle = k > 0.4 ? hsl(hue, 90, 70) : lin(cx - r, cy - r, cx + r, cy + r, [[0, '#ffffff'], [0.5, '#8a96a6'], [1, '#e8eaf0']]);
+        g.fill();
+        g.shadowColor = 'transparent';
+        g.shadowBlur = 0;
+        g.shadowOffsetY = 0;
+        hexPath(cx, cy, r * 0.84, w);
+        g.fillStyle = back ? lin(cx - r, cy - r, cx + r, cy + r, [[0, '#ff8a8a'], [0.5, RED_LIGHT], [1, RED_DARK]])
+            : lin(cx - r, cy - r, cx + r, cy + r, [[0, '#ffffff'], [0.5, '#bff0ff'], [1, '#4aa8e0']]);
+        g.fill();
+        // 結晶の 面の 線
+        g.strokeStyle = 'rgba(255,255,255,.55)';
+        g.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+            const a = Math.PI / 6 + i * Math.PI / 3;
+            g.beginPath();
+            g.moveTo(cx + Math.cos(a) * r * 0.84 * w, cy + Math.sin(a) * r * 0.84);
+            g.lineTo(cx - Math.cos(a) * r * 0.84 * w, cy - Math.sin(a) * r * 0.84);
+            g.stroke();
+        }
+        // 顔 (表: こおりくん / 裏: おにおに)。横に つぶす
+        g.save();
+        g.translate(cx, cy);
+        g.scale(w, 1);
+        g.imageSmoothingEnabled = false;
+        if (back && typeof Characters !== 'undefined' && Characters.has('onioni')) {
+            const sz = Characters.size('onioni');
+            Characters.drawEnemy(g, 'onioni', 0, r * 0.62, { scale: (r * 1.25) / sz.h, frame: 0 });
+        } else if (typeof SPRITES !== 'undefined' && SPRITES.koori) {
+            const s = (r * 1.15) / 16;
+            drawSprite(g, SPRITES.koori, Math.floor(t * 2) % 2 && k === 0 ? 'walk2' : 'walk1', -8 * s, -8 * s - r * 0.05, s);
+        }
+        g.restore();
+        // ふだんの きらり
+        if (k === 0) {
+            const a = (Math.sin(t * 2) + 1) / 2;
+            g.fillStyle = `rgba(255,255,255,${a})`;
+            g.fillRect(cx + r * 0.35, cy - r * 0.62, 1.5, r * 0.3);
+            g.fillRect(cx + r * 0.35 - r * 0.14, cy - r * 0.62 + r * 0.14, r * 0.3, 1.5);
+        }
     }
 
     // 毎フレーム。st: { mode, premium, gimmick, balls, button: { kind, lit, push, pressed } }
@@ -522,6 +644,8 @@ const Cabinet = (() => {
         lampDraw(pts, st, t);
         bottom(pts, st, t);
         g.restore();
+        // 役物 (窓の 外にも 中にも 描く。盤面の 上に 落ちてくる)
+        medal(pts, st, t);
     }
 
     return { create, draw, resize, lamp, pushRect, LAMP_TIME };

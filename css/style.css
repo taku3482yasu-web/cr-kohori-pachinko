@@ -256,6 +256,12 @@ button:hover { border-color: var(--accent); }
 .koori-button.fx-red { background: linear-gradient(135deg, #ffe0e0 0%, #ff6a6a 45%, #d01020 100%); box-shadow: 0 4px 0 #6a0a10, 0 0 26px 8px rgba(255, 40, 60, 0.9); }
 .koori-button.fx-purple { background: linear-gradient(135deg, #f0e0ff 0%, #b070ff 45%, #5a10a0 100%); box-shadow: 0 4px 0 #2a0a50, 0 0 26px 8px rgba(160, 60, 255, 0.9); }
 .koori-button.fx-shake { animation: shake 0.08s linear infinite; }
+/* レバブル: 小さく 速く ぶるぶる (2026-10-23) */
+.koori-button.fx-buru { animation: shake 0.05s linear infinite; }
+/* レバーを押せ！ (台の ボタンにも 出す。虹色に 光って 文字が「レバー」) */
+.koori-button.lever { animation: rainbow-glow 0.6s linear infinite; }
+.koori-button.lever .kb-label { font-size: 0; }
+.koori-button.lever .kb-label::after { content: 'レバー'; font-size: 11px; color: #ffe066; }
 @keyframes shake { 0% { transform: translate(-3px, 1px) rotate(-3deg); } 50% { transform: translate(3px, -1px) rotate(3deg); } 100% { transform: translate(-3px, 1px) rotate(-3deg); } }
 .koori-button.fx-beep { animation: beep-ring 0.3s ease-out infinite; }
 @keyframes beep-ring { from { box-shadow: 0 4px 0 #1b3a6b, 0 0 0 0 rgba(255, 255, 255, 0.9); } to { box-shadow: 0 4px 0 #1b3a6b, 0 0 0 18px rgba(255, 255, 255, 0); } }

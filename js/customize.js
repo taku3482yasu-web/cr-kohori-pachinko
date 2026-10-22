@@ -18,6 +18,9 @@ const Customize = (() => {
             choices: { normal: 'ふつう', pre: '先告知', post: '後告知', oneshot: '一発告知' }, default: 'normal' },
         furukawa: { label: 'ふるカワ', group: '演出', note: '',
             choices: { often: 'よくしゃべる', normal: 'ふつう', off: 'しゃべらない' }, default: 'normal' },
+        // レバブル (2026-10-23 ユーザー指定): 保留が 入ったとき・リーチの ときに レバーが 震える
+        leverBuru: { label: 'レバブル', group: '演出', note: '保留が入ったとき・リーチになったときに、レバーがぶるぶる震えることがある (スマホは台のボタン)。出たらチャンス',
+            choices: { on: 'あり', off: 'なし' }, default: 'on' },
         vibrate: { label: 'ボタンの振動', group: '演出', note: 'スマホの本体の振動',
             choices: { on: 'ON', off: 'OFF' }, default: 'on' },
         bgm: { label: 'BGM', group: '演出', note: '通常時・突破チャレンジ・RASH・大当たり中で曲が変わる (「音: OFF」のときは鳴らない)',
