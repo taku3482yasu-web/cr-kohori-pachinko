@@ -9,6 +9,7 @@
 const Figures = (() => {
     const FONT = '"DotGothic16", "MS Gothic", "Osaka-Mono", monospace';
     const cache = {};
+    const RES = 2;   // 液晶 (lcd.js) と 同じ 細かさ
 
     const isOdd = n => typeof n === 'number' && n % 2 === 1;
 
@@ -35,9 +36,10 @@ const Figures = (() => {
 
     function build(n, w, h) {
         const c = document.createElement('canvas');
-        c.width = w;
-        c.height = h;
+        c.width = w * RES;
+        c.height = h * RES;
         const g = c.getContext('2d');
+        g.scale(RES, RES);   // 液晶と 同じ 2 倍の 細かさ (2026-10-23 P1)
         g.imageSmoothingEnabled = false;
         const main = color(n);
         // 札: 暗い地に色の縁
@@ -94,7 +96,7 @@ const Figures = (() => {
             ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
             ctx.globalAlpha = 1;
         }
-        ctx.drawImage(tile(n, w, h), x, y);
+        ctx.drawImage(tile(n, w, h), x, y, w, h);
         if (options.dim) {
             ctx.fillStyle = `rgba(0, 0, 0, ${options.dim})`;
             ctx.fillRect(x, y, w, h);

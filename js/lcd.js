@@ -20,6 +20,8 @@
 const Lcd = (() => {
     const W = 256;
     const H = 144;
+    // 2026-10-23 アップグレード P1: 中を 2 倍の 細かさ (512x288) で 描く。座標は 256x144 の まま (文字・丸・光が なめらかに)
+    const RES = 2;
     const FONT = '"DotGothic16", "MS Gothic", "Osaka-Mono", monospace';
     const BIG = { w: 56, h: 64, y: 66, xs: [52, 128, 204] };
     const SMALL = { w: 22, h: 26, y: 17, xs: [14, 38, 62] };
@@ -36,9 +38,10 @@ const Lcd = (() => {
 
     function init() {
         canvas = document.createElement('canvas');
-        canvas.width = W;
-        canvas.height = H;
+        canvas.width = W * RES;
+        canvas.height = H * RES;
         ctx = canvas.getContext('2d');
+        ctx.setTransform(RES, 0, 0, RES, 0, 0);
         RashView.init({ ctx, W, H, text, band, rainbow });
         Story.init({ ctx, W, H, text, band, rainbow });
         return canvas;
@@ -1373,17 +1376,29 @@ const Lcd = (() => {
         if (phase.name === 'open') Sound.play('win');
     }
 
+    // 可動液晶 (2026-10-23 アップグレード P1): 見せ場の 場面で 液晶が 前に せり出す (js/render.js が 描く)。0〜1 で なめらかに
+    const ZOOM_PHASES = ['battle', 'pursuit', 'result', 'zenkaiten', 'zend', 'cfinal', 'cresult'];
+    let zoomNow = 0, zoomAt = 0;
+    function zoom(now) {
+        const on = Customize.get('lcdZoom') !== 'off' && !Story.active() && currentPhase && ZOOM_PHASES.includes(currentPhase.name);
+        const dt = Math.min(0.1, Math.max(0, now - zoomAt));
+        zoomAt = now;
+        const want = on ? 1 : 0;
+        zoomNow += Math.sign(want - zoomNow) * Math.min(Math.abs(want - zoomNow), dt * 3.5);
+        return zoomNow;
+    }
+
     // おにおにRASH の違和感: 画面の上下反転・白黒
     let effectCanvas = null;
     function applyEffect(fx) {
         if (!fx) return;
         if (!effectCanvas) {
             effectCanvas = document.createElement('canvas');
-            effectCanvas.width = W;
-            effectCanvas.height = H;
+            effectCanvas.width = canvas.width;
+            effectCanvas.height = canvas.height;
         }
         const g = effectCanvas.getContext('2d');
-        g.clearRect(0, 0, W, H);
+        g.clearRect(0, 0, canvas.width, canvas.height);
         g.drawImage(canvas, 0, 0);
         ctx.save();
         ctx.clearRect(0, 0, W, H);
@@ -1401,11 +1416,12 @@ const Lcd = (() => {
             // ゆれる
             ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
         }
-        ctx.drawImage(effectCanvas, 0, 0);
+        ctx.drawImage(effectCanvas, 0, 0, W, H);   // 2 倍で 写したので 256x144 に 戻して 描く
         ctx.restore();
     }
 
     function draw(now, m) {
+        ctx.setTransform(RES, 0, 0, RES, 0, 0);
         ctx.imageSmoothingEnabled = false;
         const plan = m && m.spin && spinView ? spinView.plan : null;
         const phase = plan ? phaseAt(plan, m.spin.elapsed) : null;
@@ -1546,7 +1562,7 @@ const Lcd = (() => {
         return canvas;
     }
 
-    return { init, reset, draw, event, aim, show, push, setChoosing, gimmick, W, H,
+    return { init, reset, draw, event, aim, show, push, setChoosing, gimmick, zoom, W, H,
         playStory: (name, now) => Story.play(name, now), skipStory: () => Story.skip(),
         storyPlaying: () => Story.active() ? Story.name : null };
 })();

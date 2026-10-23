@@ -319,8 +319,40 @@ const BoardView = (() => {
         }
     }
 
+    // 可動液晶 (2026-10-23 アップグレード P1): 見せ場で 液晶が 盤面の 前に せり出して 大きくなる (zoom 0〜1)。
+    //   玉と 盤面の 動きは そのまま (見た目だけ)。大きさは config.lcdZoom
+    function drawZoomedLcd(ctx, b, lcdCanvas, zoom, now) {
+        if (!lcdCanvas || !(zoom > 0)) return;
+        const z = CONFIG.show.lcdZoom;
+        const k = zoom < 1 ? 1 - Math.pow(1 - zoom, 3) : 1;
+        const w = b.lcd.w + (b.lcd.w * z.scale - b.lcd.w) * k;
+        const h = w * b.lcd.h / b.lcd.w;
+        const cx = b.lcd.x + b.lcd.w / 2;
+        const cy = b.lcd.y + b.lcd.h / 2 + (z.offsetY || 0) * k;
+        const x = cx - w / 2, y = cy - h / 2;
+        // 影と 金の 枠 (前に 出てきた 感じ)
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.55 * k})`;
+        ctx.fillRect(x - 6, y - 4, w + 12, h + 14);
+        const frame = ctx.createLinearGradient(0, y - 5, 0, y + h + 5);
+        frame.addColorStop(0, '#fff2a8');
+        frame.addColorStop(0.5, '#e0a82a');
+        frame.addColorStop(1, '#8a5a10');
+        ctx.fillStyle = frame;
+        ctx.fillRect(x - 4, y - 4, w + 8, h + 8);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(lcdCanvas, x, y, w, h);
+        ctx.imageSmoothingEnabled = false;
+        // ふちの 光
+        ctx.strokeStyle = `rgba(255, 240, 160, ${0.4 + 0.3 * Math.sin(now * 6)})`;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x - 3, y - 3, w + 6, h + 6);
+    }
+
     // lcdCanvas: 液晶の絵 (256x144)。玉と部品は view.world から。gimmick: 役物の進み具合 (0〜1、動いていないときは null)
-    function draw(view, world, lcdCanvas, gimmick = null, now = 0) {
+    function draw(view, world, lcdCanvas, gimmick = null, now = 0, zoom = 0) {
         const { ctx, board } = view;
         const b = board.config;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -329,8 +361,11 @@ const BoardView = (() => {
         ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
 
         if (lcdCanvas) {
-            ctx.imageSmoothingEnabled = false;
+            // 2 倍で 描いた 液晶を なめらかに 縮める (2026-10-23 P1)
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(lcdCanvas, b.lcd.x, b.lcd.y, b.lcd.w, b.lcd.h);
+            ctx.imageSmoothingEnabled = false;
         }
         // 盤面の 役物は 筐体 (js/cabinet.js) が 大きく 描く ときは 描かない (view.noGimmick。2026-10-23 ユーザー指定)
         if (!view.noGimmick) drawGimmick(ctx, b, gimmick, now);
@@ -360,6 +395,8 @@ const BoardView = (() => {
             disc(ctx, ball.x - 0.4, ball.y - 0.4, ball.r - 0.7, COLORS.ball);
             disc(ctx, ball.x - 1.1, ball.y - 1.1, 0.8, COLORS.ballLight);
         });
+        // 可動液晶: 見せ場では 玉の 上に 大きく 出す
+        drawZoomedLcd(ctx, b, lcdCanvas, zoom, now);
     }
 
     // カスタマイズで色が変わったときに、動かない部分を描き直す

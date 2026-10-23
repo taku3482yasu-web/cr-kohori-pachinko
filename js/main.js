@@ -311,7 +311,7 @@
         } else acc = 0;
         const lcdCanvas = Lcd.draw(time, game.machine);
         const gimmick = Lcd.gimmick();
-        BoardView.draw(game.view, game.world, lcdCanvas, gimmick, time);
+        BoardView.draw(game.view, game.world, lcdCanvas, gimmick, time, Lcd.zoom(time));   // 可動液晶 (P1)
         // 台の筐体: 状態で 光り方・役物が かわる (js/cabinet.js)
         if (game.cabinet) {
             Cabinet.draw(time, { mode: modeClass(game.machine), premium: Boolean(game.machine.bonus && game.machine.bonus.alloc && game.machine.bonus.alloc.premium), gimmick, balls: game.balls, button: MachineButton.state() });
