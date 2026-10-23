@@ -497,13 +497,15 @@ const CONFIG = {
         // バトルの相手 (ユーザー指定: 成功率が低い順に おかがっぱ・ひびきまくり・おにおに (80%)・シーシャ・ナイテイ・ナイナイ (確定))
         //   hit: 当たりのときに選ぶ重み / win: 成功率。外れのときの重みは成功率から自動で計算する
         // ライバルバトル (2026-10-23 アップグレード P3。最新のスロット koori-slot から): チーム5DX < チームASK-3 < チームお願いマッスル の 順に 熱い。
-        //   team: 3 人 並んで 出る (まんなかが リーダー)。leader の 必殺技・セリフを 使う。hit・win は Claude の 案
+        //   team: 3 人 並んで 出る (まんなかが リーダー)。leader の 必殺技・セリフを 使う。hit は Claude の 案
+        //   win (2026-10-23 ユーザー指定: メンバーの 単独より 上。おにおにより 下): 5DX 30%・ASK-3 50%・お願いマッスル 70%
+        //   kai (ユーザー指定: 怪に なったら 確定): 当たりの rate で 怪 (目の まわりに 靄、赤く 光る 目。名前は「〇〇・怪」)。外れでは 出ない (rate は Claude の 案)
         battles: {
             okagappa: { name: 'おかがっぱ', hit: 10, win: 0.05, map: 'ongagawa' },
-            rival5dx: { name: 'チーム5DX', hit: 6, win: 0.12, map: 'tsugakuro', team: ['hibikimakuri', 'okagappa', 'yamamou'], leader: 'okagappa', color: '#7fd3f7' },
             hibikimakuri: { name: 'ひびきまくり', hit: 20, win: 0.2, map: 'ebisucho' },
-            ask3: { name: 'チームASK-3', hit: 10, win: 0.35, map: 'kokuraStation', team: ['sasaki', 'asahara', 'kotani'], leader: 'asahara', color: '#ffe066' },
-            muscle: { name: 'チームお願いマッスル', hit: 14, win: 0.62, map: 'castleHall', team: ['shibata', 'ueno', 'ikekimu'], leader: 'ueno', color: '#ff6a3a' },
+            rival5dx: { name: 'チーム5DX', hit: 8, win: 0.3, map: 'tsugakuro', team: ['hibikimakuri', 'okagappa', 'yamamou'], leader: 'okagappa', color: '#7fd3f7', kai: { rate: 0.1 } },
+            ask3: { name: 'チームASK-3', hit: 10, win: 0.5, map: 'kokuraStation', team: ['sasaki', 'asahara', 'kotani'], leader: 'asahara', color: '#ffe066', kai: { rate: 0.12 } },
+            muscle: { name: 'チームお願いマッスル', hit: 14, win: 0.7, map: 'castleHall', team: ['shibata', 'ueno', 'ikekimu'], leader: 'ueno', color: '#ff6a3a', kai: { rate: 0.15 } },
             onioni: { name: 'おにおに', hit: 50, win: 0.8, map: 'castleHall' },
             naitei: { name: 'シーシャ・ナイテイ・ナイナイ', hit: 20, win: 1, map: 'goldHall' }
         },

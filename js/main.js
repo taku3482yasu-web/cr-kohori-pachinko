@@ -599,9 +599,10 @@
         force('debug-hit', 1, 'hit', null);
         force('debug-hit-rush', 1, 'hit', 'jitan');
         force('debug-small', 2, 'small', null);
-        const enemy = () => $('debug-enemy').value || undefined;
+        const enemy = () => ($('debug-enemy').value || '').split(':')[0] || undefined;
         ['debug-hit', 'debug-hit-rush'].forEach(id => $(id).addEventListener('click', () => {
             if (enemy()) game.machine.holds[1][0].forceEnemy = enemy();
+            if ($('debug-enemy').value.endsWith(':kai')) game.machine.holds[1][0].forceKai = true;   // チームの 怪
             if ($('debug-iwakan').value) game.machine.holds[1][0].forceIwakan = $('debug-iwakan').value;   // P4
         }));
         $('debug-reach').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'reach', null, { enemy: enemy() === 'naitei' ? undefined : enemy() }));

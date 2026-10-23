@@ -197,7 +197,9 @@ const Scenario = (() => {
         const totalHit = Object.values(battles).reduce((a, b) => a + b.hit, 0);
         const mass = {};
         Object.entries(battles).forEach(([id, b]) => {
-            mass[id] = b.win >= 1 ? 0 : hitRate * (b.hit / totalHit) * (1 - b.win) / b.win;
+            // 怪に なる 当たり (通常時の ライバルチームの kai.rate) は 別に 数える (怪で ない ときの 成功率が win に なるように)
+            const share = b.kai && b.kai.rate ? 1 - b.kai.rate : 1;
+            mass[id] = b.win >= 1 ? 0 : hitRate * (b.hit * share / totalHit) * (1 - b.win) / b.win;
         });
         return mass;
     }
@@ -326,6 +328,9 @@ const Scenario = (() => {
                     ? Object.fromEntries(Object.entries(show.battles).map(([id, b]) => [id, b.hit]))
                     : missBattleMass(show, spec);
                 p.enemy = result.forceEnemy || weighted(enemyWeights, rng);
+                // ライバルチームの 怪 (2026-10-23 ユーザー指定: 怪に なったら 確定): 当たりだけ。見た目だけなので fxRandom
+                const kb = show.battles[p.enemy];
+                if (hit && kb && kb.kai && (result.forceKai || fxRandom() < kb.kai.rate)) p.kai = true;
                 p.phases = [{ name: 'roll', t: t.roll }, { name: 'challenge', t: t.challenge }, { name: 'reach', t: t.reach },
                     { name: 'battle', t: t.battle }, { name: 'result', t: t.result }];
                 // 追撃チャンス: PUSH のあとに追加ダメージ。当たりのバトルで出やすい (出たら成功率が上がる)

@@ -542,5 +542,5 @@ const Characters = (() => {
     }
 
     // add: ほかの ファイルの 絵を 敵として 足す (js/rivals.js。2026-10-23)
-    return { add: (id, art) => { ENEMIES[id] = art; }, drawEnemy, drawCompanion, size, has: id => Boolean(ENEMIES[id]), isCompanion: id => Boolean(COMPANIONS[id]), hasKai: id => Boolean(KAI_EYES[id]) };
+    return { add: (id, art, kai) => { ENEMIES[id] = art; if (kai) KAI_EYES[id] = kai; }, drawEnemy, drawCompanion, size, has: id => Boolean(ENEMIES[id]), isCompanion: id => Boolean(COMPANIONS[id]), hasKai: id => Boolean(KAI_EYES[id]) };
 })();

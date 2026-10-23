@@ -233,5 +233,13 @@
     // ----- 摩天楼に住み着いた敵 (弱い順) -----
     // ハリー: 紫のトゲトゲのハリネズミ。いちばん弱い
     };
-    Object.entries(ART).forEach(([id, art]) => Characters.add(id, art));
+    // 怪の 目の 位置 (characters.js の KAI_EYES と 同じ 形。band: 靄 [x, y, 幅, 高さ] / eyes: 赤く 光る 目。2026-10-23)
+    const KAI = {
+        yamamou: { band: [10, 10, 12, 4], eyes: [[13, 12], [19, 12]] },
+        kotani: { band: [10, 8, 12, 5], eyes: [[13, 10.5], [19, 10.5]] },
+        asahara: { band: [10, 10, 16, 5], eyes: [[14.5, 12.5], [21.5, 12.5]] },
+        ueno: { band: [14, 11, 12, 4], eyes: [[17, 13], [23, 13]] },
+        ikekimu: { band: [11, 8, 13, 4], eyes: [[14.5, 10.5], [19.5, 10.5]] }
+    };
+    Object.entries(ART).forEach(([id, art]) => Characters.add(id, art, KAI[id]));
 })();

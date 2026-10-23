@@ -745,12 +745,12 @@ const Lcd = (() => {
 
     // ----- バトル -----
     // ライバルチーム (2026-10-23 アップグレード P3): 3 人 並べる (まんなかが リーダーで 少し 大きい)
-    function drawTeam(team, ex, ground, frame, hurt, alpha) {
+    function drawTeam(team, ex, ground, frame, hurt, alpha, kai = false) {
         team.forEach((id, i) => {
             const lead = i === 1;
             const sc = Math.min(lead ? 1.6 : 1.3, (lead ? 60 : 50) / Characters.size(id).h);
             const x = ex + (i - 1) * 30;
-            Characters.drawEnemy(ctx, id, x, ground - (lead ? 0 : 2), { scale: sc, frame: (frame + i) % 2, hurt, alpha });
+            Characters.drawEnemy(ctx, id, x, ground - (lead ? 0 : 2), { scale: sc, frame: (frame + i) % 2, hurt, alpha, kai });
         });
     }
 
@@ -944,7 +944,7 @@ const Lcd = (() => {
             if (l >= SUMMON_STRIKE) once('summonHit', 'attack');
         }
 
-        if (enemyAlpha > 0 && b.team) drawTeam(b.team, ex, ground, frame, enemyHurt, enemyAlpha);   // ライバルチーム (P3)
+        if (enemyAlpha > 0 && b.team) drawTeam(b.team, ex, ground, frame, enemyHurt, enemyAlpha, plan.kai);   // ライバルチーム (P3。怪は 確定)
         else if (enemyAlpha > 0) Characters.drawEnemy(ctx, plan.enemy, ex, ground, { scale, frame, hurt: enemyHurt, alpha: enemyAlpha, kai: plan.kai });
         if (plan.cheer && phase.name !== 'roll') drawCheer(now, plan, phase, ground);
         if (plan.summon && (phase.name === 'summon' || phase.name === 'result')) drawSummoned(now, plan, phase, ground, frame);
@@ -962,7 +962,8 @@ const Lcd = (() => {
         band(30, 20, 0.5);
         // 名前の色: 確定の相手は虹、怪は紫、おにおには赤。長い名前は小さく
         const titleColor = b.win >= 1 ? 'rainbow' : plan.kai ? '#c070ff' : plan.enemy === 'onioni' ? '#ff3a3a' : b.color || '#ffffff';
-        text(`VS ${b.name}`, W / 2 + 34, 40, b.name.length > 10 ? 10 : 12, titleColor, 'center', now);
+        const vsName = plan.kai && b.team ? `${b.name}・怪` : b.name;   // ライバルチームの 怪 (確定)
+        text(`VS ${vsName}`, W / 2 + 34, 40, vsName.length > 10 ? 10 : 12, titleColor, 'center', now);
         // 通常時のバトル: SPリーチ / SPSPリーチ (最終決戦)
         if (plan.fig === 1 && plan.sp) {
             const spsp = plan.sp === 'SPSP';

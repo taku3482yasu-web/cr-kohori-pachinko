@@ -788,7 +788,9 @@ test('プレミアボーナス: RASH の当たりの約3%で、出玉は 1/99 18
     for (const { specId, log } of runs) {
         const pr = log.premium;
         assert(pr.wins > 500, `${specId} の RASH の当たりが少ない (${pr.wins})`);
-        assertBetween(pr.premiums / pr.wins, 0.02, 0.04, `${specId} のプレミアボーナスの割合`);
+        // 許容幅: ±1% か、回数から 見た 偶然の ぶれ (標準誤差) の 3.5 倍の 大きいほう (RASH の 当たりは 150 時間で 500〜800 回。2026-10-23)
+        const prTol = Math.max(0.01, 3.5 * Math.sqrt(0.03 * 0.97 / pr.wins));
+        assertBetween(pr.premiums / pr.wins, 0.03 - prTol, 0.03 + prTol, `${specId} のプレミアボーナスの割合`);
         assertEqual(pr.wrongShow, 0, `${specId} でプレミアボーナスと怪が合わない`);
         assert(pr.bonuses > 0, `${specId} でプレミアボーナスの大当たりがない`);
         assertEqual(pr.wrongBonus, 0, `${specId} でプレミアボーナスの名前・出玉が違う`);
@@ -1056,10 +1058,12 @@ test('ライバルバトル・必殺技・こおりいきていける！: チー
         assert(show.develop.sp[id], `${b.name} の SP / SPSP (develop.sp) が ない`);
     }
     const spec = CONFIG.specs.s99, rng = seededRandom(3);
-    let ik = 0;
+    let ik = 0, kaiSeen = 0;
     for (let i = 0; i < 4000; i++) {
         const hit = i % 2 === 0;
         const p = Scenario.plan(CONFIG, spec, { fig: 1, rush: false, holdsLeft: 1, notice: 'normal', result: { kind: hit ? 'hit' : 'miss', alloc: {} } }, rng);
+        // ライバルチームの 怪は 当たりだけ (確定。2026-10-23 ユーザー指定)
+        if (p.kai && show.battles[p.enemy] && show.battles[p.enemy].team) { kaiSeen++; assert(hit, 'チームの 怪は 当たりだけ'); }
         if (p.type === 'ikiteru') {
             ik++;
             assert(hit && p.win, 'こおりいきていける！ は 当たりだけ');
@@ -1067,6 +1071,8 @@ test('ライバルバトル・必殺技・こおりいきていける！: チー
         }
     }
     assert(ik > 10, `こおりいきていける！ が 出る (${ik})`);
+    assert(kaiSeen > 0, 'チームの 怪が 出る');
+    for (const id of ['yamamou', 'kotani', 'asahara', 'ueno', 'ikekimu']) assert(Characters.hasKai(id), `${id} の 怪の 目が ない`);
 });
 
 // ----- 期待度の表 (2026-10-23 アップグレード P2。tools/trust.js) -----

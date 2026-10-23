@@ -50,7 +50,8 @@ function features(config) {
     [1, 2, 3].forEach(n => add('擬似連', `擬似${n + 1}連`, p => (p.gizi || 0) === n));
     Object.entries(show.challenges).forEach(([id, c]) => add('チャレンジ', c.name, p => p.challenge === id));
     add('リーチ', 'リーチ（チャレンジ成功）', p => p.type === 'reach');
-    Object.entries(show.battles).forEach(([id, b]) => add('バトルの相手', `${b.name}（${show.develop.sp[id] || 'SP'}）`, p => p.enemy === id));
+    Object.entries(show.battles).forEach(([id, b]) => add('バトルの相手', `${b.name}（${show.develop.sp[id] || 'SP'}）`, p => p.enemy === id && !(p.kai && b.team)));
+    add('バトル', 'ライバルチームの 怪', p => Boolean(p.kai && show.battles[p.enemy] && show.battles[p.enemy].team));
     add('バトル', 'SP → SPSP の発展', p => Boolean(p.develop));
     Object.entries(show.cutin.colors).forEach(([id, c]) => add('こおりカットイン', `${c.name}`, p => p.cutin === id));
     add('バトル', '盤面の役物が落ちる', p => p.gimmick);
