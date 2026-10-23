@@ -383,10 +383,10 @@ button:hover { border-color: var(--accent); }
     .bar-buttons button { padding: 5px 7px; font-size: 11px; }
     /* 盤面: 画面の高さから、上の帯・状態・操作の段のぶんを引いた大きさ */
     .board { order: 2; align-self: center; width: min(100%, calc((100dvh - 246px) * 0.72)); }   /* 強さのゲージの段のぶん */
-    /* 筐体: スマホでは 枠を 細くして 盤面を 大きく */
-    /*   (高さは 前の 盤面と ほぼ 同じ。操作の 段まで 1 画面に 収まるように) */
-    .cabinet { order: 2; align-self: center; width: min(100%, calc((100dvh - 246px) / 1.4)); aspect-ratio: 400 / 560; }
-    .cabinet .board { left: 3%; top: 4.5%; width: 94%; }
+    /* 筐体: スマホでは 枠を 細くして 盤面を 大きく (操作の 段まで 1 画面に 収まるように) */
+    /*   2026-10-23 ユーザー指定: スマホでも 下の レバーを 出す。窓の 下に レバーの 段が 残るよう 縦に 長く (560 → 608) */
+    .cabinet { order: 2; align-self: center; width: min(100%, calc((100dvh - 246px) / 1.52)); aspect-ratio: 400 / 608; }
+    .cabinet .board { left: 3%; top: 4.1%; width: 94%; }
     .mode-display { order: 3; padding: 4px 8px; font-size: 13px; }
     .aim-display { order: 3; font-size: 14px; }
     .rash-choice { order: 3; padding: 8px; }

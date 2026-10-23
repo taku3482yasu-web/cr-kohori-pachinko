@@ -540,7 +540,8 @@ const Cabinet = (() => {
         g.fill();
     }
 
-    // 下の PUSH (レバーの 上の ボタン) の 位置 (#cabinet-push を 重ねる)。下の 段が せまい (スマホ) ときは null
+    // 下の PUSH (レバーの 上の ボタン) の 位置 (#cabinet-push を 重ねる)。下の 段が せまいときは null
+    // (スマホも 筐体を 縦に 長くして 段を 残している。css/style.css の @media)
     function pushRect() {
         const L = cv && lever(windowPoints());
         if (!L) return null;
