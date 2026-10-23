@@ -589,7 +589,10 @@ const CONFIG = {
         develop: { rate: 0.6, time: 2.5, from: ['okagappa', 'hibikimakuri'], sp: { okagappa: 'SP', hibikimakuri: 'SP', onioni: 'SPSP', naitei: 'SPSP', rival5dx: 'SP', ask3: 'SP', muscle: 'SPSP' } },
         // 必殺技と 敵の セリフ (2026-10-23 アップグレード P3。最新のスロット koori-slot の battleLines.js から。onioni・naitei の セリフは Claude の 案)
         //   バトルの はじめに 相手の intro、決着で 勝てば こおりくんの 必殺技 (koori) と 相手の lose、負ければ 相手の 必殺技と win
+        //   2026-10-23 ユーザー指定: セリフと 必殺技は 最新の スロットの データ (js/battle-lines.js) を 先に 使う。ここは スロットに ない ぶん (おにおに・ナイナイ) と 名前
         battleTalk: {
+            names: { okagappa: 'おかがっぱ', hibikimakuri: 'ひびきまくり', yamamou: 'やまもぅ', sasaki: 'Mr.SASAKI', kotani: 'Mr.KOTANI', asahara: 'KING.ASAHARA',
+                shibata: 'シバター', ueno: 'マッスルウエノーブル', ikekimu: 'イケキム', onioni: 'おにおに', naitei: 'シーシャ・ナイテイ・ナイナイ' },
             koori: '大腸炎アタック',
             specials: {
                 okagappa: 'おかピポっと光線', hibikimakuri: '大音響4DX', yamamou: 'おちょくりボーンフィーバー',
@@ -602,8 +605,8 @@ const CONFIG = {
                 hibikimakuri: { intro: '響きです。', win: 'すっごいひびいたね～', lose: 'ひびかなかった～…' },
                 asahara: { intro: 'CS城の主の力、見せてやろう！', win: 'フハハハ！ワシの勝ちだ！', lose: 'ぐぬぬ…覚えておれ！' },
                 ueno: { intro: '我が筋肉の前にひれ伏すがよい！', win: '筋肉は裏切らない！', lose: '筋肉が…足りなかった…' },
-                onioni: { intro: '金を 返しに 来たのか？', win: 'ぐははは！ 出直してこい！', lose: 'ぐぬぬ… 覚えておれ…' },
-                naitei: { intro: '内定が ほしいか…？', win: 'お前に 内定は ない！', lose: '…内定を やろう' }
+                onioni: { intro: '金を 返しに 来たのか？', special: 'ぐはは！ 金棒を くらえ！', win: 'ぐははは！ 出直してこい！', lose: 'ぐぬぬ… 覚えておれ…' },
+                naitei: { intro: '内定が ほしいか…？', special: 'お前に内定はない！', win: 'お前に 内定は ない！', lose: '…内定を やろう' }
             }
         },
         // 「こおりいきていける！」(2026-10-23 アップグレード P3。最新のスロットの AT 直撃の 見せ方): 通常時の 当たりの rate で、

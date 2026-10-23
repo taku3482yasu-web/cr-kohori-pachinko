@@ -745,36 +745,76 @@ const Lcd = (() => {
 
     // ----- バトル -----
     // ライバルチーム (2026-10-23 アップグレード P3): 3 人 並べる (まんなかが リーダーで 少し 大きい)
-    function drawTeam(team, ex, ground, frame, hurt, alpha, kai = false) {
+    function drawTeam(team, ex, ground, frame, hurt, alpha, kai = false, speaking = -1) {
         team.forEach((id, i) => {
             const lead = i === 1;
             const sc = Math.min(lead ? 1.6 : 1.3, (lead ? 60 : 50) / Characters.size(id).h);
             const x = ex + (i - 1) * 30;
-            Characters.drawEnemy(ctx, id, x, ground - (lead ? 0 : 2), { scale: sc, frame: (frame + i) % 2, hurt, alpha, kai });
+            const hop = i === speaking ? Math.abs(Math.sin(performance.now() / 120)) * 4 : 0;
+            Characters.drawEnemy(ctx, id, x, ground - (lead ? 0 : 2) - hop, { scale: sc, frame: (frame + i) % 2, hurt, alpha, kai });
         });
     }
 
-    // 必殺技と 敵の セリフ (P3。config.show.battleTalk): バトルの はじめに 相手の ひとこと、決着で 必殺技の 名前と ひとこと
+    // 必殺技と 敵の セリフ (2026-10-23 ユーザー指定: 最新の スロット koori-slot の データを 読みこむ)
+    //   js/battle-lines.js (node tools/import-battle-lines.mjs で 書き出す) を 先に、なければ config.show.battleTalk を 使う。
+    //   チームは 3 人 全員の セリフ: はじめに 1 人ずつ 名乗る → 敵の 攻撃の たびに 攻撃した 人の 必殺技と ひとこと →
+    //   決着で 勝てば こおりくんの 必殺技と 3 人の 負けゼリフ、負ければ リーダーの 必殺技と 3 人の 勝ちゼリフ (順に)
+    const BL = () => window.BATTLE_LINES || { specials: {}, lines: {} };
+    const talkOf = id => BL().lines[id] || CONFIG.show.battleTalk.lines[id] || {};
+    const specialOf = id => BL().specials[id] || CONFIG.show.battleTalk.specials[id] || '必殺技';
+    const nameOf = id => CONFIG.show.battleTalk.names[id] || id;
+    const INTRO_STEP = 1.0;   // チームが 1 人ずつ 名乗る 秒
+    const INTRO_AT = 2.4;     // 名乗りを 始める バトルの 秒 (ふるカワの 返事が 消えてから)
+    // いま しゃべっている 人 { id, idx, kind: 'intro' / 'special' / 'end', line }。いなければ null
+    function battleSpeaker(plan, phase) {
+        const b = CONFIG.show.battles[plan.enemy];
+        if (!b || plan.fig !== 1 || !phase) return null;
+        const members = b.team || [plan.enemy];
+        if (phase.name === 'battle') {
+            const l = phase.local;
+            if (l < INTRO_AT) return null;
+            if (l < INTRO_AT + INTRO_STEP * members.length) {
+                const idx = Math.floor((l - INTRO_AT) / INTRO_STEP);
+                return { id: members[idx], idx, kind: 'intro', line: talkOf(members[idx]).intro };
+            }
+            // 敵の 攻撃 (奇数の ターン。drawBattle と 同じ 1.2 秒ごと): 攻撃した 人の 必殺技
+            const pushStart = phase.t - CONFIG.show.pushTime;
+            const turn = Math.floor(Math.min(l, pushStart) / 1.2);
+            if (l < pushStart && turn % 2 === 1 && l >= INTRO_AT + INTRO_STEP * members.length) {
+                const idx = Math.floor(turn / 2) % members.length;
+                return { id: members[idx], idx, kind: 'special', line: talkOf(members[idx]).special };
+            }
+            return null;
+        }
+        if (phase.name === 'result' && phase.local >= 1.1) {
+            const step = (phase.t - 1.1) / members.length;
+            const idx = Math.min(members.length - 1, Math.floor((phase.local - 1.1) / step));
+            return { id: members[idx], idx, kind: 'end', line: plan.win ? talkOf(members[idx]).lose : talkOf(members[idx]).win };
+        }
+        return null;
+    }
     function drawBattleTalk(now, plan, phase) {
         const bt = CONFIG.show.battleTalk;
         if (!bt || plan.fig !== 1) return;
         const b = CONFIG.show.battles[plan.enemy];
         if (!b) return;
-        const who = b.leader || plan.enemy;
-        const lines = bt.lines[who] || {};
-        const bubbleAt = (str, y) => {
-            if (!str) return;
-            const size = str.length > 14 ? 8 : 9;
-            band(y - 7, 14, 0.55);
-            text(`「${str}」`, W / 2 + 30, y, size, '#ffffff', 'center');
-        };
-        if (phase.name === 'battle' && phase.local < 1.6) bubbleAt(lines.intro, 100);
-        if (phase.name === 'result' && phase.local < 1.4) {
-            const name = plan.win ? bt.koori : bt.specials[who] || '必殺技';
-            band(92, 22, 0.65);
-            text(plan.win ? `こおりくんの ${name}!!` : `${b.name} の ${name}!!`, W / 2, 103, name.length > 9 ? 10 : 12, plan.win ? 'rainbow' : '#ff6a6a', 'center', now);
+        const sp = battleSpeaker(plan, phase);
+        const y = phase.name === 'result' ? 100 : 88;   // 決着は 大きい 図柄の 下
+        const cx = phase.name === 'result' ? W / 2 : W / 2 + 30;
+        if (sp && sp.line) {
+            const head = sp.kind === 'special' ? `${nameOf(sp.id)} の ${specialOf(sp.id)}！` : nameOf(sp.id);
+            band(y, 24, 0.6);
+            text(head, cx, y + 6, head.length > 16 ? 8 : 9, sp.kind === 'special' ? '#ff9a6a' : '#ffe066', 'center');
+            text(`「${sp.line}」`, cx, y + 18, sp.line.length > 14 ? 8 : 9, '#ffffff', 'center');
+            if (sp.kind === 'special') once(`sp${sp.idx}${Math.floor(phase.local / 2.4)}`, 'hurt');
+        }
+        if (phase.name === 'result' && phase.local < 1.1) {
+            const who = b.leader || plan.enemy;
+            const name = plan.win ? specialOf('koori') : specialOf(who);
+            band(y + 1, 22, 0.65);
+            text(plan.win ? `こおりくんの ${name}!!` : `${nameOf(who)} の ${name}!!`, W / 2, y + 12, name.length > 9 ? 10 : 12, plan.win ? 'rainbow' : '#ff6a6a', 'center', now);
             once('special', plan.win ? 'win' : 'hurt');
-        } else if (phase.name === 'result' && phase.local < phase.t) bubbleAt(plan.win ? lines.lose : lines.win, 100);
+        }
     }
 
     // ----- 違和感演出 (2026-10-23 アップグレード P4) -----
@@ -944,7 +984,8 @@ const Lcd = (() => {
             if (l >= SUMMON_STRIKE) once('summonHit', 'attack');
         }
 
-        if (enemyAlpha > 0 && b.team) drawTeam(b.team, ex, ground, frame, enemyHurt, enemyAlpha, plan.kai);   // ライバルチーム (P3。怪は 確定)
+        const speaking = battleSpeaker(plan, phase);   // しゃべっている 人は 少し 跳ねる
+        if (enemyAlpha > 0 && b.team) drawTeam(b.team, ex, ground, frame, enemyHurt, enemyAlpha, plan.kai, speaking ? speaking.idx : -1);   // ライバルチーム (P3。怪は 確定)
         else if (enemyAlpha > 0) Characters.drawEnemy(ctx, plan.enemy, ex, ground, { scale, frame, hurt: enemyHurt, alpha: enemyAlpha, kai: plan.kai });
         if (plan.cheer && phase.name !== 'roll') drawCheer(now, plan, phase, ground);
         if (plan.summon && (phase.name === 'summon' || phase.name === 'result')) drawSummoned(now, plan, phase, ground, frame);
@@ -982,7 +1023,7 @@ const Lcd = (() => {
         }
         hpBar(90, 54, 70, kooriHp, '#7fd3f7');
         hpBar(176, 54, 70, enemyHp, '#ff6a8a');
-        drawBattleTalk(now, plan, phase);   // 必殺技と 敵の セリフ (P3)
+        if (phase.name !== 'result') drawBattleTalk(now, plan, phase);   // 必殺技と 敵の セリフ (決着は 図柄の 上に 出すので 外で)
 
         if (phase.name === 'battle' && phase.pushing) {
             const pushed = spinView.pushedAt !== null;
@@ -1582,6 +1623,7 @@ const Lcd = (() => {
                 RashView.drawOnioniRash(now, { pattern: null }, { name: 'roll', local: 0, t: 1 });
             }
             if (phase && phase.name === 'challenge') drawChallenge(now, plan, phase);
+            const talkResult = phase && phase.name === 'result' && plan && plan.fig === 1 && plan.enemy && !plan.revival;   // 決着の 必殺技と セリフ
             if (phase && (plan.kind === 'rashBattle' || (phase.name === 'reach' && phase.local >= 1.4) || ['develop', 'cutin', 'battle', 'pursuit'].includes(phase.name) || (phase.name === 'result' && phase.local < 0.6))) {
                 // こおりRASH の結果は 0.6 秒から図柄を大きく出す (復活の負けの result はそのまま、撃破の rvkill も同じ)
                 const bigReels = (phase.name === 'result' && !plan.revival) || phase.name === 'rvkill';
@@ -1614,6 +1656,7 @@ const Lcd = (() => {
             if (phase && phase.name === 'next') drawNext(now, plan, phase);
             if (plan && plan.type === 'zenkaiten' && phase) drawZenkaiten(now, plan, phase);
             if (plan && plan.type === 'ikiteru' && phase) drawIkiteru(now, plan, phase);   // こおりいきていける！ (P3)
+            if (talkResult) drawBattleTalk(now, plan, phase);   // 決着の 必殺技と セリフ (大きい 図柄の 下に)
             // 擬似連のあと (チャレンジのあいだ) は右上に「擬似〇連」
             if (plan && plan.gizi && phase && phase.name === 'challenge') text(`擬似${plan.gizi + 1}連`, W - 6, 9, 9, '#ffe066', 'right');
             if (phase && phase.name === 'reach' && phase.local >= 0.6 && phase.local < 1.4) {

@@ -20,7 +20,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const JS_DIR = path.join(ROOT, 'js');
 // 画面に触らないファイルだけ読み込む
-const GAME_FILES = ['config.js', 'sprites.js', 'characters.js', 'rivals.js', 'scenario.js', 'machine.js', 'records.js', 'updates.js', 'bgm.js', 'round-info.js'];
+const GAME_FILES = ['config.js', 'sprites.js', 'characters.js', 'rivals.js', 'battle-lines.js', 'scenario.js', 'machine.js', 'records.js', 'updates.js', 'bgm.js', 'round-info.js'];
 
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => {
@@ -59,7 +59,7 @@ function loadGame(seed) {
     for (const file of GAME_FILES) {
         vm.runInContext(fs.readFileSync(path.join(JS_DIR, file), 'utf8'), context, { filename: file });
     }
-    const game = vm.runInContext('({ CONFIG, SPRITES, Characters, Scenario, Machine, SettingHint, Collection, DataCounter, SettingEstimate, UpdateNotes, UPDATES, Bgm, BGM_TRACKS, RoundInfo })', context);
+    const game = vm.runInContext('({ CONFIG, BATTLE_LINES, SPRITES, Characters, Scenario, Machine, SettingHint, Collection, DataCounter, SettingEstimate, UpdateNotes, UPDATES, Bgm, BGM_TRACKS, RoundInfo })', context);
     game.rng = seededMath.random;
     return game;
 }
@@ -1048,13 +1048,17 @@ test('ページ: index.html と tools/fast.html が js/ のファイルをすべ
 
 // ----- ASO の 演出 (2026-10-23 アップグレード P3) -----
 test('ライバルバトル・必殺技・こおりいきていける！: チームの 絵と セリフが そろい、こおりいきていける！ は 当たりだけ', () => {
-    const { CONFIG, Characters, Scenario } = loadGame(5);
+    const { CONFIG, BATTLE_LINES, Characters, Scenario } = loadGame(5);
     const show = CONFIG.show;
     for (const [id, b] of Object.entries(show.battles)) {
         (b.team || [id]).forEach(who => assert(Characters.has(who), `${b.name} の ${who} の 絵が ない`));
-        const lead = b.leader || id;
-        assert(show.battleTalk.specials[lead], `${b.name} の 必殺技 (battleTalk.specials.${lead}) が ない`);
-        assert(show.battleTalk.lines[lead], `${b.name} の セリフ (battleTalk.lines.${lead}) が ない`);
+        // セリフと 必殺技: 最新の スロットから 読みこんだ もの (js/battle-lines.js) か config。チームは 3 人 全員 (2026-10-23 ユーザー指定)
+        for (const who of b.team || [id]) {
+            const line = BATTLE_LINES.lines[who] || show.battleTalk.lines[who];
+            assert(BATTLE_LINES.specials[who] || show.battleTalk.specials[who], `${b.name} の ${who} の 必殺技が ない`);
+            assert(line && line.intro && line.special && line.win && line.lose, `${b.name} の ${who} の セリフ (intro・special・win・lose) が そろって いない`);
+            assert(show.battleTalk.names[who], `${who} の 名前 (battleTalk.names) が ない`);
+        }
         assert(show.develop.sp[id], `${b.name} の SP / SPSP (develop.sp) が ない`);
     }
     const spec = CONFIG.specs.s99, rng = seededRandom(3);
