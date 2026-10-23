@@ -464,11 +464,15 @@ const Cabinet = (() => {
         const capY = L.capY + sink + pull * capR * 1.5;
         const capR0 = capR;
         capR *= 1 + pull * 0.3;
+        // 引け！の 色 (2026-10-24 ユーザー指定: 色の 段階)。虹は 色が 流れる、ほかは その 色で 明るさが 脈打つ
+        const LEVER_HUE = { blue: 212, red: 355, gold: 46 };
+        const hue = LEVER_HUE[bs.leverColor];
+        const lc = (off, s, l) => hue == null ? hsl(t * 400 + off, s, l) : hsl(hue + off * 0.05, s, l + 12 * Math.sin(t * 12) - (off ? 8 : 0));
         const jig = bs.buru ? Math.sin(t * 90) * capR * 0.14 : 0;
         g.save();
         g.translate(jig, bs.buru ? Math.cos(t * 70) * capR * 0.05 : 0);
         if (bs.lever) {
-            g.shadowColor = hsl(t * 400, 95, 60);
+            g.shadowColor = lc(0, 95, 60);
             g.shadowBlur = 26;
         }
         const sw0 = baseW * 0.3, sw1 = capR * 0.9;
@@ -479,7 +483,7 @@ const Cabinet = (() => {
         g.lineTo(cx + sw1 * 0.55, capY + capR * 0.2);
         g.bezierCurveTo(cx + sw1 * 0.5, capY + capR, cx + sw0 * 0.55, (sy0 + capY) / 2, cx + sw0 / 2, sy0);
         g.closePath();
-        g.fillStyle = bs.lever ? lin(0, capY, 0, sy0, [[0, hsl(t * 400, 95, 65)], [0.5, hsl(t * 400 + 120, 95, 55)], [1, hsl(t * 400 + 240, 95, 45)]])
+        g.fillStyle = bs.lever ? lin(0, capY, 0, sy0, [[0, lc(0, 95, 65)], [0.5, lc(120, 95, 55)], [1, lc(240, 95, 45)]])
             : lin(cx - sw0 / 2, 0, cx + sw0 / 2, 0, [[0, '#1a1a20'], [0.35, RED_DARK], [0.5, RED_LIGHT], [0.65, RED_DARK], [1, '#1a1a20']]);
         g.fill();
         g.shadowBlur = 0;
@@ -494,8 +498,8 @@ const Cabinet = (() => {
         g.fill();   // ボタンの 側面
         let face = lin(cx - capR, capY - capR, cx + capR, capY + capR, [[0, '#ffffff'], [0.5, '#c8d0da'], [1, '#6a7688']]);
         if (bs.lever) {
-            const c = hsl(t * 400, 95, 65);
-            face = rad(cx, capY, capR * 0.1, capR, [[0, '#ffffff'], [0.5, c], [1, hsl(t * 400 + 180, 95, 55)]]);
+            const c = lc(0, 95, 65);
+            face = rad(cx, capY, capR * 0.1, capR, [[0, '#ffffff'], [0.5, c], [1, lc(180, 95, 55)]]);
             g.shadowColor = c;
             g.shadowBlur = 26;
         } else if (bs.kind && bs.lit) {
@@ -537,7 +541,7 @@ const Cabinet = (() => {
                 const x = cx + dx * capR0 * 1.7;
                 g.globalAlpha = 1;
                 g.strokeText('引け', x, capY - capR0 * 0.6);
-                g.fillStyle = hsl(t * 400 + dx * 90, 95, 65);
+                g.fillStyle = lc(dx * 90, 95, 65);
                 g.fillText('引け', x, capY - capR0 * 0.6);
                 g.globalAlpha = 1 - k;
                 g.strokeText('▼', x, capY + capR0 * (0.2 + k * 0.8));

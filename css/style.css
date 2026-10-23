@@ -262,6 +262,14 @@ button:hover { border-color: var(--accent); }
 .koori-button.lever { animation: rainbow-glow 0.6s linear infinite; }
 .koori-button.lever .kb-label { font-size: 0; }
 .koori-button.lever .kb-label::after { content: 'レバーを引け'; font-size: 11px; color: #ffe066; white-space: nowrap; }
+/* 引け！の 色の 段階 (2026-10-24): 青 < 赤 < 金 < 虹 (虹は 上の rainbow-glow のまま) */
+.koori-button.lever-blue { animation: none; background: linear-gradient(135deg, #e0f0ff 0%, #4aa8ff 45%, #1050c0 100%); box-shadow: 0 4px 0 #0a2a6a, 0 0 26px 8px rgba(74, 168, 255, 0.9); }
+.koori-button.lever-red { animation: none; background: linear-gradient(135deg, #ffe0e0 0%, #ff6a6a 45%, #d01020 100%); box-shadow: 0 4px 0 #6a0a10, 0 0 26px 8px rgba(255, 40, 60, 0.9); }
+.koori-button.lever-gold { animation: none; background: linear-gradient(135deg, #fff6d0 0%, #ffd23a 45%, #b07a00 100%); box-shadow: 0 4px 0 #5a3a00, 0 0 30px 10px rgba(255, 210, 58, 0.95); }
+.koori-button.lever-blue .kb-label::after { color: #8ac8ff; }
+.koori-button.lever-red .kb-label::after { color: #ff8a8a; }
+/* ハンドルブル (2026-10-24): ハンドルが 小さく 速く ぶるぶる */
+.handle.fx-buru { animation: shake 0.05s linear infinite; }
 @keyframes shake { 0% { transform: translate(-3px, 1px) rotate(-3deg); } 50% { transform: translate(3px, -1px) rotate(3deg); } 100% { transform: translate(-3px, 1px) rotate(-3deg); } }
 .koori-button.fx-beep { animation: beep-ring 0.3s ease-out infinite; }
 @keyframes beep-ring { from { box-shadow: 0 4px 0 #1b3a6b, 0 0 0 0 rgba(255, 255, 255, 0.9); } to { box-shadow: 0 4px 0 #1b3a6b, 0 0 0 18px rgba(255, 255, 255, 0); } }

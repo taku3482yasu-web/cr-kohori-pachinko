@@ -56,6 +56,7 @@ const Lcd = (() => {
     let stageFx = null;     // ステージが変わったところ { stage: { id, kind }, start }
     let renchan = null;     // 「〇G連確定！」{ games, start }
     let holdFx = null;      // 保留変化 { result, current, start }
+    let leverHold = null;   // 保留を レバーで 変える (2026-10-24): 引くのを 待って いる 保留 { result, current, start }
     let promoteFx = null;   // 図柄の昇格 { start, from, to, bonus }
     let machineRef = null;  // いまの台 (イベントのときに大当たりの中身を見るため)
 
@@ -89,8 +90,34 @@ const Lcd = (() => {
         else if (t > 0.5) text('…！？', W / 2, 112, 16, '#ffffff');
     }
 
+    // 保留の 見せる 色 (レバーを 待って いる 保留は 白の まま)
+    const shownHold = h => leverHold && leverHold.result === h ? 'white' : h.shownColor || h.holdColor;
+    // 保留の 位置 (変動中の 保留は 真ん中)。いなければ null
+    function holdPos(m, result, current) {
+        if (current) return { x: W / 2, y: 134 };
+        const i = m.holds[1].indexOf(result);
+        return i < 0 ? null : { x: 14 + i * 13, y: 136 };
+    }
+    // 保留を レバーで 変える: 保留の 上に ▼ と、帯に「保留に レバーを引け！」。引くか holdTime 秒で 変わる
+    function drawLeverHold(now, m) {
+        if (!leverHold) return;
+        if (now - leverHold.start >= CONFIG.show.lever.holdTime) { resolveLeverHold(now); return; }
+        const pos = holdPos(m, leverHold.result, leverHold.current);
+        if (!pos) { leverHold = null; return; }
+        band(112, 14, 0.55);
+        text('保留に レバーを引け！', W / 2, 119, 10, CONFIG.show.lever.colors.red.color);
+        if (Math.floor(now * 6) % 2) text('▼', Math.min(W - 8, Math.max(8, pos.x)), pos.y - 12, 9, '#ffe066', 'center', now);
+    }
+    function resolveLeverHold(now) {
+        if (!leverHold) return;
+        holdFx = { result: leverHold.result, current: leverHold.current, start: now };
+        leverHold = null;
+        Sound.play('success');
+    }
+
     // 保留変化: 変わった保留のまわりに光の輪と「ピキーン！」
     function drawHoldFx(now, m) {
+        drawLeverHold(now, m);
         if (!holdFx) return;
         const t = now - holdFx.start;
         if (t > 1.2) { holdFx = null; return; }
@@ -148,7 +175,7 @@ const Lcd = (() => {
     }
 
     function reset() {
-        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = holdFx = promoteFx = trophy = null;
+        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = holdFx = leverHold = promoteFx = trophy = null;
     }
 
     function show(text, color, now, seconds = 1.2) {
@@ -187,6 +214,12 @@ const Lcd = (() => {
             } else if (e.result.button) MachineButton.trigger(e.result.button, now);
             // レバブル (保留が 入ったとき。カスタマイズで あり のとき)
             if (e.result.leverBuru && Customize.get('leverBuru') !== 'off') MachineButton.buru(now);
+            if (e.result.handleBuru && Customize.get('leverBuru') !== 'off') MachineButton.handleBuru(now);   // ハンドルブル (2026-10-24)
+        } else if (e.type === 'holdChange' && e.result.leverHold) {
+            // 保留を レバーで 変える: 引くまで 白の まま (前の 保留が 待って いたら 先に 変える)
+            resolveLeverHold(now);
+            leverHold = { result: e.result, current: e.current, start: now };
+            Sound.play('lever');
         } else if (e.type === 'holdChange') {
             // 保留変化: ピキーン！
             holdFx = { result: e.result, current: e.current, start: now };
@@ -373,7 +406,10 @@ const Lcd = (() => {
     // 台のボタンが押された (バトルの PUSH)。how: 'button' 台の ボタン / 'pull' 筐体の レバーを 引いた / 'any' どちらでも (レバーが 出ていないとき)
     //   レバーを引け！ (2026-10-24 ユーザー指定) は レバーを 引いたときだけ。はじめ PUSH！ の ときは、ボタンを 押すと レバーを引け！ に 変わる
     function push(now, how = 'any') {
-        if (!(spinView && currentPhase && currentPhase.pushing && spinView.pushedAt === null)) return;
+        if (!(spinView && currentPhase && currentPhase.pushing && spinView.pushedAt === null)) {
+            if (leverHold && how !== 'button') resolveLeverHold(now);   // 保留を レバーで 変える
+            return;
+        }
         if (spinView.plan.lever && spinView.pullAt === null && how !== 'pull') { leverOn(now); return; }
         if (spinView.pullAt !== null && how === 'button') return;
         if (spinView.plan.lever && spinView.pullAt === null) spinView.pullAt = now;
@@ -390,6 +426,9 @@ const Lcd = (() => {
     }
     // PUSH を 待つ 秒 (レバーを 引くときは 長く)
     const pushTimeOf = plan => plan && plan.lever ? CONFIG.show.lever.time : CONFIG.show.pushTime;
+    // 引け！の 色 (液晶の 文字・筐体の レバー・台の ボタン)。もう一回 引け！ は 虹
+    const leverColorOf = (plan, phase) => phase && phase.name === 'rvagain' ? 'rainbow' : (plan && plan.leverColor) || 'rainbow';
+    const leverText = id => (CONFIG.show.lever.colors[id] || {}).color || 'rainbow';
 
     // ----- 描く道具 -----
     function rainbow(now, offset = 0) {
@@ -435,7 +474,7 @@ const Lcd = (() => {
         const n = phase.name;
         const local = phase.local;
         const last = phase.index === plan.phases.length - 1;
-        if (plan.kind === 'rashBattle' && plan.revival && n !== 'roll' && n !== 'battle') {
+        if (plan.revival && (n === 'result' || n.startsWith('rv'))) {   // こおりRASH・通常時の 引け！の 復活 (2026-10-24)
             // 復活: 負けて見せる result では中を止めず、暗転のあいだは隠す。撃破 (rvkill) で そろって大きく
             if (n === 'result') return { stop: [true, false, true], big: false };
             if (n !== 'rvkill') return { stop: [false, false, false], big: false, hidden: true };
@@ -910,6 +949,20 @@ const Lcd = (() => {
         ctx.fillRect(x + 1, y + 1, Math.round((w - 2) * Math.max(0, ratio)), 3);
     }
 
+    // もう一回 引け！ (引いても 負けたあとの 復活。2026-10-24): 暗い 中に「まだだ…！」と 虹の「もう一回 レバーを引け！」。引いたら 白く 光る
+    function drawLeverAgain(now, plan, phase) {
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, W, H);
+        const pulled = spinView && spinView.pushedAt !== null;
+        text('まだだ…！', W / 2, 44, 14, `rgba(255, 255, 255, ${Math.min(1, phase.local / 0.4)})`);
+        if (!pulled) {
+            if (phase.local > 0.4) text('もう一回 レバーを引け！', W / 2, 84, 18, 'rainbow', 'center', now);
+        } else {
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, 1 - (now - spinView.pushedAt) * 2)})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+    }
+
     // phase.name が 'reach' (相手が出てくる) / 'battle' / 'result'
     // 復活 (plan.revival): result では負けて見せ、rv○○ の場面は RashView.drawRevival、最後の rvkill で撃破する
     function drawBattle(now, plan, phase) {
@@ -917,6 +970,9 @@ const Lcd = (() => {
             if (phase.name === 'rvkill') {
                 plan = { ...plan, revival: false };
                 phase = { ...phase, name: 'result' };
+            } else if (phase.name === 'rvagain') {
+                drawLeverAgain(now, plan, phase);
+                return;
             } else if (phase.name.startsWith('rv')) {
                 RashView.drawRevival(now, plan, phase);
                 return;
@@ -1049,7 +1105,7 @@ const Lcd = (() => {
                         ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * (1 - since / 0.3)})`;
                         ctx.fillRect(0, 0, W, H);
                     }
-                    text('レバーを引け！', W / 2, 79, Math.round(18 + Math.max(0, 0.25 - since) * 24), 'rainbow', 'center', now);
+                    text('レバーを引け！', W / 2, 79, Math.round(18 + Math.max(0, 0.25 - since) * 24), leverText(spinView.plan.leverColor), 'center', now);
                 } else text('PUSH！', W / 2, 79, 22, Math.floor(now * 8) % 2 ? '#ffe066' : '#ff3a3a');
             } else {
                 ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, 0.8 - (now - spinView.pushedAt) * 2)})`;
@@ -1373,12 +1429,12 @@ const Lcd = (() => {
 
     function drawHolds(now, m) {
         if (m.rush.challenge) {
-            m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, h.shownColor || h.holdColor, now));
+            m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, shownHold(h), now));
         drawHoldFx(now, m);
             RashView.drawChallengeHolds(now, m);
             return;
         }
-        m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, h.shownColor || h.holdColor, now));
+        m.holds[1].forEach((h, i) => holdIcon(14 + i * 13, 136, 10, shownHold(h), now));
         drawHoldFx(now, m);
         for (let i = m.holds[1].length; i < CONFIG.machine.holdMax; i++) {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
@@ -1386,7 +1442,7 @@ const Lcd = (() => {
         }
         m.holds[2].forEach((h, i) => holdIcon(W - 14 - i * 13, 136, 10, h.rashHold === 'black' ? 'black' : 'white', now, false, h.rashHold === 'spin'));
         // 変動中の保留 (当該保留) は真ん中の下に大きく
-        if (m.spin && m.spin.fig === 1 && !m.bonus) holdIcon(W / 2, 134, 12, m.spin.result.shownColor || m.spin.result.holdColor, now, true);
+        if (m.spin && m.spin.fig === 1 && !m.bonus) holdIcon(W / 2, 134, 12, shownHold(m.spin.result), now, true);
     }
 
     // ----- ふるカワ -----
@@ -1639,6 +1695,13 @@ const Lcd = (() => {
         const plan = m && m.spin && spinView ? spinView.plan : null;
         const phase = plan ? phaseAt(plan, m.spin.elapsed) : null;
         if (phase && (phase.name === 'battle' || phase.name === 'cfinal')) phase.pushing = phase.local >= phase.t - (phase.name === 'battle' ? pushTimeOf(plan) : CONFIG.show.pushTime);
+        if (phase && phase.name === 'rvagain') phase.pushing = true;   // もう一回 引け！ (引いても 負けたあとの 復活)
+        // PUSH を 待つ 場面が 変わったら、押した・引いたを 数え直す (バトルの PUSH と もう一回 引け！)
+        if (phase && phase.pushing && spinView && spinView.pushPhase !== phase.index) {
+            if (spinView.pushPhase != null) spinView.pushedAt = spinView.pullAt = null;
+            spinView.pushPhase = phase.index;
+            if (phase.name === 'rvagain') spinView.pullAt = now;
+        }
         // レバーを引け！: はじめから 出るか、PUSH！ から changeAt 秒で 変わる (その前に ボタンを 押しても 変わる。push)
         if (plan && plan.lever && phase && phase.name === 'battle' && phase.pushing && spinView.pushedAt === null && spinView.pullAt === null
             && (!plan.leverChange || phase.local >= phase.t - pushTimeOf(plan) + CONFIG.show.lever.changeAt)) leverOn(now);
@@ -1658,7 +1721,10 @@ const Lcd = (() => {
         phaseSounds(plan, phase);
 
         // バトル中は PUSH の案内を台のボタンにも出す (レバーの ときは「レバーを引け！」。筐体の レバーが 光る)
-        MachineButton.prompt(Boolean(phase && phase.pushing && spinView.pushedAt === null), Boolean(plan && plan.lever && spinView.pullAt !== null));
+        //   保留を レバーで 変える ときも (2026-10-24)
+        const battleLever = Boolean(plan && plan.lever && phase && phase.pushing && spinView.pushedAt === null && spinView.pullAt !== null);
+        MachineButton.prompt(Boolean(phase && phase.pushing && spinView.pushedAt === null) || Boolean(leverHold), battleLever || Boolean(leverHold),
+            battleLever ? leverColorOf(plan, phase) : 'red');
         // レバブル (変動中: リーチに なったとき 1 回)
         if (plan && plan.leverBuru && phase && phase.name === 'reach' && !spinView.buru) {
             spinView.buru = true;
@@ -1683,7 +1749,9 @@ const Lcd = (() => {
             }
             if (phase && phase.name === 'challenge') drawChallenge(now, plan, phase);
             const talkResult = phase && phase.name === 'result' && plan && plan.fig === 1 && plan.enemy && !plan.revival;   // 決着の 必殺技と セリフ
-            if (phase && (plan.kind === 'rashBattle' || (phase.name === 'reach' && phase.local >= 1.4) || ['develop', 'cutin', 'battle', 'pursuit'].includes(phase.name) || (phase.name === 'result' && phase.local < 0.6))) {
+            // 通常時の 引け！の 復活 (2026-10-24): 負けて 見せる result は ずっと、暗転〜フラッシュも、撃破 (rvkill) は 0.6 秒まで バトルを 描く
+            const leverRv = plan && plan.fig === 1 && plan.revival && phase && (phase.name === 'result' || (phase.name.startsWith('rv') && (phase.name !== 'rvkill' || phase.local < 0.6)));
+            if (phase && (plan.kind === 'rashBattle' || leverRv || (phase.name === 'reach' && phase.local >= 1.4) || ['develop', 'cutin', 'battle', 'pursuit'].includes(phase.name) || (phase.name === 'result' && phase.local < 0.6 && !plan.revival))) {
                 // こおりRASH の結果は 0.6 秒から図柄を大きく出す (復活の負けの result はそのまま、撃破の rvkill も同じ)
                 const bigReels = (phase.name === 'result' && !plan.revival) || phase.name === 'rvkill';
                 if (plan.kind !== 'rashBattle' || !(bigReels && phase.local >= 0.6)) drawBattle(now, plan, phase);

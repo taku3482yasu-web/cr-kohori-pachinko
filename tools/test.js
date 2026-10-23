@@ -430,7 +430,9 @@ test('復活: こおりRASH の当たりの約20%、1/99 は 900個 確定、確
         const total = spec.rushHit.reduce((a, x) => a + x.weight, 0);
         const counted = Object.values(rv.labels).reduce((a, x) => a + x, 0);
         for (const a of spec.rushHit) {
-            assertBetween((rv.labels[a.label] || 0) / counted, a.weight / total - 0.05, a.weight / total + 0.05, `${specId} の ${a.label}個 の割合`);
+            // 許容幅は ±5% か、標準誤差の 3.5 倍の 大きいほう (当たりが 数百回 なので ぶれが 大きい)
+            const w = a.weight / total, tol = Math.max(0.05, 3.5 * Math.sqrt(w * (1 - w) / counted));
+            assertBetween((rv.labels[a.label] || 0) / counted, w - tol, w + tol, `${specId} の ${a.label}個 の割合`);
         }
     }
 });
@@ -460,6 +462,38 @@ test('レバー・レバブル (2026-10-24): レバーを引け！が出たら 8
     }
 });
 
+test('レバーを引け！の色・保留・復活・ハンドルブル (2026-10-24): 色は 青 < 赤 < 金 < 虹 (確定)、復活は当たりだけで変動が長い、保留に引け！は保留変化だけ', () => {
+    const show = CONFIG.show;
+    for (const { specId, log } of runs) {
+        const colors = {}, handle = [0, 0];
+        let revivals = 0, revivalLoss = 0, leverHolds = 0, leverHoldNoChange = 0;
+        for (const e of log.events) {
+            if (e.type === 'spinEnd' && e.fig === 1 && e.plan.lever) {
+                const c = colors[e.plan.leverColor] || (colors[e.plan.leverColor] = [0, 0]);
+                c[0]++;
+                if (e.plan.win) c[1]++;
+            }
+            if (e.type === 'spinEnd' && e.plan.leverRevival) {
+                revivals++;
+                const names = e.plan.phases.map(ph => ph.name);
+                if (!e.plan.win || !e.plan.lever || !names.includes('rvagain') || names.indexOf('rvagain') < names.indexOf('result')) revivalLoss++;
+            }
+            if (e.type === 'hold' && e.fig === 1 && !e.result.extra) {
+                if (e.result.leverHold) { leverHolds++; if (!e.result.changed) leverHoldNoChange++; }
+                if (e.result.handleBuru) { handle[0]++; if (e.result.kind === 'hit') handle[1]++; }
+            }
+        }
+        const rate = id => colors[id] ? colors[id][1] / colors[id][0] : null;
+        assert(Object.keys(colors).every(id => id in show.lever.colors), `${specId} の引け！の色 (${Object.keys(colors)})`);
+        assert(rate('blue') < rate('red') && rate('red') < rate('gold'), `${specId} の引け！の色の順 (青 ${rate('blue')} / 赤 ${rate('red')} / 金 ${rate('gold')})`);
+        assert(!colors.rainbow || rate('rainbow') === 1, `${specId} の虹の引け！は確定のはず (${rate('rainbow')})`);
+        assert(revivals > 0 && revivalLoss === 0, `${specId} の引け！の復活 (${revivals} 回。おかしいもの ${revivalLoss})`);
+        assert(leverHolds > 10 && leverHoldNoChange === 0, `${specId} の保留に引け！ (${leverHolds} 回。保留変化でないもの ${leverHoldNoChange})`);
+        assert(handle[0] > 30, `${specId} でハンドルブルが少ない (${handle[0]})`);
+        assertBetween(handle[1] / handle[0], show.handleBuru.holdReliability - 0.15, show.handleBuru.holdReliability + 0.15, `${specId} のハンドルブル`);
+    }
+});
+
 test('追撃チャンス: 通常時のバトルで出て、出たほうが勝ちやすい。相手ごとの成功率は変わらない', () => {
     const pu = CONFIG.show.pursuit;
     for (const { specId, log } of runs) {
@@ -468,7 +502,7 @@ test('追撃チャンス: 通常時のバトルで出て、出たほうが勝ち
             if (e.type !== 'spinEnd' || e.fig !== 1 || e.plan.type !== 'reach') continue;
             const p = e.plan;
             // 予告 (ステップアップ・群)・擬似連・発展・カットインは除いて流れを見る
-            const names = p.phases.map(ph => ph.name).filter(n => !['stepup', 'gun', 'next', 'develop', 'cutin'].includes(n)).join();
+            const names = p.phases.map(ph => ph.name).filter(n => !['stepup', 'gun', 'next', 'develop', 'cutin'].includes(n) && !n.startsWith('rv')).join();   // rv○○: 引け！の 復活
             assertEqual(names, p.pursuit ? 'roll,challenge,reach,battle,pursuit,result' : 'roll,challenge,reach,battle,result', `${specId} の追撃の流れ`);
             const c = n[p.pursuit ? 'on' : 'off'];
             c[0]++;

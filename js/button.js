@@ -51,10 +51,28 @@ const MachineButton = (() => {
     }
 
     // lever: ボタンの かわりに「レバーを引け！」(2026-10-24 ユーザー指定。筐体の レバーを 引く。レバーが 出ていない 画面では 台の ボタン)
-    function prompt(on, lever = false) {
+    //   color: 引け！の 色 (blue / red / gold / rainbow。2026-10-24 ユーザー指定: 色の 段階)
+    let leverColor = null;
+    function prompt(on, lever = false, color = 'rainbow') {
         if (!el) return;
         el.classList.toggle('push', on);
         el.classList.toggle('lever', on && lever);
+        leverColor = on && lever ? color : null;
+        for (const c of ['blue', 'red', 'gold', 'rainbow']) el.classList.toggle('lever-' + c, leverColor === c);
+    }
+    // ハンドルブル (2026-10-24): 発射の ハンドルが ぶるぶる 震える (スマホは ハンドルを 出さないので 本体の 振動)
+    let handleUntil = 0;
+    function handleBuru(now) {
+        const h = document.getElementById('handle');
+        if (h) {
+            h.classList.remove('fx-buru');
+            void h.offsetWidth;
+            h.classList.add('fx-buru');
+        }
+        handleUntil = now + CONFIG.show.handleBuru.time;
+        if (navigator.vibrate && Customize.get('vibrate') === 'on') {
+            try { navigator.vibrate([40, 20, 40, 20, 40, 20, 40, 20, 120]); } catch (e) { /* 振動できない環境 */ }
+        }
     }
     // レバブル: レバーが ぶるぶる 震える (筐体の レバー・スマホは 台の ボタン・本体の 振動)
     let buruUntil = 0;
@@ -75,6 +93,11 @@ const MachineButton = (() => {
     function pulled(now) { pullDrag = 0; pulledAt = now; }
 
     function update(now) {
+        if (handleUntil && now >= handleUntil) {
+            const h = document.getElementById('handle');
+            if (h) h.classList.remove('fx-buru');
+            handleUntil = 0;
+        }
         pullShown = pullDrag;
         if (!pullDrag && pulledAt !== null) {
             const d = now - pulledAt;
@@ -93,7 +116,7 @@ const MachineButton = (() => {
     }
     // いまの 光り方 (筐体の PUSH が 使う)
     const state = () => ({ kind: lit, lit: Boolean(lit), push: Boolean(el && el.classList.contains('push')), pressed: Boolean(el && el.classList.contains('pressed')),
-        lever: Boolean(el && el.classList.contains('lever')), buru: Boolean(buruUntil), pull: pullShown });
+        lever: Boolean(el && el.classList.contains('lever')), buru: Boolean(buruUntil), pull: pullShown, leverColor });
 
-    return { init, trigger, prompt, buru, pull, pulled, update, state, LONG_PRESS };
+    return { init, trigger, prompt, buru, handleBuru, pull, pulled, update, state, LONG_PRESS };
 })();

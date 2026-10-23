@@ -57,6 +57,8 @@ function features(config) {
     add('バトル', '盤面の役物が落ちる', p => p.gimmick);
     add('バトル', '追撃チャンス', p => p.pursuit);
     add('バトル', 'レバーを引け！', p => p.lever);
+    Object.entries(show.lever.colors).forEach(([id, c]) => add('バトル', `レバーを引け！（${c.name}）`, p => p.lever && p.leverColor === id));
+    add('バトル', 'もう一回 レバーを引け！（復活）', p => p.leverRevival);
     add('バトル', 'レバブル（リーチ）', p => p.leverBuru);
     if (show.iwakan) Object.entries(show.iwakan.kinds).forEach(([id, k]) => add('違和感', k.name, p => p.iwakan === id));
     add('プレミア', '全回転', p => p.type === 'zenkaiten');

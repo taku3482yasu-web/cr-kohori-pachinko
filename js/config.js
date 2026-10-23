@@ -516,7 +516,24 @@ const CONFIG = {
         //   change: はじめは「PUSH！」で、PUSH を 押すと (押さなくても changeAt 秒で)「レバーを引け！」に 変わる 割合 (ユーザー指定: 変化する 場合が ある。割合は Claude が 決めた)
         //   time: レバーの ときに 待つ 秒 (引く ぶん PUSH より 長く)
         //   rashHit (ユーザー指定: RASH 中に 引け！が 出たら 当たり確定): こおりRASH の 当たりの バトルで 出る 割合 (外れでは 出ない。割合は Claude が 決めた)
-        lever: { hit: 0.2, reliability: 0.85, change: 0.4, changeAt: 0.7, time: 3, rashHit: 0.15 },
+        //   colors (2026-10-24 ユーザー指定: 色の段階): 引け！の 色。hit / miss は 当たり・外れの ときの 重み (Claude が 決めた)。
+        //     出たら 当たる 割合は おおよそ 青 67%・赤 85%・金 95%・虹 100% (全体で reliability)。RASH 中は hit の 重み
+        //   revival (2026-10-24 ユーザー指定: 引いても 負けたあとの 復活): 通常時の 当たりの バトルの うち、引け！で 一度 負けて 見せ、
+        //     暗転 →「もう一回 引け！」→ 撃破 に なる 割合 (Claude が 決めた)。変動が 長く なるので 台の 乱数 (rng) で 決める
+        //   hold (2026-10-24 ユーザー指定: 保留を レバーで 変える): 保留変化の うち、変わる ときに「引け！」が 出て、引くと (待っても) 色が 変わる 割合
+        //   holdTime / againTime: 保留の 引け！・もう一回 引け！で 待つ 秒
+        lever: { hit: 0.2, reliability: 0.85, change: 0.4, changeAt: 0.7, time: 3, rashHit: 0.15,
+            colors: {
+                blue: { name: '青', color: '#4aa8ff', hit: 20, miss: 55 },
+                red: { name: '赤', color: '#ff3a4a', hit: 35, miss: 35 },
+                gold: { name: '金', color: '#ffd23a', hit: 35, miss: 10 },
+                rainbow: { name: '虹', color: 'rainbow', hit: 10, miss: 0 }
+            },
+            revival: 0.04, againTime: 3, timing: { dark: 1.0, flash: 1.8, kill: 2.4 },
+            hold: 0.35, holdTime: 3 },
+        // ハンドルブル (2026-10-24 ユーザー指定): 保留が 入ったときに ハンドルが ぶるぶる 震える (スマホは 本体の 振動)。
+        //   holdHit: 当たりで 出る 割合、holdReliability: 出たら 当たる 割合 (Claude が 決めた)。カスタマイズの「レバブル」と いっしょに あり / なし
+        handleBuru: { holdHit: 0.1, holdReliability: 0.7, time: 1.4 },
         // レバブル (2026-10-23 ユーザー指定。カスタマイズで あり / なし): レバーが ぶるぶる 震える (スマホは 台の ボタンが 震える)。
         //   hold: 保留が 入ったとき / spin: 変動中 (リーチに なったとき)。hit: 当たりで 出る 割合、reliability: 出たら 当たる 割合 (Claude が 決めた)
         leverBuru: { holdHit: 0.15, holdReliability: 0.6, spinHit: 0.3, spinReliability: 0.75, time: 1.4 },
@@ -847,6 +864,11 @@ const CONFIG = {
             { id: 'allAnomalies', name: '違和感マスター', desc: 'おにおにRASH の違和感を全種類見る', stat: 'seen:anomaly', value: 'all' },
             { id: 'allStages', name: '旅の記録', desc: 'ステージを全部めぐる (SE城前・満月も)', stat: 'seen:stage', value: 'all' },
             { id: 'rainbowTrophy', name: '虹のトロフィー', desc: '虹のトロフィー (設定6確定) を見る', stat: 'seen:trophy:6', value: 1 },
+            // レバーを引け！ (2026-10-24 ユーザー指定)
+            { id: 'leverRainbow', name: '虹の引け！', desc: '虹色の「レバーを引け！」を見る', stat: 'seen:lever:rainbow', value: 1 },
+            { id: 'leverRash', name: '引け！確定', desc: 'RASH 中に「レバーを引け！」(当たり確定) を見る', stat: 'seen:lever:rash', value: 1 },
+            { id: 'leverRevival', name: 'もう一回引け', desc: '引いても負けたあと、「もう一回 レバーを引け！」で復活する', stat: 'seen:lever:revival', value: 1 },
+            { id: 'allLever', name: 'レバーマスター', desc: '「レバーを引け！」を全種類見る', stat: 'seen:lever', value: 'all' },
             { id: 'spins3000', name: '打ち込み3000回転', desc: '合計 3000回転 まわす', stat: 'spins', value: 3000 }
         ]
     }

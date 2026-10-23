@@ -83,6 +83,11 @@ const Collection = (() => {
             { id: 'okapipo', name: 'おかピポRASH の一発告知', items: list(s.okapipoRash.notices) },
             { id: 'cutin', name: 'こおりカットイン', items: list(s.cutin.colors) },
             { id: 'summon', name: 'お仲間召喚 (こおりRASH)', items: list(s.summon.members, name => name) },
+            // レバーを引け！ (2026-10-24 ユーザー指定): 色・RASH 中の 確定・保留・もう一回 引け！ を 見た 回数と 当たった 回数
+            { id: 'lever', name: 'レバーを引け！', items: [
+                ...Object.entries(s.lever.colors).map(([id, c]) => ({ id, name: `${c.name}の 引け！` })),
+                { id: 'rash', name: 'RASH 中の 引け！ (確定)' }, { id: 'hold', name: '保留に 引け！' }, { id: 'revival', name: 'もう一回 引け！ (復活)' }],
+                battle: true, winLabel: '当たり' },
             { id: 'rashHold', name: 'RASH 中の保留', items: [{ id: 'black', name: '黒い保留' }, { id: 'spin', name: '回る保留' }] },
             { id: 'button', name: '台のボタン', items: [
                 { id: 'red', name: '赤く光る' }, { id: 'shake', name: '震える' }, { id: 'beep', name: '高い音' },
@@ -132,6 +137,11 @@ const Collection = (() => {
 
     function noteSpin(e, config) {
         const p = e.plan;
+        // レバーを引け！ (2026-10-24)
+        const lever = id => { see('lever', id); if (p.win) win('lever', id); };
+        if (p.lever) lever(p.fig === 2 ? 'rash' : p.leverColor || 'rainbow');
+        if (p.leverRevival) lever('revival');
+        if (e.result.leverHold) lever('hold');
         if (e.fig === 1) {
             see('hold', e.result.holdColor || 'white');
             if (p.zenkaiten) see('zenkaiten', p.zenkaiten);
@@ -231,6 +241,12 @@ const DataCounter = (() => {
     function note(c, e, ctx, config) {
         const active = c.history.find(h => h.active);
         if (e.type === 'spinStart' && e.fig === 1) c.spins = (c.spins || 0) + 1;
+        // レバーを引け！ を 見た 回数と 当たった 回数 (2026-10-24。前の 保存データには ない)
+        if (e.type === 'spinEnd' && e.plan.lever) {
+            c.lever = c.lever || { seen: 0, wins: 0 };
+            c.lever.seen++;
+            if (e.plan.win) c.lever.wins++;
+        }
         if (e.type === 'bonusStart' && (!e.rush || e.yutime)) {
             // 初当たり (遊タイムの当たりも。そのまま RASH)
             if (active) finish(active, ctx);

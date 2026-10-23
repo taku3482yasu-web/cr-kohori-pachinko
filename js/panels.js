@@ -58,7 +58,8 @@ const Panels = (() => {
             ['大当たり', fmt(c.firstHits)],
             ['RASH', fmt(c.rashes)],
             ['初当たり', c.firstHits ? `1/${Math.round(m.stats.spins1 / c.firstHits)}` : '-'],
-            ['差玉', signed(balls - c.invested)]
+            ['差玉', signed(balls - c.invested)],
+            ['レバーを引け！', c.lever && c.lever.seen ? `${fmt(c.lever.wins)} / ${fmt(c.lever.seen)} 当たり` : '-']   // 2026-10-24
         ];
         $('dc-stats').innerHTML = stats.map(([label, value]) =>
             `<div class="dc-item"><span class="dc-label">${label}</span><span class="dc-value">${value}</span></div>`).join('');
