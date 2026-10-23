@@ -57,11 +57,35 @@ const Lcd = (() => {
     let renchan = null;     // 「〇G連確定！」{ games, start }
     let holdFx = null;      // 保留変化 { result, current, start }
     let leverHold = null;   // 保留を レバーで 変える (2026-10-24): 引くのを 待って いる 保留 { result, current, start }
+    let holdStepFx = null;  // 保留が 1 段ずつ 上がる (2026-10-24) { result, current, steps, start, shown }
+    let bonusLever = null;  // 大当たり中の レバー (2026-10-24) { start, promote (昇格の 中身。ガセは null), bonus }
+    let bonusLabel = 0;     // いまの 大当たりの 出玉 (ガセの レバーを 出す 大当たりか 見る)
+    let drawNow = 0;        // いま 描いて いる 時刻 (保留の 段階の 色を 決める)
     let promoteFx = null;   // 図柄の昇格 { start, from, to, bonus }
     let machineRef = null;  // いまの台 (イベントのときに大当たりの中身を見るため)
 
+    // 大当たり中の レバー (2026-10-24 ユーザー指定): 「レバーを引け！ 上乗せチャンス」。引くか time 秒で 結果 (昇格 / 残念…)
+    function drawBonusLever(now) {
+        if (!bonusLever || now < bonusLever.start) return;
+        if (now - bonusLever.start >= CONFIG.show.bonusLever.time) { resolveBonusLever(now); return; }
+        band(56, 40, 0.6);
+        text('上乗せチャンス！', W / 2, 68, 14, '#ffe066', 'center', now);
+        text('レバーを引け！', W / 2, 88, 20, Math.floor(now * 6) % 2 ? '#ffd23a' : '#ff9a3a', 'center', now);
+    }
+    function resolveBonusLever(now) {
+        if (!bonusLever) return;
+        const { promote, bonus } = bonusLever;
+        bonusLever = null;
+        if (promote) promoteFx = { start: now, from: shown[0], to: promote.to, bonus };
+        else {
+            show('残念…', '#8aa4c0', now, 1.4);
+            Sound.play('lose');
+        }
+    }
+
     // 図柄の昇格: 偶数の図柄が大きく現れて震え、光って奇数の図柄に変わる →「昇格！」
     function drawPromote(now) {
+        drawBonusLever(now);
         if (!promoteFx) return;
         const t = now - promoteFx.start;
         if (t < 0) return;
@@ -91,7 +115,31 @@ const Lcd = (() => {
     }
 
     // 保留の 見せる 色 (レバーを 待って いる 保留は 白の まま)
-    const shownHold = h => leverHold && leverHold.result === h ? 'white' : h.shownColor || h.holdColor;
+    const shownHold = h => {
+        if (leverHold && leverHold.result === h) return h.question ? 'question' : 'white';
+        if (holdStepFx && holdStepFx.result === h) return holdStepFx.steps[Math.min(holdStepFx.steps.length - 1, stepIndex(drawNow))];
+        const c = h.shownColor || h.holdColor;
+        return c === 'white' && h.question && h.change ? 'question' : c;   // まだ 変わって いない「?」の 保留
+    };
+    // 保留が 1 段ずつ 上がる: 白 → 青 → … → 本当の 色 (order の 順。いちばん 上の 色だけ なら 1 段)
+    const stepIndex = now => holdStepFx ? Math.floor((now - holdStepFx.start) / CONFIG.show.holdStep.stepTime) : 0;
+    function startHoldStep(result, current, now) {
+        const order = CONFIG.show.holdColors.order;
+        const to = order.indexOf(result.holdColor);
+        const steps = to > 1 ? order.slice(1, to + 1) : [result.holdColor];
+        if (holdStepFx) holdStepFx.steps.length = 0;   // 前の 保留は すぐ 本当の 色に
+        holdStepFx = { result, current, steps, start: now, shown: -1 };
+    }
+    function drawHoldStep(now, m) {
+        if (!holdStepFx) return;
+        const k = stepIndex(now);
+        if (k >= holdStepFx.steps.length) { holdStepFx = null; return; }
+        if (k !== holdStepFx.shown) {
+            holdStepFx.shown = k;
+            holdFx = { result: holdStepFx.result, current: holdStepFx.current, start: now };
+            Sound.play(k === holdStepFx.steps.length - 1 ? 'success' : 'hold');
+        }
+    }
     // 保留の 位置 (変動中の 保留は 真ん中)。いなければ null
     function holdPos(m, result, current) {
         if (current) return { x: W / 2, y: 134 };
@@ -110,14 +158,14 @@ const Lcd = (() => {
     }
     function resolveLeverHold(now) {
         if (!leverHold) return;
-        holdFx = { result: leverHold.result, current: leverHold.current, start: now };
+        startHoldStep(leverHold.result, leverHold.current, now);
         leverHold = null;
-        Sound.play('success');
     }
 
     // 保留変化: 変わった保留のまわりに光の輪と「ピキーン！」
     function drawHoldFx(now, m) {
         drawLeverHold(now, m);
+        drawHoldStep(now, m);
         if (!holdFx) return;
         const t = now - holdFx.start;
         if (t > 1.2) { holdFx = null; return; }
@@ -175,7 +223,7 @@ const Lcd = (() => {
     }
 
     function reset() {
-        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = holdFx = leverHold = promoteFx = trophy = null;
+        flash = summary = aimNotice = bubble = spinView = stageFx = renchan = holdFx = leverHold = holdStepFx = bonusLever = promoteFx = trophy = null;
     }
 
     function show(text, color, now, seconds = 1.2) {
@@ -201,7 +249,11 @@ const Lcd = (() => {
     // ----- 台のイベント -----
     function event(e, now) {
         // ラウンド中の紹介のカードは、大当たりの始まりの表示 (opening) が終わってから
-        if (e.type === 'bonusStart') infoStart = now + CONFIG.machine.bonus.opening;
+        if (e.type === 'bonusStart') {
+            infoStart = now + CONFIG.machine.bonus.opening;
+            bonusLabel = e.label || 0;
+            bonusLever = null;
+        }
         if (e.type === 'hold' && e.result.extra) {
             // おまけの保留 (突破チャレンジのバトル中に入った): 入ったことを見せない・鳴らさない
         } else if (e.type === 'hold') {
@@ -213,17 +265,17 @@ const Lcd = (() => {
                 MachineButton.trigger(e.result.kai ? 'purple' : 'red', now, CONFIG.show.voiceButtonTime);
             } else if (e.result.button) MachineButton.trigger(e.result.button, now);
             // レバブル (保留が 入ったとき。カスタマイズで あり のとき)
-            if (e.result.leverBuru && Customize.get('leverBuru') !== 'off') MachineButton.buru(now);
-            if (e.result.handleBuru && Customize.get('leverBuru') !== 'off') MachineButton.handleBuru(now);   // ハンドルブル (2026-10-24)
+            const buruOn = Customize.get('leverBuru') !== 'off' && Customize.get('fx') !== 'quiet';   // 演出の 強さ 控えめ でも 出さない
+            if (e.result.leverBuru && buruOn) MachineButton.buru(now);
+            if (e.result.handleBuru && buruOn) MachineButton.handleBuru(now);   // ハンドルブル (2026-10-24)
         } else if (e.type === 'holdChange' && e.result.leverHold) {
             // 保留を レバーで 変える: 引くまで 白の まま (前の 保留が 待って いたら 先に 変える)
             resolveLeverHold(now);
             leverHold = { result: e.result, current: e.current, start: now };
             Sound.play('lever');
         } else if (e.type === 'holdChange') {
-            // 保留変化: ピキーン！
-            holdFx = { result: e.result, current: e.current, start: now };
-            Sound.play('success');
+            // 保留変化: ピキーン！ (2026-10-24: 1 段ずつ 上がる)
+            startHoldStep(e.result, e.current, now);
         } else if (e.type === 'trophy') {
             trophy = { level: e.level, start: now, until: Infinity };
             Sound.play(e.level === 6 ? 'win' : 'success');
@@ -296,9 +348,14 @@ const Lcd = (() => {
             }
             if (e.round === 1) anomalyTalk = null;
             // 昇格: 1ラウンド目の途中で図柄が現れて奇数に変わる
+            const bl = CONFIG.show.bonusLever;
             if (e.round === 1 && machineRef && machineRef.bonus && machineRef.bonus.promote) {
                 const pr = machineRef.bonus.promote;
-                promoteFx = { start: now + (pr.toV ? CONFIG.show.promote.vDelay : CONFIG.show.promote.delay), from: shown[0], to: pr.to, bonus: machineRef.bonus };
+                // 大当たり中の レバー (2026-10-24): 昇格を「レバーを引け！ 上乗せチャンス」で 見せる ことが ある (V への 昇格は そのまま)
+                if (!pr.toV && Math.random() < bl.promote) bonusLever = { start: now + bl.delay, promote: pr, bonus: machineRef.bonus };
+                else promoteFx = { start: now + (pr.toV ? CONFIG.show.promote.vDelay : CONFIG.show.promote.delay), from: shown[0], to: pr.to, bonus: machineRef.bonus };
+            } else if (e.round === 1 && machineRef && machineRef.bonus && bonusLabel < CONFIG.show.bigLabel && Math.random() < bl.gasa) {
+                bonusLever = { start: now + bl.delay, promote: null, bonus: machineRef.bonus };   // ガセ (昇格しない)
             }
             const f = CONFIG.show.furukawa;
             if (e.round === e.rounds && e.rounds > 1) bonusTalk('lastRound', now);
@@ -407,25 +464,60 @@ const Lcd = (() => {
     //   レバーを引け！ (2026-10-24 ユーザー指定) は レバーを 引いたときだけ。はじめ PUSH！ の ときは、ボタンを 押すと レバーを引け！ に 変わる
     function push(now, how = 'any') {
         if (!(spinView && currentPhase && currentPhase.pushing && spinView.pushedAt === null)) {
-            if (leverHold && how !== 'button') resolveLeverHold(now);   // 保留を レバーで 変える
+            if (how === 'button') return;
+            if (leverHold) resolveLeverHold(now);   // 保留を レバーで 変える
+            else if (bonusLever && now >= bonusLever.start) resolveBonusLever(now);   // 大当たり中の レバー
             return;
         }
         if (spinView.plan.lever && spinView.pullAt === null && how !== 'pull') { leverOn(now); return; }
         if (spinView.pullAt !== null && how === 'button') return;
         if (spinView.plan.lever && spinView.pullAt === null) spinView.pullAt = now;
+        // 長押し (ため) / 連打 (連撃) (2026-10-24 ユーザー指定)。もう一回 引け！ と レバーの ときは 使わない
+        const mode = pushModeOf(spinView.plan, currentPhase);
+        if (mode === 'long') {
+            if (spinView.holdStart == null) spinView.holdStart = now;
+            Sound.play('push');
+            return;
+        }
+        if (mode === 'mash') {
+            spinView.mash = (spinView.mash || 0) + 1;
+            spinView.mashAt = now;
+            Sound.play(spinView.mash % 2 ? 'attack' : 'hurt');
+            if (spinView.mash < CONFIG.show.pushStyle.mashCount) return;
+        }
         spinView.pushedAt = now;
-        Sound.play(spinView.pullAt !== null ? 'pull' : 'attack');
+        Sound.play(spinView.pullAt !== null || mode !== 'tap' ? 'pull' : 'attack');
     }
+    // ボタンを 離した (長押しの ため を 止める。たまった ぶんは 残る)
+    function release(now) {
+        if (!spinView || spinView.holdStart == null) return;
+        spinView.chargeBase = chargeOf(now);
+        spinView.holdStart = null;
+    }
+    // ため (0〜1)
+    function chargeOf(now) {
+        if (!spinView) return 0;
+        const run = spinView.holdStart != null ? (now - spinView.holdStart) / CONFIG.show.pushStyle.longTime : 0;
+        return Math.min(1, (spinView.chargeBase || 0) + run);
+    }
+    // この 場面の 押し方 (tap / long / mash)。レバーを引け！・もう一回 引け！ は null
+    const pushModeOf = (plan, phase) => !plan || plan.lever || !phase || phase.name !== 'battle' ? null : plan.pushMode || 'tap';
+    // 長押しの ため の 最中と、ためきって すぐ (押したままの 長押しを 早送りと まちがえない)
+    const busy = () => Boolean(currentPhase && currentPhase.pushing && spinView && pushModeOf(spinView.plan, currentPhase) === 'long'
+        && (spinView.pushedAt === null || drawNow - spinView.pushedAt < 1.5));
     // 「レバーを引け！」を 出す (PUSH！ から 変わるときは ガコッと 音を 鳴らして レバーを 震わせる)
     function leverOn(now) {
         spinView.pullAt = now;
         if (spinView.plan.leverChange) {
             Sound.play('lever');
-            MachineButton.buru(now);
+            if (Customize.get('fx') !== 'quiet') MachineButton.buru(now);
         }
     }
     // PUSH を 待つ 秒 (レバーを 引くときは 長く)
-    const pushTimeOf = plan => plan && plan.lever ? CONFIG.show.lever.time : CONFIG.show.pushTime;
+    const pushTimeOf = plan => plan && plan.lever ? CONFIG.show.lever.time
+        : plan && (plan.pushMode === 'long' || plan.pushMode === 'mash') ? CONFIG.show.pushStyle.time : CONFIG.show.pushTime;
+    const pushColorOf = plan => (plan && plan.pushColor) || 'white';
+    const pushText = id => (CONFIG.show.pushStyle.colors[id] || {}).color || '#ffe066';
     // 引け！の 色 (液晶の 文字・筐体の レバー・台の ボタン)。もう一回 引け！ は 虹
     const leverColorOf = (plan, phase) => phase && phase.name === 'rvagain' ? 'rainbow' : (plan && plan.leverColor) || 'rainbow';
     const leverText = id => (CONFIG.show.lever.colors[id] || {}).color || 'rainbow';
@@ -949,6 +1041,50 @@ const Lcd = (() => {
         ctx.fillRect(x + 1, y + 1, Math.round((w - 2) * Math.max(0, ratio)), 3);
     }
 
+    // PUSH の 案内 (2026-10-24): 押し方 (PUSH！ / 長押し！ / 連打！) と 色 (白 < 青 < 赤 < 金 < 虹)。長押しは ため の ゲージ、連打は 〇連撃 と 残り
+    function drawPushPrompt(now, plan, phase) {
+        const color = pushText(pushColorOf(plan));
+        const blink = Math.floor(now * 8) % 2;
+        const mode = pushModeOf(plan, phase) || 'tap';
+        if (mode === 'tap') {
+            text('PUSH！', W / 2, 79, 22, color === '#ffffff' ? (blink ? '#ffe066' : '#ff3a3a') : color, 'center', now);
+            return;
+        }
+        if (mode === 'long') {
+            const c = chargeOf(now);
+            text(spinView.holdStart != null ? 'ためろ！！' : '長押し！', W / 2, 75, 18, color, 'center', now);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(W / 2 - 50, 84, 100, 6);
+            ctx.fillStyle = color === 'rainbow' ? rainbow(now) : color;
+            ctx.fillRect(W / 2 - 49, 85, Math.round(98 * c), 4);
+            return;
+        }
+        const n = spinView.mash || 0, need = CONFIG.show.pushStyle.mashCount;
+        text(n ? `${n}連撃！` : '連打！', W / 2, 75, Math.round(18 + Math.max(0, 0.12 - (now - (spinView.mashAt || -9))) * 40), color, 'center', now);
+        for (let i = 0; i < need; i++) {
+            ctx.fillStyle = i < n ? (color === 'rainbow' ? rainbow(now, i * 30) : color) : 'rgba(255,255,255,0.25)';
+            ctx.fillRect(W / 2 - need * 5 + i * 10 + 1, 85, 8, 4);
+        }
+    }
+    // ため の 光: こおりくんの まわりに 輪と 光の 粒が 集まる (たまるほど 大きく 明るく)
+    function drawCharge(now, x, y, k, colorId) {
+        const c = pushText(colorId);
+        const col = a => c === 'rainbow' ? `hsla(${(now * 300) % 360}, 95%, 65%, ${a})` : c === '#ffffff' ? `rgba(160, 220, 255, ${a})` : hexA(c, a);
+        ctx.save();
+        ctx.fillStyle = col(0.18 + k * 0.3);
+        ctx.beginPath();
+        ctx.arc(x, y, 10 + k * 16 + Math.sin(now * 20) * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = col(0.9);
+        for (let i = 0; i < 8; i++) {
+            const a = i / 8 * Math.PI * 2 + now * 3;
+            const r = (1 - ((now * 2 + i / 8) % 1)) * 34;
+            ctx.fillRect(Math.round(x + Math.cos(a) * r), Math.round(y + Math.sin(a) * r), 2, 2);
+        }
+        ctx.restore();
+    }
+    const hexA = (hex, a) => `rgba(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}, ${a})`;
+
     // もう一回 引け！ (引いても 負けたあとの 復活。2026-10-24): 暗い 中に「まだだ…！」と 虹の「もう一回 レバーを引け！」。引いたら 白く 光る
     function drawLeverAgain(now, plan, phase) {
         ctx.fillStyle = '#000000';
@@ -1053,6 +1189,20 @@ const Lcd = (() => {
             if (l >= SUMMON_STRIKE) once('summonHit', 'attack');
         }
 
+        // 長押しの ため / 連打の 連撃 (2026-10-24 ユーザー指定)
+        const pmode = phase.name === 'battle' && phase.pushing && spinView ? pushModeOf(plan, phase) : null;
+        let charge = 0;
+        if (pmode === 'long') {
+            charge = spinView.pushedAt !== null ? 1 : chargeOf(now);
+            kx += Math.sin(now * 70) * charge * 1.5;   // ためて ふるえる
+        }
+        if (pmode === 'mash' && spinView.mash) {
+            const since = now - (spinView.mashAt || -9);
+            if (since < 0.16) { kx += 60 * Math.sin(since / 0.16 * Math.PI); enemyHurt = true; }
+            enemyHp = Math.max(0.1, enemyHp - spinView.mash * 0.025);
+        }
+        if (charge > 0) drawCharge(now, kx + 16, ground - 16, charge, pushColorOf(plan));
+
         const speaking = battleSpeaker(plan, phase);   // しゃべっている 人は 少し 跳ねる
         if (enemyAlpha > 0 && b.team) drawTeam(b.team, ex, ground, frame, enemyHurt, enemyAlpha, plan.kai, speaking ? speaking.idx : -1);   // ライバルチーム (P3。怪は 確定)
         else if (enemyAlpha > 0) Characters.drawEnemy(ctx, plan.enemy, ex, ground, { scale, frame, hurt: enemyHurt, alpha: enemyAlpha, kai: plan.kai });
@@ -1106,10 +1256,15 @@ const Lcd = (() => {
                         ctx.fillRect(0, 0, W, H);
                     }
                     text('レバーを引け！', W / 2, 79, Math.round(18 + Math.max(0, 0.25 - since) * 24), leverText(spinView.plan.leverColor), 'center', now);
-                } else text('PUSH！', W / 2, 79, 22, Math.floor(now * 8) % 2 ? '#ffe066' : '#ff3a3a');
+                } else drawPushPrompt(now, plan, phase);   // PUSH！ / 長押し (ため) / 連打 (連撃)。色の 段階 (2026-10-24)
             } else {
-                ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, 0.8 - (now - spinView.pushedAt) * 2)})`;
+                const mode = pushModeOf(plan, phase);
+                const since = now - spinView.pushedAt;
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, 0.8 - since * 2)})`;
                 ctx.fillRect(0, 0, W, H);
+                // とどめの 文字: フルチャージ！ / 〇連撃！
+                if (mode === 'long' && since < 0.9) text('フルチャージ！！', W / 2, 79, 22, pushText(pushColorOf(plan)), 'center', now);
+                if (mode === 'mash' && since < 0.9) text(`${spinView.mash}連撃！！`, W / 2, 79, 24, pushText(pushColorOf(plan)), 'center', now);
             }
         }
         if (phase.name === 'pursuit') {
@@ -1409,6 +1564,16 @@ const Lcd = (() => {
             ctx.restore();
             return;
         }
+        if (color === 'question') {
+            // 「?」の 保留 (2026-10-24): 白い 四角に 黒い「?」が ゆらゆら
+            const s = size;
+            ctx.fillStyle = '#1b3a6b';
+            ctx.fillRect(x - s / 2, y - s / 2, s, s);
+            ctx.fillStyle = '#e8f6ff';
+            ctx.fillRect(x - s / 2 + 1, y - s / 2 + 1, s - 2, s - 2);
+            text('?', x, y + s * 0.35 + Math.sin(now * 6 + x) * 0.6, Math.round(s * 0.95), '#10162a');
+            return;
+        }
         const fill = color === 'rainbow' ? rainbow(now, x * 3) : color === 'black' ? '#141418' : CONFIG.show.holdColors.colors[color] || '#e8f6ff';
         const s = size;
         if (active) {
@@ -1614,7 +1779,9 @@ const Lcd = (() => {
     const ZOOM_PHASES = ['battle', 'pursuit', 'result', 'zenkaiten', 'zend', 'cfinal', 'cresult', 'klive', 'kend'];
     let zoomNow = 0, zoomAt = 0;
     function zoom(now) {
-        const on = Customize.get('lcdZoom') !== 'off' && !Story.active() && currentPhase && ZOOM_PHASES.includes(currentPhase.name);
+        // 演出の 強さ (2026-10-24): 控えめ は 出さない、派手 は 可動液晶の 設定に かかわらず 出す
+        const fx = Customize.get('fx');
+        const on = fx !== 'quiet' && (fx === 'flashy' || Customize.get('lcdZoom') !== 'off') && !Story.active() && currentPhase && ZOOM_PHASES.includes(currentPhase.name);
         const dt = Math.min(0.1, Math.max(0, now - zoomAt));
         zoomAt = now;
         const want = on ? 1 : 0;
@@ -1626,7 +1793,15 @@ const Lcd = (() => {
     //   js/cabinet.js に わたす { kind, color, speed }。kind: hit 虹色 (当たりが 見えた 瞬間から) / color その色で 流れる /
     //   strobe 白く 点滅 (PUSH・NEXT) / dim 暗く (外れが 決まった) / glitch ちらつく (違和感)。null は ふだんの 光り方
     let lightSpin = null;
+    // 演出の 強さ (2026-10-24): 控えめ は 当たりの 虹色 だけ、派手 は 速く 流す
     function light() {
+        const l = lightRaw();
+        const fx = Customize.get('fx');
+        if (fx === 'quiet') return l && l.kind === 'hit' ? l : null;
+        if (fx === 'flashy' && l && l.speed) return { ...l, speed: l.speed * 1.6 };
+        return l;
+    }
+    function lightRaw() {
         if (Story.active() || !lightSpin || !currentPhase) return null;
         const { plan, elapsed } = lightSpin;
         const ph = currentPhase, n = ph.name;
@@ -1690,6 +1865,7 @@ const Lcd = (() => {
     }
 
     function draw(now, m) {
+        drawNow = now;
         ctx.setTransform(RES, 0, 0, RES, 0, 0);
         ctx.imageSmoothingEnabled = false;
         const plan = m && m.spin && spinView ? spinView.plan : null;
@@ -1699,8 +1875,17 @@ const Lcd = (() => {
         // PUSH を 待つ 場面が 変わったら、押した・引いたを 数え直す (バトルの PUSH と もう一回 引け！)
         if (phase && phase.pushing && spinView && spinView.pushPhase !== phase.index) {
             if (spinView.pushPhase != null) spinView.pushedAt = spinView.pullAt = null;
+            spinView.holdStart = null;
+            spinView.chargeBase = 0;
+            spinView.mash = 0;
             spinView.pushPhase = phase.index;
             if (phase.name === 'rvagain') spinView.pullAt = now;
+        }
+        // 長押しの ため が いっぱいに なったら 一撃 (2026-10-24)
+        if (phase && phase.pushing && spinView && spinView.pushedAt === null && pushModeOf(plan, phase) === 'long' && chargeOf(now) >= 1) {
+            spinView.pushedAt = now;
+            spinView.holdStart = null;
+            Sound.play('pull');
         }
         // レバーを引け！: はじめから 出るか、PUSH！ から changeAt 秒で 変わる (その前に ボタンを 押しても 変わる。push)
         if (plan && plan.lever && phase && phase.name === 'battle' && phase.pushing && spinView.pushedAt === null && spinView.pullAt === null
@@ -1722,13 +1907,17 @@ const Lcd = (() => {
 
         // バトル中は PUSH の案内を台のボタンにも出す (レバーの ときは「レバーを引け！」。筐体の レバーが 光る)
         //   保留を レバーで 変える ときも (2026-10-24)
+        //   大当たり中の レバーも (2026-10-24)。PUSH の 色と 押し方 (長押し・連打) も 台の ボタンに 出す
         const battleLever = Boolean(plan && plan.lever && phase && phase.pushing && spinView.pushedAt === null && spinView.pullAt !== null);
-        MachineButton.prompt(Boolean(phase && phase.pushing && spinView.pushedAt === null) || Boolean(leverHold), battleLever || Boolean(leverHold),
-            battleLever ? leverColorOf(plan, phase) : 'red');
+        const bonusLeverOn = Boolean(bonusLever && now >= bonusLever.start);
+        const pushing = Boolean(phase && phase.pushing && spinView.pushedAt === null);
+        MachineButton.prompt(pushing || Boolean(leverHold) || bonusLeverOn, battleLever || Boolean(leverHold) || bonusLeverOn,
+            battleLever ? leverColorOf(plan, phase) : bonusLeverOn ? 'gold' : 'red',
+            pushing && !battleLever && !leverHold ? { color: pushColorOf(plan), mode: pushModeOf(plan, phase) || 'tap', charge: chargeOf(now) } : null);
         // レバブル (変動中: リーチに なったとき 1 回)
         if (plan && plan.leverBuru && phase && phase.name === 'reach' && !spinView.buru) {
             spinView.buru = true;
-            if (Customize.get('leverBuru') !== 'off') MachineButton.buru(now);
+            if (Customize.get('leverBuru') !== 'off' && Customize.get('fx') !== 'quiet') MachineButton.buru(now);
         }
 
         if (m.bonus) {
@@ -1859,7 +2048,7 @@ const Lcd = (() => {
         return canvas;
     }
 
-    return { init, reset, draw, event, aim, show, push, setChoosing, gimmick, zoom, light, W, H,
+    return { init, reset, draw, event, aim, show, push, release, busy, setChoosing, gimmick, zoom, light, W, H,
         __phase: () => (currentPhase ? currentPhase.name : null),   // 確認用 (いまの 場面の 名前)
         playStory: (name, now) => Story.play(name, now), skipStory: () => Story.skip(),
         storyPlaying: () => Story.active() ? Story.name : null };

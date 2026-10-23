@@ -531,6 +531,28 @@ const CONFIG = {
             },
             revival: 0.04, againTime: 3, timing: { dark: 1.0, flash: 1.8, kill: 2.4 },
             hold: 0.35, holdTime: 3 },
+        // PUSH の 押し方と 色 (2026-10-24 ユーザー指定: 長押しは ため演出、連打は 連撃演出。色の 段階も)。重みは Claude が 決めた
+        //   modes: tap 1 回 / long 長押し (ためて フルチャージで 一撃) / mash 連打 (mashCount 回で 連撃の とどめ)。hit / miss は 当たり・外れの 重み
+        //   colors: 白 < 青 < 赤 < 金 < 虹 (虹は 確定)。time: 長押し・連打の ときに 待つ 秒 / longTime: フルチャージまでの 秒
+        //   レバーを引け！の ときは 使わない。通常時の バトルと こおりRASH の バトルの 最後の PUSH
+        pushStyle: {
+            modes: { tap: { name: 'PUSH', hit: 50, miss: 70 }, long: { name: '長押し', hit: 25, miss: 15 }, mash: { name: '連打', hit: 25, miss: 15 } },
+            colors: {
+                white: { name: '白', color: '#ffffff', hit: 25, miss: 60 },
+                blue: { name: '青', color: '#4aa8ff', hit: 25, miss: 28 },
+                red: { name: '赤', color: '#ff3a4a', hit: 25, miss: 10 },
+                gold: { name: '金', color: '#ffd23a', hit: 17, miss: 2 },
+                rainbow: { name: '虹', color: 'rainbow', hit: 8, miss: 0 }
+            },
+            time: 3.5, longTime: 1.2, mashCount: 10
+        },
+        // 保留の「?」と 段階の 変化 (2026-10-24 ユーザー指定): 保留変化の ときに 白 → 青 → … と 1 段ずつ 上がって いく (stepTime 秒ごと)。
+        //   question: 保留変化する 保留の うち、変わるまで「?」で 出す 割合 (Claude が 決めた)。見た目だけ
+        holdStep: { question: 0.3, stepTime: 0.45 },
+        // 大当たり中の レバー (2026-10-24 ユーザー指定: 上乗せ チャンス): 1 ラウンド目に「レバーを引け！ 上乗せチャンス」。
+        //   引くと 昇格 (上乗せ)、外れ (ガセ) は「残念…」。出玉は 変えない (前から 決まって いる 昇格を 見せる だけ)。
+        //   promote: 昇格する 大当たりで 出す 割合 / gasa: 昇格しない 小さい 大当たりで 出す 割合 / delay: ラウンドが 始まって から 出す 秒 / time: 待つ 秒 (Claude が 決めた)
+        bonusLever: { promote: 0.5, gasa: 0.12, delay: 1.2, time: 3 },
         // ハンドルブル (2026-10-24 ユーザー指定): 保留が 入ったときに ハンドルが ぶるぶる 震える (スマホは 本体の 振動)。
         //   holdHit: 当たりで 出る 割合、holdReliability: 出たら 当たる 割合 (Claude が 決めた)。カスタマイズの「レバブル」と いっしょに あり / なし
         handleBuru: { holdHit: 0.1, holdReliability: 0.7, time: 1.4 },

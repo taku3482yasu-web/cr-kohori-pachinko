@@ -17,9 +17,11 @@ const MachineButton = (() => {
     // 長押し (LONG_PRESS 秒) で onLong (演出の早送り。ユーザー指定 2026-10-20)
     const LONG_PRESS = 0.6;
     let longTimer = null;
-    function init(element, onPress, onLong = null) {
+    //   onRelease: 離したとき (長押しの ため を 止める。2026-10-24)
+    function init(element, onPress, onLong = null, onRelease = null) {
         el = element;
         const release = () => {
+            if (el.classList.contains('pressed') && onRelease) onRelease();
             el.classList.remove('pressed');
             clearTimeout(longTimer);
             longTimer = null;
@@ -36,6 +38,7 @@ const MachineButton = (() => {
 
     // time: 光らせて おく 秒 (省略すると config.show.button.time)
     function trigger(kind, now, time = CONFIG.show.button.time) {
+        if (Customize.get('fx') === 'quiet' && kind === 'shake') kind = 'red';   // 演出の 強さ 控えめ: 震え・振動は 出さない (2026-10-24)
         if (!el) return;
         el.classList.remove('fx-red', 'fx-shake', 'fx-beep', 'fx-rainbow', 'fx-purple');
         void el.offsetWidth;   // アニメーションを最初からやり直す
@@ -52,13 +55,18 @@ const MachineButton = (() => {
 
     // lever: ボタンの かわりに「レバーを引け！」(2026-10-24 ユーザー指定。筐体の レバーを 引く。レバーが 出ていない 画面では 台の ボタン)
     //   color: 引け！の 色 (blue / red / gold / rainbow。2026-10-24 ユーザー指定: 色の 段階)
-    let leverColor = null;
-    function prompt(on, lever = false, color = 'rainbow') {
+    //   style: PUSH の 色と 押し方 { color, mode: tap / long / mash, charge 0〜1 } (2026-10-24。レバーの ときは null)
+    let leverColor = null, pushStyle = null;
+    function prompt(on, lever = false, color = 'rainbow', style = null) {
         if (!el) return;
         el.classList.toggle('push', on);
         el.classList.toggle('lever', on && lever);
         leverColor = on && lever ? color : null;
         for (const c of ['blue', 'red', 'gold', 'rainbow']) el.classList.toggle('lever-' + c, leverColor === c);
+        pushStyle = on && !lever ? style : null;
+        for (const c of ['blue', 'red', 'gold', 'rainbow']) el.classList.toggle('pc-' + c, Boolean(pushStyle && pushStyle.color === c));
+        for (const md of ['long', 'mash']) el.classList.toggle('pm-' + md, Boolean(pushStyle && pushStyle.mode === md));
+        el.style.setProperty('--charge', pushStyle ? String(pushStyle.charge || 0) : '0');
     }
     // ハンドルブル (2026-10-24): 発射の ハンドルが ぶるぶる 震える (スマホは ハンドルを 出さないので 本体の 振動)
     let handleUntil = 0;
@@ -116,7 +124,7 @@ const MachineButton = (() => {
     }
     // いまの 光り方 (筐体の PUSH が 使う)
     const state = () => ({ kind: lit, lit: Boolean(lit), push: Boolean(el && el.classList.contains('push')), pressed: Boolean(el && el.classList.contains('pressed')),
-        lever: Boolean(el && el.classList.contains('lever')), buru: Boolean(buruUntil), pull: pullShown, leverColor });
+        lever: Boolean(el && el.classList.contains('lever')), buru: Boolean(buruUntil), pull: pullShown, leverColor, pushStyle });
 
     return { init, trigger, prompt, buru, handleBuru, pull, pulled, update, state, LONG_PRESS };
 })();

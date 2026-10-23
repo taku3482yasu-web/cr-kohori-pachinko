@@ -268,6 +268,15 @@ button:hover { border-color: var(--accent); }
 .koori-button.lever-gold { animation: none; background: linear-gradient(135deg, #fff6d0 0%, #ffd23a 45%, #b07a00 100%); box-shadow: 0 4px 0 #5a3a00, 0 0 30px 10px rgba(255, 210, 58, 0.95); }
 .koori-button.lever-blue .kb-label::after { color: #8ac8ff; }
 .koori-button.lever-red .kb-label::after { color: #ff8a8a; }
+/* PUSH の 色の 段階と 押し方 (2026-10-24): 色は 台の ボタンの 光、長押しは ため の 輪、連打は 文字 */
+.koori-button.push.pc-blue { animation: none; background: linear-gradient(135deg, #e0f0ff 0%, #4aa8ff 45%, #1050c0 100%); box-shadow: 0 4px 0 #0a2a6a, 0 0 22px 6px rgba(74, 168, 255, 0.9); }
+.koori-button.push.pc-red { animation: none; background: linear-gradient(135deg, #ffe0e0 0%, #ff6a6a 45%, #d01020 100%); box-shadow: 0 4px 0 #6a0a10, 0 0 22px 6px rgba(255, 40, 60, 0.9); }
+.koori-button.push.pc-gold { animation: none; background: linear-gradient(135deg, #fff6d0 0%, #ffd23a 45%, #b07a00 100%); box-shadow: 0 4px 0 #5a3a00, 0 0 26px 8px rgba(255, 210, 58, 0.95); }
+.koori-button.push.pc-rainbow { animation: rainbow-glow 0.5s linear infinite; background: linear-gradient(135deg, #ff6a6a, #ffe066, #6aff8a, #6ab8ff, #c06aff); }
+.koori-button.push.pm-long .kb-label, .koori-button.push.pm-mash .kb-label { font-size: 0; }
+.koori-button.push.pm-long .kb-label::after { content: '長押し'; font-size: 11px; color: #ffe066; }
+.koori-button.push.pm-mash .kb-label::after { content: '連打'; font-size: 11px; color: #ffe066; }
+.koori-button.push.pm-long { outline: 3px solid rgba(255, 230, 102, calc(0.25 + var(--charge, 0) * 0.75)); outline-offset: calc(2px + var(--charge, 0) * 8px); }
 /* ハンドルブル (2026-10-24): ハンドルが 小さく 速く ぶるぶる */
 .handle.fx-buru { animation: shake 0.05s linear infinite; }
 @keyframes shake { 0% { transform: translate(-3px, 1px) rotate(-3deg); } 50% { transform: translate(3px, -1px) rotate(3deg); } 100% { transform: translate(-3px, 1px) rotate(-3deg); } }

@@ -398,7 +398,7 @@
         Sound.unlock();
         Bgm.init(Sound.context);
     }));
-    MachineButton.init($('koori-button'), pressButton, skipShow);
+    MachineButton.init($('koori-button'), pressButton, skipShow, () => Lcd.release(time));   // 離したとき: 長押しの ため を 止める (2026-10-24)
     const updateSoundButton = () => { $('sound-button').textContent = `音: ${Sound.muted ? 'OFF' : 'ON'}`; };
     $('sound-button').addEventListener('click', () => { Sound.setMuted(!Sound.muted); updateSoundButton(); });
     updateSoundButton();
@@ -416,7 +416,7 @@
     });
     document.addEventListener('keyup', e => {
         if (e.code === 'Space') game.firing = false;
-        if (e.code === 'KeyB') keyBDown = null;
+        if (e.code === 'KeyB') { keyBDown = null; Lcd.release(time); }
     });
     let keyBDown = null;   // B キーを押した時刻 (長押しの早送り用)
 
@@ -424,7 +424,7 @@
     // カスタマイズの「早送り: OFF」では飛ばさない。当たりやすさは変わらない
     function skipShow() {
         const m = game.machine;
-        if (game.paused || Customize.get('skip') === 'off' || !m.spin || m.bonus) return;
+        if (game.paused || Customize.get('skip') === 'off' || !m.spin || m.bonus || Lcd.busy()) return;   // 長押しの ため の ときは 早送りしない
         const to = Scenario.skipPoint(m.spin.plan);
         if (m.spin.elapsed >= to) return;
         m.spin.elapsed = to;

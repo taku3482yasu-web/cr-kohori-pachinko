@@ -105,7 +105,9 @@ const Scenario = (() => {
         }
         // 保留を レバーで 変える (2026-10-24): 変わる ときに「レバーを引け！」(見た目だけ。fxRandom)
         const leverHold = Boolean(change && show.lever && fxRandom() < show.lever.hold);
-        return { holdColor, shownColor, change, changed, button, hiStage, voice, leverBuru, handleBuru, leverHold };
+        // 保留の「?」(2026-10-24): 変わるまで「?」で 出す (見た目だけ)
+        const question = Boolean(change && show.holdStep && fxRandom() < show.holdStep.question);
+        return { holdColor, shownColor, change, changed, button, hiStage, voice, leverBuru, handleBuru, leverHold, question };
     }
 
     // ----- 通常時のステージ (背景) -----
@@ -370,6 +372,7 @@ const Scenario = (() => {
                     p.leverChange = result.forceLeverChange ?? fxRandom() < lvr.change;   // はじめは PUSH！ で、とちゅうから レバーを引け！ に 変わる
                     p.leverColor = result.forceLeverColor || weighted(leverWeights(lvr, hit), fxRandom);   // 色の 段階 (青 < 赤 < 金 < 虹)
                 }
+                if (!p.lever) Object.assign(p, pushStyle(show, hit, result));   // PUSH の 押し方と 色 (2026-10-24)
                 if (leverRevival) {
                     // 決着で 一度 負けて 見せ → 暗転 →「もう一回 引け！」(rvagain) → 虹色の フラッシュ → 撃破
                     const rt = lvr.timing;
@@ -413,6 +416,14 @@ const Scenario = (() => {
         // 通常時だけ、ふるカワが変動の始まりにしゃべる
         if (!spin.rush) p.talk = talk(show, p, spin, rng);
         return p;
+    }
+
+    // PUSH の 押し方 (tap / long ため / mash 連撃) と 色 (白 < 青 < 赤 < 金 < 虹)。見た目だけなので fxRandom
+    function pushStyle(show, hit, result) {
+        const ps = show.pushStyle;
+        if (!ps) return {};
+        const w = obj => Object.fromEntries(Object.entries(obj).map(([id, x]) => [id, hit ? x.hit : x.miss]));
+        return { pushMode: result.forcePushMode || weighted(w(ps.modes), fxRandom), pushColor: result.forcePushColor || weighted(w(ps.colors), fxRandom) };
     }
 
     // レバーを引け！の 色の 重み (当たり / 外れ)
@@ -657,7 +668,7 @@ const Scenario = (() => {
                     p.lever = true;
                     p.leverChange = result.forceLeverChange ?? fxRandom() < lvr.change;
                     p.leverColor = result.forceLeverColor || weighted(leverWeights(lvr, true), fxRandom);
-                }
+                } else Object.assign(p, pushStyle(show, win, result));   // PUSH の 押し方と 色 (2026-10-24)
                 // お仲間の応援 (0〜3人): 人数が多いほど勝ちやすい
                 p.cheer = Number(weighted(show.cheer[win ? 'win' : 'miss'], rng));
                 // お仲間召喚: 当たりのバトルだけ。仲間が現れて撃破 (確定の相手・復活では起きない)

@@ -59,6 +59,8 @@ function features(config) {
     add('バトル', 'レバーを引け！', p => p.lever);
     Object.entries(show.lever.colors).forEach(([id, c]) => add('バトル', `レバーを引け！（${c.name}）`, p => p.lever && p.leverColor === id));
     add('バトル', 'もう一回 レバーを引け！（復活）', p => p.leverRevival);
+    Object.entries(show.pushStyle.modes).forEach(([id, md]) => add('PUSH', `押し方 ${md.name}${id === 'long' ? '（ため）' : id === 'mash' ? '（連撃）' : ''}`, p => p.pushMode === id));
+    Object.entries(show.pushStyle.colors).forEach(([id, c]) => add('PUSH', `PUSH の色 ${c.name}`, p => p.pushColor === id));
     add('バトル', 'レバブル（リーチ）', p => p.leverBuru);
     if (show.iwakan) Object.entries(show.iwakan.kinds).forEach(([id, k]) => add('違和感', k.name, p => p.iwakan === id));
     add('プレミア', '全回転', p => p.type === 'zenkaiten');

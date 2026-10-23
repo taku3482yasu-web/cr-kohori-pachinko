@@ -507,9 +507,17 @@ const Cabinet = (() => {
             face = rad(cx, capY, capR * 0.1, capR, [[0, '#ffffff'], [0.5, c], [1, c]]);
             g.shadowColor = c;
             g.shadowBlur = 22;
+        } else if (bs.push && bs.pushStyle && bs.pushStyle.color !== 'white') {
+            // PUSH の 色の 段階 (2026-10-24): 青 < 赤 < 金 < 虹。長押しは ため で 明るく なる
+            const PUSH_HUE = { blue: 212, red: 355, gold: 46 };
+            const h = PUSH_HUE[bs.pushStyle.color];
+            const c = h == null ? hsl(t * 400, 95, 65) : hsl(h, 95, 60 + 10 * Math.abs(Math.sin(t * 6)));
+            face = rad(cx, capY, capR * 0.1, capR, [[0, '#ffffff'], [0.5, c], [1, c]]);
+            g.shadowColor = c;
+            g.shadowBlur = 14 + 12 * Math.abs(Math.sin(t * 6)) + 20 * (bs.pushStyle.charge || 0);
         } else if (bs.push) {
             g.shadowColor = '#ffe066';
-            g.shadowBlur = 10 + 12 * Math.abs(Math.sin(t * 6));
+            g.shadowBlur = 10 + 12 * Math.abs(Math.sin(t * 6)) + 20 * ((bs.pushStyle && bs.pushStyle.charge) || 0);
         }
         g.beginPath();
         g.ellipse(cx, capY, capR, capR * 0.55, 0, 0, Math.PI * 2);

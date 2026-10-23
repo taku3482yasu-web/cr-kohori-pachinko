@@ -453,7 +453,9 @@ test('レバー・レバブル (2026-10-24): レバーを引け！が出たら 8
             if (e.type === 'hold' && e.fig === 1 && !e.result.extra && e.result.leverBuru) { hold[0]++; if (e.result.kind === 'hit') hold[1]++; }
         }
         assert(lever[0] > 30, `${specId} でレバーが少ない (${lever[0]})`);
-        assertBetween(lever[1] / lever[0], show.lever.reliability - 0.07, show.lever.reliability + 0.07, `${specId} のレバーを引け！が出たら当たる割合`);
+        // 許容幅は ±7% か、標準誤差の 3.5 倍の 大きいほう (見た目の 演出は fxRandom なので 毎回 少し 変わる。1/159 は 数が 少ない)
+        const lr = show.lever.reliability, ltol = Math.max(0.07, 3.5 * Math.sqrt(lr * (1 - lr) / lever[0]));
+        assertBetween(lever[1] / lever[0], lr - ltol, lr + ltol, `${specId} のレバーを引け！が出たら当たる割合`);
         assert(rash[0] > 0 && rash[1] === rash[0], `${specId} の RASH 中のレバーを引け！ (${rash[1]} / ${rash[0]}。出たら確定・復活では出ないはず)`);
         assertBetween(change[1] / change[0], show.lever.change - 0.12, show.lever.change + 0.12, `${specId} の PUSH！ からレバーを引け！に変わる割合`);
         assert(spin[0] > 30 && hold[0] > 30, `${specId} でレバブルが少ない (変動中 ${spin[0]} / 保留 ${hold[0]})`);
@@ -485,12 +487,38 @@ test('レバーを引け！の色・保留・復活・ハンドルブル (2026-1
         }
         const rate = id => colors[id] ? colors[id][1] / colors[id][0] : null;
         assert(Object.keys(colors).every(id => id in show.lever.colors), `${specId} の引け！の色 (${Object.keys(colors)})`);
-        assert(rate('blue') < rate('red') && rate('red') < rate('gold'), `${specId} の引け！の色の順 (青 ${rate('blue')} / 赤 ${rate('red')} / 金 ${rate('gold')})`);
+        // 色ごとの 数が 少ない (1/159 は 数十回) ので、差の 大きい 青 < 金 だけ 見る (色ごとの 割合は node tools/trust.js で はかる)
+        assert(rate('blue') < rate('gold'), `${specId} の引け！の色の順 (青 ${rate('blue')} / 赤 ${rate('red')} / 金 ${rate('gold')})`);
         assert(!colors.rainbow || rate('rainbow') === 1, `${specId} の虹の引け！は確定のはず (${rate('rainbow')})`);
         assert(revivals > 0 && revivalLoss === 0, `${specId} の引け！の復活 (${revivals} 回。おかしいもの ${revivalLoss})`);
         assert(leverHolds > 10 && leverHoldNoChange === 0, `${specId} の保留に引け！ (${leverHolds} 回。保留変化でないもの ${leverHoldNoChange})`);
         assert(handle[0] > 30, `${specId} でハンドルブルが少ない (${handle[0]})`);
         assertBetween(handle[1] / handle[0], show.handleBuru.holdReliability - 0.15, show.handleBuru.holdReliability + 0.15, `${specId} のハンドルブル`);
+    }
+});
+
+test('PUSH の押し方と色・保留の「?」(2026-10-24): 色は 白 < 青 < 赤 < 金 < 虹 (確定)、長押し・連打は 1 回押しより熱い、「?」は保留変化だけ', () => {
+    for (const { specId, log } of runs) {
+        const color = {}, mode = {};
+        let noStyle = 0, questions = 0, badQuestion = 0;
+        const add = (map, id, win) => { const c = map[id] || (map[id] = [0, 0]); c[0]++; if (win) c[1]++; };
+        for (const e of log.events) {
+            if (e.type === 'spinEnd' && e.fig === 1 && e.plan.type === 'reach') {
+                if (e.plan.lever) continue;
+                if (!e.plan.pushMode || !e.plan.pushColor) { noStyle++; continue; }
+                add(color, e.plan.pushColor, e.plan.win);
+                add(mode, e.plan.pushMode, e.plan.win);
+            }
+            if (e.type === 'spinEnd' && e.plan.kind === 'rashBattle' && !e.plan.lever && !e.plan.pushMode) noStyle++;
+            if (e.type === 'hold' && e.fig === 1 && !e.result.extra && e.result.question) { questions++; if (!e.result.changed) badQuestion++; }   // change は 変わったあと 消えるので changed で 見る
+        }
+        const rate = (map, id) => map[id] ? map[id][1] / map[id][0] : null;
+        assertEqual(noStyle, 0, `${specId} で押し方・色のない PUSH`);
+        const order = ['white', 'blue', 'red', 'gold'].map(id => rate(color, id));
+        for (let i = 1; i < order.length; i++) assert(order[i] > order[i - 1], `${specId} の PUSH の色の順 (${order.map(pct).join(' < ')})`);
+        assert(!color.rainbow || rate(color, 'rainbow') === 1, `${specId} の虹の PUSH は確定のはず`);
+        assert(rate(mode, 'long') > rate(mode, 'tap') && rate(mode, 'mash') > rate(mode, 'tap'), `${specId} の押し方 (1 回 ${pct(rate(mode, 'tap'))}・長押し ${pct(rate(mode, 'long'))}・連打 ${pct(rate(mode, 'mash'))})`);
+        assert(questions > 10 && badQuestion === 0, `${specId} の「?」の保留 (${questions} 回。保留変化でないもの ${badQuestion})`);
     }
 });
 

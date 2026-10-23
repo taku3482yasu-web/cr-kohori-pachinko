@@ -18,6 +18,7 @@
     ?force=hit&zen=okagappa  全回転 (koori / naitei / aruaru / onioni / okagappa)
     ?force=fail&yutime=1&holds=0  遊タイム (はじめの変動が止まったら遊タイム突入)
     ?force=koori&hit=2&cheer=3  こおりRASH のお仲間の応援 (0〜3人)
+    ?force=hit&push=long&pcolor=gold&hold=1  PUSH の押し方 (tap / long ため / mash 連撃) と色。hold=1 で長押し、mash=1 で連打をまねる
     ?force=hit&lever=change  レバーを引け！ (lever=1 ははじめから。force=koori&hit=2 と使うと RASH 中の確定)
     ?force=hit&enemy=onioni&gun=hibiki&cutin=gold&develop=1&gimmick=1&stepup=none  群予告・SPSP への発展・こおりカットイン・役物 (役物は盤面に描くので index.html で)
     ?force=hit&notice=post  告知のタイプ (post: 後告知 / oneshot: 一発告知)
@@ -131,6 +132,9 @@
         if (params.get('develop')) first.forceDevelop = true;
         if (params.get('gimmick')) first.forceGimmick = true;
         if (params.get('lever')) Object.assign(first, { forceLever: true, forceLeverChange: params.get('lever') === 'change' });
+        // &push=long (または mash / tap) &pcolor=gold: PUSH の押し方と色 (2026-10-24)
+        if (params.get('push')) first.forcePushMode = params.get('push');
+        if (params.get('pcolor')) first.forcePushColor = params.get('pcolor');
     }
     if (params.get('change')) {
         // 保留変化の確認: 当たりの保留を白で出しておき、変化させる
@@ -143,6 +147,11 @@
         time += dt;
         Machine.update(m, dt);
         m.events.splice(0).forEach(e => Lcd.event(e, time));
+        // &hold=1: 長押しを まねる (押しつづける) / &mash=1: 連打を まねる (0.1 秒ごとに 押す)。押せる 場面を 知るため 毎回 描く
+        if (params.get('hold') || params.get('mash')) {
+            Lcd.draw(time, m);
+            if (Math.floor(time * 10) !== Math.floor((time - dt) * 10)) Lcd.push(time);
+        }
         // &vpromote=1: 小当たりのアタッカーが開いたら、すぐ V に入れる (玉がないので)
         if (params.get('vpromote') && m.small && !m.small.v) Machine.enter(m, 'attacker');
     };
@@ -186,7 +195,9 @@
         requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
-    document.addEventListener('keydown', e => { if (e.code === 'KeyB') Lcd.push(time); });
+    document.addEventListener('keydown', e => { if (e.code === 'KeyB' && !e.repeat) Lcd.push(time); });
+    document.addEventListener('keyup', e => { if (e.code === 'KeyB') Lcd.release(time); });
+
 })();
 </script>
 </body>
