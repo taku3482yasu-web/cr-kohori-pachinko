@@ -314,7 +314,7 @@
         BoardView.draw(game.view, game.world, lcdCanvas, gimmick, time, Lcd.zoom(time));   // 可動液晶 (P1)
         // 台の筐体: 状態で 光り方・役物が かわる (js/cabinet.js)
         if (game.cabinet) {
-            Cabinet.draw(time, { mode: modeClass(game.machine), premium: Boolean(game.machine.bonus && game.machine.bonus.alloc && game.machine.bonus.alloc.premium), gimmick, balls: game.balls, button: MachineButton.state() });
+            Cabinet.draw(time, { mode: modeClass(game.machine), premium: Boolean(game.machine.bonus && game.machine.bonus.alloc && game.machine.bonus.alloc.premium), gimmick, balls: game.balls, button: MachineButton.state(), cue: Lcd.light() });   // cue: 演出の 光 (当たりは 虹色)
             // 筐体の PUSH の 位置を 絵に 合わせる (下の 段が せまい スマホでは 出さない)
             const r = Cabinet.pushRect(), push = $('cabinet-push');
             push.hidden = !r;

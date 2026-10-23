@@ -1546,6 +1546,41 @@ const Lcd = (() => {
         return zoomNow;
     }
 
+    // 筐体の 光 (2026-10-23 ユーザー指定: 当たったら 周りの ライトが 虹色。演出に 合わせて 光り方を かえて 盛り上げる)
+    //   js/cabinet.js に わたす { kind, color, speed }。kind: hit 虹色 (当たりが 見えた 瞬間から) / color その色で 流れる /
+    //   strobe 白く 点滅 (PUSH・NEXT) / dim 暗く (外れが 決まった) / glitch ちらつく (違和感)。null は ふだんの 光り方
+    let lightSpin = null;
+    function light() {
+        if (Story.active() || !lightSpin || !currentPhase) return null;
+        const { plan, elapsed } = lightSpin;
+        const ph = currentPhase, n = ph.name;
+        if (plan.win) {
+            // 当たりが 見える 秒: reveal が なければ 図柄が そろう ところ (result の 0.6 秒。全回転は zend)、それも なければ 変動の 終わり
+            const names = plan.phases.map(p => p.name);
+            let idx = plan.reveal ? names.indexOf(plan.reveal.phase) : names.indexOf('result');
+            let off = plan.reveal ? plan.reveal.at : 0.6;
+            if (idx < 0) { idx = names.indexOf('zend'); off = 0; }
+            if (idx < 0) { idx = names.length - 1; off = Math.max(0, plan.phases[idx].t - 0.3); }
+            const at = plan.phases.slice(0, idx).reduce((a, p) => a + p.t, 0) + off;
+            if (elapsed >= at) return { kind: 'hit' };
+        }
+        const show = CONFIG.show;
+        if (plan.iwakan && show.iwakan && elapsed < show.iwakan.time) return { kind: 'glitch' };
+        const b = plan.enemy && show.battles[plan.enemy];
+        const foe = plan.kai ? '#c040ff' : (b && b.color) || '#ff3a4a';
+        if (ph.pushing) return { kind: 'strobe' };
+        if (n === 'stepup' && plan.stepUp) return { kind: 'color', color: show.stepUp.colors[plan.stepUp.color] || '#ffffff', speed: 10 + plan.stepUp.step * 6 };
+        if (n === 'next') return ph.local < 0.5 ? { kind: 'strobe' } : { kind: 'color', color: '#7fd3f7', speed: 18 };
+        if (n === 'challenge' || n === 'cround') return { kind: 'color', color: '#ffe066', speed: 16 };
+        if (n === 'reach' || n === 'develop') return { kind: 'color', color: foe, speed: 20 };
+        if (n === 'cutin' && plan.cutin) return { kind: 'color', color: show.cutin.colors[plan.cutin].color, speed: 34 };
+        if (n === 'battle' || n === 'cfinal') return { kind: 'color', color: plan.cutin ? show.cutin.colors[plan.cutin].color : foe, speed: 28 };
+        if (n === 'pursuit') return { kind: 'color', color: '#ff3a4a', speed: 36 };
+        if (n === 'zenkaiten') return { kind: 'hit' };
+        if ((n === 'result' || n === 'fail' || n === 'cresult' || n === 'rvdark') && !plan.win) return { kind: 'dim' };
+        return null;
+    }
+
     // おにおにRASH の違和感: 画面の上下反転・白黒
     let effectCanvas = null;
     function applyEffect(fx) {
@@ -1585,6 +1620,7 @@ const Lcd = (() => {
         const phase = plan ? phaseAt(plan, m.spin.elapsed) : null;
         if (phase && (phase.name === 'battle' || phase.name === 'cfinal')) phase.pushing = phase.local >= phase.t - CONFIG.show.pushTime;
         currentPhase = phase;
+        lightSpin = plan ? { plan, elapsed: m.spin.elapsed } : null;
         reverseText = Boolean(plan && plan.kind === 'onioni' && plan.pattern === 'reverse' && phase && phase.name === 'anomaly');
         if (m) rashMode = m.rashMode;
         machineRef = m;
@@ -1732,7 +1768,7 @@ const Lcd = (() => {
         return canvas;
     }
 
-    return { init, reset, draw, event, aim, show, push, setChoosing, gimmick, zoom, W, H,
+    return { init, reset, draw, event, aim, show, push, setChoosing, gimmick, zoom, light, W, H,
         __phase: () => (currentPhase ? currentPhase.name : null),   // 確認用 (いまの 場面の 名前)
         playStory: (name, now) => Story.play(name, now), skipStory: () => Story.skip(),
         storyPlaying: () => Story.active() ? Story.name : null };

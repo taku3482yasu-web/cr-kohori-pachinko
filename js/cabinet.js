@@ -70,8 +70,19 @@ const Cabinet = (() => {
         stops.forEach(([o, c]) => gr.addColorStop(o, c));
         return gr;
     };
-    const rainbowish = st => st.mode === 'bonus' || st.premium;
+    // 演出の 光 (2026-10-23 ユーザー指定。st.cue は Lcd.light()): 当たり (hit) は 虹色。当たりが 見えてから HIT_TIME 秒は
+    // 変動が 終わっても 虹色で 強く 光る (hitAt)。color は その色で 速く 流れる、strobe は 白く 点滅、dim は 暗く、glitch は ちらつく
+    const HIT_TIME = 4;
+    let hitAt = -Infinity, lastCue = null;
+    const hitting = (st, t) => Boolean(st.cue && st.cue.kind === 'hit') || t - hitAt < HIT_TIME;
+    const rainbowish = st => st.mode === 'bonus' || st.premium || st.hit;
     function ledColor(st, i, t) {
+        const cue = st.cue;
+        if (st.hit) return hsl(i * 26 - t * 620, 100, 64);
+        if (cue && cue.kind === 'strobe') return Math.floor(t * 16) % 2 ? '#ffffff' : '#ffe066';
+        if (cue && cue.kind === 'glitch') return Math.random() < 0.5 ? '#ffffff' : '#20242c';
+        if (cue && cue.kind === 'dim') return '#3a4258';
+        if (cue && cue.kind === 'color') return (Math.floor(i / 2 + t * 8) % 3) ? cue.color : '#ffffff';
         if (rainbowish(st)) return hsl(i * 18 - t * 240, 95, st.premium ? 72 : 62);
         const [a, b] = LED[st.mode] || LED.normal;
         return (Math.floor(i / 3 + t * (st.mode === 'rush' ? 6 : 2)) % 2) ? a : b;
@@ -156,25 +167,35 @@ const Cabinet = (() => {
             const x = p.x1 + (p.x2 - p.x1) * k, y = p.y1 + (p.y2 - p.y1) * k;
             // 外側へ 少し ずらす (帯の まんなか)
             const nx = -(p.y2 - p.y1) / (p.d || 1), ny = (p.x2 - p.x1) / (p.d || 1);
-            const on = (i + Math.floor(t * (st.mode === 'normal' ? 10 : 24))) % 7 < 2;
+            const cue = st.cue;
+            const on = st.hit ? (Math.floor(t * 10) % 2 ? true : i % 2 === 0)
+                : cue && cue.kind === 'strobe' ? Math.floor(t * 16) % 2 === 0
+                : cue && cue.kind === 'glitch' ? Math.random() < 0.4
+                : cue && cue.kind === 'dim' ? (i + Math.floor(t * 3)) % 12 === 0
+                : cue && cue.kind === 'color' ? (i + Math.floor(t * cue.speed)) % 5 < 3
+                : (i + Math.floor(t * (st.mode === 'normal' ? 10 : 24))) % 7 < 2;
             g.fillStyle = on ? ledColor(st, i, t) : 'rgba(255,255,255,.18)';
-            g.fillRect(x - nx * bw * 0.55 - 1, y - ny * bw * 0.55 - 1, 2, 2);
+            const dot = st.hit || (cue && cue.kind !== 'dim') ? 3 : 2;   // 演出中は 粒を 大きく
+            g.fillRect(x - nx * bw * 0.55 - dot / 2, y - ny * bw * 0.55 - dot / 2, dot, dot);
         }
     }
     // 窓の 内側の ふちの 光 (状態の 色。盤面の ふちに うすく かかる)
     function innerGlow(pts, st, t) {
-        const glow = rainbowish(st) ? hsl(t * 200) : (LED[st.mode] || LED.normal)[0];
+        const cue = st.cue;
+        const glow = st.hit ? hsl(t * 520) : cue && cue.kind === 'color' ? cue.color : cue && cue.kind === 'strobe' ? (Math.floor(t * 16) % 2 ? '#ffffff' : '#ffe066')
+            : cue && cue.kind === 'dim' ? '#2a3044' : rainbowish(st) ? hsl(t * 200) : (LED[st.mode] || LED.normal)[0];
         g.save();
         g.beginPath();
         windowPath(pts);
         g.clip();
         g.shadowColor = glow;
-        g.shadowBlur = 14 + 6 * Math.sin(t * 4);
+        const strong = st.hit || (cue && cue.kind !== 'dim');
+        g.shadowBlur = (strong ? 26 : 14) + 6 * Math.sin(t * (strong ? 12 : 4));
         g.beginPath();
         windowPath(pts);
         g.strokeStyle = glow;
         g.globalAlpha = 0.8;
-        g.lineWidth = 2;
+        g.lineWidth = strong ? 4 : 2;
         g.stroke();
         g.restore();
     }
@@ -202,7 +223,7 @@ const Cabinet = (() => {
         g.fillStyle = '#1e1e26';
         const step = Math.max(2, r0 / 4.5);
         for (let y = -r0; y <= r0; y += step) for (let x = -r0; x <= r0; x += step) if (x * x + y * y < (r0 * 0.82) ** 2) g.fillRect(cx + x - 0.7, cy + y - 0.7, 1.4, 1.4);
-        g.strokeStyle = rainbowish(st) ? hsl(t * 200 + cx) : (LED[st.mode] || LED.normal)[0];
+        g.strokeStyle = st.hit ? hsl(t * 500 + cx) : st.cue && st.cue.kind === 'color' ? st.cue.color : rainbowish(st) ? hsl(t * 200 + cx) : (LED[st.mode] || LED.normal)[0];
         g.lineWidth = Math.max(1.2, r0 * 0.08);
         g.globalAlpha = 0.45 + 0.4 * Math.sin(t * 5 + cx);
         g.beginPath();
@@ -274,7 +295,7 @@ const Cabinet = (() => {
     // 左右の 透明な 結晶の 飾り (窓の 外)
     function crystals(pts, st, t) {
         const left = winLeft(pts) - band(), right = W - (winRight(pts) + band());
-        const glow = rainbowish(st) ? hsl(t * 120, 90, 70) : st.mode === 'rush' ? '#ff9ab0' : '#c8b0ff';
+        const glow = st.hit ? hsl(t * 400, 95, 70) : st.cue && st.cue.kind === 'color' ? st.cue.color : rainbowish(st) ? hsl(t * 120, 90, 70) : st.mode === 'rush' ? '#ff9ab0' : '#c8b0ff';
         const cluster = (x, y, size, dir) => {
             for (let k = 0; k < 4; k++) {
                 const h = size * (1 - k * 0.18), w = size * 0.32;
@@ -311,7 +332,7 @@ const Cabinet = (() => {
         rr(cx - tw * 0.9, top - 2, tw * 1.8, tw * 1.6, tw * 0.5);
         g.fill();
         const flash = st.gimmick != null ? 1 : 0;
-        const core = rainbowish(st) ? hsl(t * 220, 95, 75) : st.mode === 'rush' ? '#ff8a9a' : '#ffffff';
+        const core = st.hit ? hsl(t * 500, 95, 75) : st.cue && st.cue.kind === 'color' ? st.cue.color : rainbowish(st) ? hsl(t * 220, 95, 75) : st.mode === 'rush' ? '#ff8a9a' : '#ffffff';
         g.shadowColor = rainbowish(st) ? core : st.mode === 'rush' ? '#ff3a4a' : '#bff0ff';
         g.shadowBlur = 10 + flash * 24 + 4 * Math.sin(t * 4);
         rr(cx - tw / 2, top + tw * 1.2, tw, bottom - top - tw * 1.2, tw / 2);
@@ -621,12 +642,44 @@ const Cabinet = (() => {
         }
     }
 
-    // 毎フレーム。st: { mode, premium, gimmick, balls, button: { kind, lit, push, pressed } }
+    // 当たりの 瞬間の 虹色の 光の すじ (窓の 外。はじめの 1.6 秒)
+    function hitBurst(pts, t) {
+        const e = t - hitAt;
+        if (e < 0 || e > 1.6) return;
+        const a = 1 - e / 1.6;
+        g.save();
+        g.beginPath();
+        g.rect(-10, -10, W + 20, H + 20);
+        windowPath(pts);
+        g.clip('evenodd');
+        g.fillStyle = `rgba(255,255,255,${0.35 * a * (Math.floor(e * 14) % 2)})`;
+        g.fillRect(0, 0, W, H);
+        const cx = W / 2, cy = B.y + B.h * 0.4, R = Math.hypot(W, H);
+        for (let i = 0; i < 18; i++) {
+            const ang = i / 18 * Math.PI * 2 + e * 1.5;
+            g.beginPath();
+            g.moveTo(cx, cy);
+            g.arc(cx, cy, R, ang, ang + 0.12);
+            g.closePath();
+            g.fillStyle = hsl(i * 20 + e * 300, 95, 65, 0.35 * a);
+            g.fill();
+        }
+        g.restore();
+    }
+
+    // 毎フレーム。st: { mode, premium, gimmick, balls, button: { kind, lit, push, pressed }, cue: 演出の 光 (Lcd.light) }
     function draw(t, st) {
         if (!cv) return;
         if (cv.width !== Math.round(wrap.clientWidth * dpr) || boardEl.offsetWidth !== B.w) resize();
         g.setTransform(dpr, 0, 0, dpr, 0, 0);
         g.clearRect(0, 0, W, H);
+        // 当たりが 見えた 瞬間: 虹色に 切りかえ、先バレの ランプも 虹色
+        if (st.cue && st.cue.kind === 'hit' && !(lastCue && lastCue.kind === 'hit')) {
+            hitAt = t;
+            lamp('rainbow', t);
+        }
+        lastCue = st.cue;
+        st = { ...st, hit: hitting(st, t) };
         const pts = windowPoints();
         body(pts);
         innerGlow(pts, st, t);
@@ -644,6 +697,7 @@ const Cabinet = (() => {
         lampDraw(pts, st, t);
         bottom(pts, st, t);
         g.restore();
+        hitBurst(pts, t);
         // 役物 (窓の 外にも 中にも 描く。盤面の 上に 落ちてくる)
         medal(pts, st, t);
     }
