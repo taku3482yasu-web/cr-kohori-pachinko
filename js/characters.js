@@ -541,5 +541,6 @@ const Characters = (() => {
         return c ? { w: c.w, h: c.h } : { w: 0, h: 0 };
     }
 
-    return { drawEnemy, drawCompanion, size, has: id => Boolean(ENEMIES[id]), isCompanion: id => Boolean(COMPANIONS[id]), hasKai: id => Boolean(KAI_EYES[id]) };
+    // add: ほかの ファイルの 絵を 敵として 足す (js/rivals.js。2026-10-23)
+    return { add: (id, art) => { ENEMIES[id] = art; }, drawEnemy, drawCompanion, size, has: id => Boolean(ENEMIES[id]), isCompanion: id => Boolean(COMPANIONS[id]), hasKai: id => Boolean(KAI_EYES[id]) };
 })();

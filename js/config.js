@@ -496,9 +496,14 @@ const CONFIG = {
         },
         // バトルの相手 (ユーザー指定: 成功率が低い順に おかがっぱ・ひびきまくり・おにおに (80%)・シーシャ・ナイテイ・ナイナイ (確定))
         //   hit: 当たりのときに選ぶ重み / win: 成功率。外れのときの重みは成功率から自動で計算する
+        // ライバルバトル (2026-10-23 アップグレード P3。最新のスロット koori-slot から): チーム5DX < チームASK-3 < チームお願いマッスル の 順に 熱い。
+        //   team: 3 人 並んで 出る (まんなかが リーダー)。leader の 必殺技・セリフを 使う。hit・win は Claude の 案
         battles: {
             okagappa: { name: 'おかがっぱ', hit: 10, win: 0.05, map: 'ongagawa' },
+            rival5dx: { name: 'チーム5DX', hit: 6, win: 0.12, map: 'tsugakuro', team: ['hibikimakuri', 'okagappa', 'yamamou'], leader: 'okagappa', color: '#7fd3f7' },
             hibikimakuri: { name: 'ひびきまくり', hit: 20, win: 0.2, map: 'ebisucho' },
+            ask3: { name: 'チームASK-3', hit: 10, win: 0.35, map: 'kokuraStation', team: ['sasaki', 'asahara', 'kotani'], leader: 'asahara', color: '#ffe066' },
+            muscle: { name: 'チームお願いマッスル', hit: 14, win: 0.62, map: 'castleHall', team: ['shibata', 'ueno', 'ikekimu'], leader: 'ueno', color: '#ff6a3a' },
             onioni: { name: 'おにおに', hit: 50, win: 0.8, map: 'castleHall' },
             naitei: { name: 'シーシャ・ナイテイ・ナイナイ', hit: 20, win: 1, map: 'goldHall' }
         },
@@ -579,7 +584,32 @@ const CONFIG = {
         // リーチの発展 (SP → SPSP。ユーザー指定 2026-10-20、数値は Claude が決めた): バトルは相手で SPリーチ / SPSPリーチ (最終決戦) に分かれる。
         //   SPSP の相手のバトルの rate は、はじめ SPリーチ の相手 (from のどれか) が出てきて、「発展！！」(time 秒) で SPSP の相手に変わる
         //   どの相手と戦うかは前と同じなので、成功率は変わらない (発展したら SPSP の成功率)
-        develop: { rate: 0.6, time: 2.5, from: ['okagappa', 'hibikimakuri'], sp: { okagappa: 'SP', hibikimakuri: 'SP', onioni: 'SPSP', naitei: 'SPSP' } },
+        develop: { rate: 0.6, time: 2.5, from: ['okagappa', 'hibikimakuri'], sp: { okagappa: 'SP', hibikimakuri: 'SP', onioni: 'SPSP', naitei: 'SPSP', rival5dx: 'SP', ask3: 'SP', muscle: 'SPSP' } },
+        // 必殺技と 敵の セリフ (2026-10-23 アップグレード P3。最新のスロット koori-slot の battleLines.js から。onioni・naitei の セリフは Claude の 案)
+        //   バトルの はじめに 相手の intro、決着で 勝てば こおりくんの 必殺技 (koori) と 相手の lose、負ければ 相手の 必殺技と win
+        battleTalk: {
+            koori: '大腸炎アタック',
+            specials: {
+                okagappa: 'おかピポっと光線', hibikimakuri: '大音響4DX', yamamou: 'おちょくりボーンフィーバー',
+                sasaki: 'ASAスラッシュ', kotani: 'NABIテンポ', asahara: 'DOPAPANCHI',
+                shibata: 'シバタードライバー', ikekimu: 'イケキムドライブ', ueno: 'マッスルウエノクラッシュ',
+                onioni: '鬼鬼の金棒', naitei: '不採用の裁き'
+            },
+            lines: {
+                okagappa: { intro: 'ま～だまだ戦わねば！', win: 'お宝はいただきだぜ　イェア！', lose: 'ノリが…足りなかった…イェア…' },
+                hibikimakuri: { intro: '響きです。', win: 'すっごいひびいたね～', lose: 'ひびかなかった～…' },
+                asahara: { intro: 'CS城の主の力、見せてやろう！', win: 'フハハハ！ワシの勝ちだ！', lose: 'ぐぬぬ…覚えておれ！' },
+                ueno: { intro: '我が筋肉の前にひれ伏すがよい！', win: '筋肉は裏切らない！', lose: '筋肉が…足りなかった…' },
+                onioni: { intro: '金を 返しに 来たのか？', win: 'ぐははは！ 出直してこい！', lose: 'ぐぬぬ… 覚えておれ…' },
+                naitei: { intro: '内定が ほしいか…？', win: 'お前に 内定は ない！', lose: '…内定を やろう' }
+            }
+        },
+        // 「こおりいきていける！」(2026-10-23 アップグレード P3。最新のスロットの AT 直撃の 見せ方): 通常時の 当たりの rate で、
+        //   ノイズ → 暗転 → 虹色の こおりくんと「こおりいきていける！」→ 図柄が そろう (チャレンジ・バトルなし。大当たり 確定。rate は Claude の 案)
+        ikiteru: { rate: 0.02, timing: { kroll: 1.2, knoise: 0.9, kdark: 1.2, klive: 2.8, kend: 1.6 } },
+        // 天国の カットイン (2026-10-23 アップグレード P3。最新のスロットの 天国の 示唆): RUSH が 終わったとき、残りの 保留に 当たりが あれば rate で
+        //   シーシャ・ナイテイ (ナイナイ か アルアル) が「まだ 終わらせない…」(出たら 残りの 保留で 当たり 確定)
+        heavenCutin: { rate: 0.25, time: 2.4 },
         // 全回転 (プレミア。ユーザー指定 2026-10-20): 当たりの変動の rate で、チャレンジ・バトルなしに3つの図柄が同じキャラのまま回って当たる (大当たり確定)
         //   kinds: 5種類 (ユーザー指定)。figure はそろう図柄 (8 ナイナイ・9 アルアルは全回転だけの図柄)。
         //     odd / even: 奇数 (突破チャレンジへ行く当たり)・偶数の当たりで選べるか (図柄の色と出玉の振り分けを合わせる)。weight と rate は Claude が決めた
@@ -657,6 +687,9 @@ const CONFIG = {
                 hibikimakuri: ['…うん、響いてるね', '自己紹介、それだけ…？'],
                 onioni: ['来ちゃった…！ お金はあとで返すから！', 'こわい…でも負けないよ！'],
                 naitei: ['こおりくん、内定のチャンスだよ！'],
+                rival5dx: ['チーム5DX だ！ ノリで 押してくるよ！', '3人 まとめて 来た…！'],
+                ask3: ['チームASK-3！ 計算ずくで 来るよ…', 'KING.ASAHARA が いる…！'],
+                muscle: ['お願いマッスル！ いちばん 強い チームだよ！！', '筋肉が すごい…！ でも 熱いよ！'],
                 shibata: ['ぶんぶん…？ おはしばたじゃないの？', 'ぶんぶんって、なに…？'],
                 sasaki: ['自分で言っちゃうんだ…', 'しご出来なのに、目の下にクマが…'],
                 goldDog: ['かわいい…けど、さわっちゃダメ！', 'すっごく自信ありげ…！'],
@@ -669,6 +702,9 @@ const CONFIG = {
                 hibikimakuri: ['やっと静かになった…！', '最後まで響いてたね…'],
                 onioni: ['おにおにを倒した！ すごいよ！', 'お金のことは…また今度ね！'],
                 naitei: ['こおりくん、内定おめでとう！', 'これで内定持ちだね…ふーん♪'],
+                rival5dx: ['チーム5DX、ノリで 負けたね！', '3人とも 川にお帰り〜！'],
+                ask3: ['計算外だったね、ASK-3！', 'KING.ASAHARA を 倒した！'],
+                muscle: ['お願いマッスルに 勝った！ すごい！！', '筋肉より 内定だね！'],
                 shibata: ['シバター、バーイ！', 'いまの、動画にしないでね！'],
                 sasaki: ['SASAKIさん、ゆっくり休んでね…', 'すごいです。やばいです。…うつっちゃった'],
                 goldDog: ['ワンちゃん、金庫にお帰り〜！', '黄金にならなくてよかった…！']

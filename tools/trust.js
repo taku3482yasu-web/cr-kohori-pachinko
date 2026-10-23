@@ -17,7 +17,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const FILES = ['config.js', 'sprites.js', 'characters.js', 'scenario.js'];
+const FILES = ['config.js', 'sprites.js', 'characters.js', 'rivals.js', 'scenario.js'];
 
 function seededRandom(seed) {
     let t = seed >>> 0;
@@ -58,6 +58,7 @@ function features(config) {
     add('バトル', 'レバーを押せ！', p => p.lever);
     add('バトル', 'レバブル（リーチ）', p => p.leverBuru);
     add('プレミア', '全回転', p => p.type === 'zenkaiten');
+    add('プレミア', 'こおりいきていける！', p => p.type === 'ikiteru');
     return list;
 }
 

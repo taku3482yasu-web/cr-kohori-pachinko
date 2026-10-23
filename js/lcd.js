@@ -289,6 +289,11 @@ const Lcd = (() => {
             bonusTalk('endRash', now);
         } else if (e.type === 'rushEnd') {
             summary = { hits: e.hits - 1, balls: e.balls, failed: e.challengeFailed, until: now + summaryTime };
+            // 天国の カットイン (P3): 残りの 保留に 当たりが あれば ときどき (結果の 表示の あと)
+            const left = machineRef ? [...machineRef.holds[1], ...machineRef.holds[2]] : [];
+            if (CONFIG.show.heavenCutin && left.some(h => h && h.kind === 'hit') && Math.random() < CONFIG.show.heavenCutin.rate) {
+                heavenFx = { who: Math.random() < 0.5 ? 'naitei' : 'aruaru', start: now + summaryTime * 0.6 };
+            }
         }
     }
 
@@ -452,6 +457,9 @@ const Lcd = (() => {
         if (n === 'develop' || n === 'cutin') return { stop: [true, false, true], big: false };
         if (n === 'postnotice') return { stop: [true, true, true], big: true };
         if (n === 'zenkaiten') return { stop: [false, false, false], big: true, zenkaiten: true };
+        if (n === 'kroll' || n === 'knoise') return { stop: [false, false, false], big: true };
+        if (n === 'kdark' || n === 'klive') return { hidden: true };
+        if (n === 'kend') return { stop: [true, true, true], big: true };
         if (n === 'zend') return { stop: [true, true, true], big: true };
         if (plan.type === undefined || plan.type === 'plain') {
             // 外れ・特図2: 左 45% → 右 70% → 中 100%
@@ -732,6 +740,87 @@ const Lcd = (() => {
     }
 
     // ----- バトル -----
+    // ライバルチーム (2026-10-23 アップグレード P3): 3 人 並べる (まんなかが リーダーで 少し 大きい)
+    function drawTeam(team, ex, ground, frame, hurt, alpha) {
+        team.forEach((id, i) => {
+            const lead = i === 1;
+            const sc = Math.min(lead ? 1.6 : 1.3, (lead ? 60 : 50) / Characters.size(id).h);
+            const x = ex + (i - 1) * 30;
+            Characters.drawEnemy(ctx, id, x, ground - (lead ? 0 : 2), { scale: sc, frame: (frame + i) % 2, hurt, alpha });
+        });
+    }
+
+    // 必殺技と 敵の セリフ (P3。config.show.battleTalk): バトルの はじめに 相手の ひとこと、決着で 必殺技の 名前と ひとこと
+    function drawBattleTalk(now, plan, phase) {
+        const bt = CONFIG.show.battleTalk;
+        if (!bt || plan.fig !== 1) return;
+        const b = CONFIG.show.battles[plan.enemy];
+        if (!b) return;
+        const who = b.leader || plan.enemy;
+        const lines = bt.lines[who] || {};
+        const bubbleAt = (str, y) => {
+            if (!str) return;
+            const size = str.length > 14 ? 8 : 9;
+            band(y - 7, 14, 0.55);
+            text(`「${str}」`, W / 2 + 30, y, size, '#ffffff', 'center');
+        };
+        if (phase.name === 'battle' && phase.local < 1.6) bubbleAt(lines.intro, 100);
+        if (phase.name === 'result' && phase.local < 1.4) {
+            const name = plan.win ? bt.koori : bt.specials[who] || '必殺技';
+            band(92, 22, 0.65);
+            text(plan.win ? `こおりくんの ${name}!!` : `${b.name} の ${name}!!`, W / 2, 103, name.length > 9 ? 10 : 12, plan.win ? 'rainbow' : '#ff6a6a', 'center', now);
+            once('special', plan.win ? 'win' : 'hurt');
+        } else if (phase.name === 'result' && phase.local < phase.t) bubbleAt(plan.win ? lines.lose : lines.win, 100);
+    }
+
+    // ----- こおりいきていける！ (P3): ノイズ → 暗転 → 虹色の こおりくん -----
+    function drawIkiteru(now, plan, phase) {
+        const n = phase.name, l = phase.local;
+        if (n === 'knoise') {
+            for (let i = 0; i < 30; i++) {
+                const v = Math.floor(Math.random() * 255);
+                ctx.fillStyle = `rgba(${v},${v},${v},${0.3 + Math.random() * 0.5})`;
+                ctx.fillRect(0, Math.floor(Math.random() * H), W, 1 + Math.floor(Math.random() * 3));
+            }
+            once('knoise', 'hurt');
+        } else if (n === 'kdark' || n === 'klive') {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, W, H);
+            if (n === 'klive') {
+                if (l < 0.3) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${0.9 - l * 3})`;
+                    ctx.fillRect(0, 0, W, H);
+                }
+                const g = ctx.createRadialGradient(W / 2, 66, 4, W / 2, 66, 70);
+                g.addColorStop(0, rainbow(now));
+                g.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = g;
+                ctx.fillRect(0, 0, W, H);
+                drawSprite(ctx, SPRITES.koori, Math.floor(now * 4) % 2 ? 'walk1' : 'walk2', W / 2 - 24, 30 + Math.sin(now * 3) * 2, 3);
+                text('こおりいきていける！', W / 2, 118, 16, 'rainbow', 'center', now);
+                once('klive', 'win');
+            }
+        }
+    }
+
+    // 天国の カットイン (P3): RUSH が 終わったとき、残りの 保留に 当たりが あれば ときどき シーシャ・ナイテイ
+    let heavenFx = null;   // { who, start }
+    function drawHeaven(now) {
+        if (!heavenFx) return;
+        const t = now - heavenFx.start, total = CONFIG.show.heavenCutin.time;
+        if (t > total) return void (heavenFx = null);
+        const slide = t < 0.25 ? 1 - t / 0.25 : t > total - 0.25 ? -(t - total + 0.25) / 0.25 : 0;
+        ctx.save();
+        ctx.translate(Math.round(slide * W), 0);
+        ctx.fillStyle = heavenFx.who === 'aruaru' ? rainbow(now) : '#3a1450';
+        ctx.fillRect(0, 40, W, 64);
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        for (let i = 0; i < 10; i++) ctx.fillRect(0, 40 + ((i * 17 + Math.floor(now * 30) * 5) % 64), W, 1);
+        Characters.drawEnemy(ctx, heavenFx.who, 50, 102, { scale: Math.min(2, 60 / Characters.size(heavenFx.who).h) });
+        text(heavenFx.who === 'aruaru' ? 'また すぐに 会おう…' : 'まだ 終わらせないぞ…', W / 2 + 30, 66, 13, '#ffffff', 'center');
+        ctx.restore();
+    }
+
     function enemyScale(id, maxH) {
         return Math.min(2, maxH / Characters.size(id).h);
     }
@@ -764,7 +853,7 @@ const Lcd = (() => {
         const b = plan.enemyInfo || CONFIG.show.battles[plan.enemy];
         const frame = Math.floor(now * 4) % 2;
         const ground = 128;
-        const scale = enemyScale(plan.enemy, 70);
+        const scale = b.team ? 0 : enemyScale(plan.enemy, 70);
         let ex = 196, kx = 50, enemyHurt = false, kooriHurt = false, enemyAlpha = 1, kooriDown = false;
         let enemyHp = 1, kooriHp = 1;
 
@@ -830,7 +919,8 @@ const Lcd = (() => {
             if (l >= SUMMON_STRIKE) once('summonHit', 'attack');
         }
 
-        if (enemyAlpha > 0) Characters.drawEnemy(ctx, plan.enemy, ex, ground, { scale, frame, hurt: enemyHurt, alpha: enemyAlpha, kai: plan.kai });
+        if (enemyAlpha > 0 && b.team) drawTeam(b.team, ex, ground, frame, enemyHurt, enemyAlpha);   // ライバルチーム (P3)
+        else if (enemyAlpha > 0) Characters.drawEnemy(ctx, plan.enemy, ex, ground, { scale, frame, hurt: enemyHurt, alpha: enemyAlpha, kai: plan.kai });
         if (plan.cheer && phase.name !== 'roll') drawCheer(now, plan, phase, ground);
         if (plan.summon && (phase.name === 'summon' || phase.name === 'result')) drawSummoned(now, plan, phase, ground, frame);
         if (kooriDown) {
@@ -846,7 +936,7 @@ const Lcd = (() => {
         // 名前と体力
         band(30, 20, 0.5);
         // 名前の色: 確定の相手は虹、怪は紫、おにおには赤。長い名前は小さく
-        const titleColor = b.win >= 1 ? 'rainbow' : plan.kai ? '#c070ff' : plan.enemy === 'onioni' ? '#ff3a3a' : '#ffffff';
+        const titleColor = b.win >= 1 ? 'rainbow' : plan.kai ? '#c070ff' : plan.enemy === 'onioni' ? '#ff3a3a' : b.color || '#ffffff';
         text(`VS ${b.name}`, W / 2 + 34, 40, b.name.length > 10 ? 10 : 12, titleColor, 'center', now);
         // 通常時のバトル: SPリーチ / SPSPリーチ (最終決戦)
         if (plan.fig === 1 && plan.sp) {
@@ -866,6 +956,7 @@ const Lcd = (() => {
         }
         hpBar(90, 54, 70, kooriHp, '#7fd3f7');
         hpBar(176, 54, 70, enemyHp, '#ff6a8a');
+        drawBattleTalk(now, plan, phase);   // 必殺技と 敵の セリフ (P3)
 
         if (phase.name === 'battle' && phase.pushing) {
             const pushed = spinView.pushedAt !== null;
@@ -1377,7 +1468,7 @@ const Lcd = (() => {
     }
 
     // 可動液晶 (2026-10-23 アップグレード P1): 見せ場の 場面で 液晶が 前に せり出す (js/render.js が 描く)。0〜1 で なめらかに
-    const ZOOM_PHASES = ['battle', 'pursuit', 'result', 'zenkaiten', 'zend', 'cfinal', 'cresult'];
+    const ZOOM_PHASES = ['battle', 'pursuit', 'result', 'zenkaiten', 'zend', 'cfinal', 'cresult', 'klive', 'kend'];
     let zoomNow = 0, zoomAt = 0;
     function zoom(now) {
         const on = Customize.get('lcdZoom') !== 'off' && !Story.active() && currentPhase && ZOOM_PHASES.includes(currentPhase.name);
@@ -1490,6 +1581,7 @@ const Lcd = (() => {
             }
             if (phase && phase.name === 'next') drawNext(now, plan, phase);
             if (plan && plan.type === 'zenkaiten' && phase) drawZenkaiten(now, plan, phase);
+            if (plan && plan.type === 'ikiteru' && phase) drawIkiteru(now, plan, phase);   // こおりいきていける！ (P3)
             // 擬似連のあと (チャレンジのあいだ) は右上に「擬似〇連」
             if (plan && plan.gizi && phase && phase.name === 'challenge') text(`擬似${plan.gizi + 1}連`, W - 6, 9, 9, '#ffe066', 'right');
             if (phase && phase.name === 'reach' && phase.local >= 0.6 && phase.local < 1.4) {
@@ -1553,6 +1645,7 @@ const Lcd = (() => {
             }
         }
         drawTrophy(now);
+        drawHeaven(now);   // 天国の カットイン (P3)
         if (flash && now < flash.until) {
             const t = 1 - (flash.until - now) / flash.length;
             band(44, 44, 0.45);
@@ -1563,6 +1656,7 @@ const Lcd = (() => {
     }
 
     return { init, reset, draw, event, aim, show, push, setChoosing, gimmick, zoom, W, H,
+        __phase: () => (currentPhase ? currentPhase.name : null),   // 確認用 (いまの 場面の 名前)
         playStory: (name, now) => Story.play(name, now), skipStory: () => Story.skip(),
         storyPlaying: () => Story.active() ? Story.name : null };
 })();

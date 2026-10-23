@@ -20,7 +20,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const JS_DIR = path.join(ROOT, 'js');
 // 画面に触らないファイルだけ読み込む
-const GAME_FILES = ['config.js', 'sprites.js', 'characters.js', 'scenario.js', 'machine.js', 'records.js', 'updates.js', 'bgm.js', 'round-info.js'];
+const GAME_FILES = ['config.js', 'sprites.js', 'characters.js', 'rivals.js', 'scenario.js', 'machine.js', 'records.js', 'updates.js', 'bgm.js', 'round-info.js'];
 
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => {
@@ -320,7 +320,10 @@ test('台をまわす: 突破率・継続率が目標に近い', () => {
     for (const { specId, m, log } of runs) {
         const target = CONFIG.specs[specId].target;
         assert(log.challenges > 150, `${specId} の突破チャレンジが少ない (${log.challenges})`);
-        assertBetween(log.challengeWins / log.challenges, target.challenge - 0.08, target.challenge + 0.08, `${specId} の突破率`);
+        // 許容幅: ±8% か、回数から 見た 偶然の ぶれ (標準誤差) の 3.5 倍の 大きいほう (1/159 は 突破チャレンジが 約350回で ぶれが 約2.7%。2026-10-23)
+        const se = Math.sqrt(target.challenge * (1 - target.challenge) / log.challenges);
+        const tol = Math.max(0.08, 3.5 * se);
+        assertBetween(log.challengeWins / log.challenges, target.challenge - tol, target.challenge + tol, `${specId} の突破率`);
         const s = m.stats;
         const continuation = (s.rushHits - s.rushEntries) / s.rushHits;
         assertBetween(continuation, target.continuation - 0.05, target.continuation + 0.05, `${specId} の継続率`);
@@ -1039,6 +1042,31 @@ test('ページ: index.html と tools/fast.html が js/ のファイルをすべ
     for (const f of files) assert(scripts(index).includes(f), `index.html が ${f} を読み込んでいない`);
     assertEqual(scripts(fast).join(), scripts(index).join(), 'tools/fast.html の読み込みが index.html と違う (python tools/make-fast.py で作り直す)');
     assert(scripts(howto).includes('js/config.js'), 'howto.html が config.js を読み込んでいない');
+});
+
+// ----- ASO の 演出 (2026-10-23 アップグレード P3) -----
+test('ライバルバトル・必殺技・こおりいきていける！: チームの 絵と セリフが そろい、こおりいきていける！ は 当たりだけ', () => {
+    const { CONFIG, Characters, Scenario } = loadGame(5);
+    const show = CONFIG.show;
+    for (const [id, b] of Object.entries(show.battles)) {
+        (b.team || [id]).forEach(who => assert(Characters.has(who), `${b.name} の ${who} の 絵が ない`));
+        const lead = b.leader || id;
+        assert(show.battleTalk.specials[lead], `${b.name} の 必殺技 (battleTalk.specials.${lead}) が ない`);
+        assert(show.battleTalk.lines[lead], `${b.name} の セリフ (battleTalk.lines.${lead}) が ない`);
+        assert(show.develop.sp[id], `${b.name} の SP / SPSP (develop.sp) が ない`);
+    }
+    const spec = CONFIG.specs.s99, rng = seededRandom(3);
+    let ik = 0;
+    for (let i = 0; i < 4000; i++) {
+        const hit = i % 2 === 0;
+        const p = Scenario.plan(CONFIG, spec, { fig: 1, rush: false, holdsLeft: 1, notice: 'normal', result: { kind: hit ? 'hit' : 'miss', alloc: {} } }, rng);
+        if (p.type === 'ikiteru') {
+            ik++;
+            assert(hit && p.win, 'こおりいきていける！ は 当たりだけ');
+            assert(p.digits.every(d => d === p.digits[0]), '図柄が そろう');
+        }
+    }
+    assert(ik > 10, `こおりいきていける！ が 出る (${ik})`);
 });
 
 // ----- 期待度の表 (2026-10-23 アップグレード P2。tools/trust.js) -----

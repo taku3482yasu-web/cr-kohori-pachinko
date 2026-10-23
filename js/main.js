@@ -605,6 +605,10 @@
         }));
         $('debug-reach').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'reach', null, { enemy: enemy() === 'naitei' ? undefined : enemy() }));
         $('debug-fail').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'fail', null));
+        $('debug-ikiteru').addEventListener('click', () => {   // P3
+            Machine.debugHold(game.machine, 1, 'hit', null);
+            game.machine.holds[1][0].forceIkiteru = true;
+        });
         $('debug-button').addEventListener('click', () => MachineButton.trigger(['red', 'shake', 'beep'][Math.floor(Math.random() * 3)], time));
         $('debug-rainbow').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'hit', null, { holdColor: 'rainbow', enemy: enemy() }));
         $('debug-rash-mode').addEventListener('click', () => {

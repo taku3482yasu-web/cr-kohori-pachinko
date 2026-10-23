@@ -292,6 +292,9 @@ const Scenario = (() => {
         if (!spin.rush && (spin.notice === 'post' || spin.notice === 'oneshot')) return noticePlan(config, spin, rng);
         // 全回転 (プレミア): 通常時の当たりの変動の rate
         if (hit && !spin.rush && (result.forceZenkaiten || rng() < show.zenkaiten.rate)) return zenkaitenPlan(config, spin, rng);
+        // こおりいきていける！ (P3): ノイズ → 暗転 → 虹色の こおりくん → そろう。
+        //   変動の 長さが 変わるので 全回転と 同じく 台の 乱数 (rng) で 決める (fxRandom に すると テストの 結果が 毎回 変わる)
+        if (hit && !spin.rush && show.ikiteru && (result.forceIkiteru || rng() < show.ikiteru.rate)) return ikiteruPlan(config, spin, rng);
 
         // ステップアップ予告・群予告 (通常時だけ)
         const step = spin.rush ? null : stepUp(show, spec, hit, result, rng);
@@ -478,6 +481,18 @@ const Scenario = (() => {
             reveal: { phase: 'zenkaiten', at: 0.8 }, defeatLine: show.furukawa.congratsLine, defeatColor: 6 };
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         if (!spin.rush) p.talk = talk(show, p, spin, rng);
+        return p;
+    }
+
+    // こおりいきていける！ (2026-10-23 アップグレード P3): kroll → knoise (ノイズ) → kdark (暗転) → klive (虹色の こおりくん) → kend (そろう)
+    function ikiteruPlan(config, spin, rng) {
+        const show = config.show;
+        const t = show.ikiteru.timing;
+        const d = hitDigit(show, spin.result, 1, rng);
+        const p = { fig: 1, type: 'ikiteru', win: true, talk: null, digits: [d, d, d],
+            phases: ['kroll', 'knoise', 'kdark', 'klive', 'kend'].map(name => ({ name, t: t[name] })),
+            reveal: { phase: 'klive', at: 0.5 }, defeatLine: show.furukawa.congratsLine, defeatColor: 6 };
+        p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         return p;
     }
 
