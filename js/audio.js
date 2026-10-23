@@ -127,6 +127,9 @@ const Sound = (() => {
         attack: () => tone(220, 0, 0.15, { slideTo: 880, volume: 0.06, type: 'sawtooth' }),
         hurt: () => tone(160, 0, 0.2, { slideTo: 60, volume: 0.08, type: 'square' }),
         push: () => tone(1568, 0, 0.1, { volume: 0.06 }),
+        // レバーを引け！ (2026-10-24): PUSH！ から 変わる ガコッ / レバーを 引いた ズドン
+        lever: () => { tone(110, 0, 0.12, { volume: 0.12, type: 'square' }); tone(1760, 0.08, 0.25, { volume: 0.07, slideTo: 2637 }); },
+        pull: () => { tone(90, 0, 0.35, { slideTo: 40, volume: 0.14, type: 'sawtooth' }); tone(880, 0.05, 0.3, { slideTo: 1760, volume: 0.07 }); },
         win: () => [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.11, 0.2, { volume: 0.08 })),
         lose: () => [392, 330, 262].forEach((f, i) => tone(f, i * 0.18, 0.25, { volume: 0.06, type: 'triangle' })),
         v: () => [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, i * 0.06, 0.15, { volume: 0.07 })),

@@ -18,6 +18,7 @@
     ?force=hit&zen=okagappa  全回転 (koori / naitei / aruaru / onioni / okagappa)
     ?force=fail&yutime=1&holds=0  遊タイム (はじめの変動が止まったら遊タイム突入)
     ?force=koori&hit=2&cheer=3  こおりRASH のお仲間の応援 (0〜3人)
+    ?force=hit&lever=change  レバーを引け！ (lever=1 ははじめから。force=koori&hit=2 と使うと RASH 中の確定)
     ?force=hit&enemy=onioni&gun=hibiki&cutin=gold&develop=1&gimmick=1&stepup=none  群予告・SPSP への発展・こおりカットイン・役物 (役物は盤面に描くので index.html で)
     ?force=hit&notice=post  告知のタイプ (post: 後告知 / oneshot: 一発告知)
     ?force=okapipo&hit=6&oka=rainbow  おかピポRASH の当たり (lose=1 で外れ。oka=gold で金色のおかがっぱ、oka=gun で告知なしのおかがっぱ群)
@@ -111,6 +112,8 @@
         }
         // 怪の保留 (先バレ): 怪の相手のバトルにする
         if (params.get('kai')) m.holds[2][0].kai = true;
+        // &lever=1: レバーを引け！ (&lever=change: PUSH！ から変わる)
+        if (params.get('lever')) Object.assign(m.holds[2][0], { forceLever: true, forceLeverChange: params.get('lever') === 'change' });
     } else if (force === 'small') Machine.debugHold(m, 2, 'small', null);
     else if (force === 'rush') Machine.debugHold(m, 1, 'hit', 'jitan', options);
     else Machine.debugHold(m, 1, force, null, options);
@@ -127,6 +130,7 @@
         if (params.get('cutin')) first.forceCutin = params.get('cutin');
         if (params.get('develop')) first.forceDevelop = true;
         if (params.get('gimmick')) first.forceGimmick = true;
+        if (params.get('lever')) Object.assign(first, { forceLever: true, forceLeverChange: params.get('lever') === 'change' });
     }
     if (params.get('change')) {
         // 保留変化の確認: 当たりの保留を白で出しておき、変化させる
@@ -144,7 +148,7 @@
     };
     const render = () => {
         screen.imageSmoothingEnabled = false;
-        screen.drawImage(Lcd.draw(time, m), 0, 0);
+        screen.drawImage(Lcd.draw(time, m), 0, 0, 256, 144);   // 液晶は 2 倍で 描くので 縮める (P1)
         const p = m.spin && m.spin.plan;
         document.getElementById('info').textContent = `t=${time.toFixed(2)}s`
             + (p ? ` / ${p.type || ''} ${p.challenge || ''} ${p.enemy || ''} ${p.win ? '勝ち' : ''} 図柄 ${p.digits.join(',')}` : '');
@@ -159,7 +163,7 @@
             c.height = 144;
             const g = c.getContext('2d');
             g.imageSmoothingEnabled = false;
-            g.drawImage(Lcd.draw(time, m), 0, 0);
+            g.drawImage(Lcd.draw(time, m), 0, 0, 256, 144);
             const label = document.createElement('span');
             label.textContent = `${target}s`;
             box.append(c, label);

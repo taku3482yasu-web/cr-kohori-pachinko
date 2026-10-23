@@ -435,11 +435,15 @@ test('復活: こおりRASH の当たりの約20%、1/99 は 900個 確定、確
     }
 });
 
-test('レバー・レバブル (2026-10-23): レバーが出たら 90% 越えで当たり、レバブルは出たら当たる割合が config に近い', () => {
+test('レバー・レバブル (2026-10-24): レバーを引け！が出たら 85% くらいで当たり (RASH 中は確定)、レバブルは出たら当たる割合が config に近い', () => {
     const show = CONFIG.show;
     for (const { specId, log } of runs) {
-        const lever = [0, 0], spin = [0, 0], hold = [0, 0];
+        const lever = [0, 0], spin = [0, 0], hold = [0, 0], rash = [0, 0], change = [0, 0];
         for (const e of log.events) {
+            if (e.type === 'spinEnd' && e.plan.lever) { change[0]++; if (e.plan.leverChange) change[1]++; }
+            if (e.type === 'spinEnd' && e.plan.kind === 'rashBattle') {
+                if (e.plan.lever) { rash[0]++; if (e.plan.win && !e.plan.revival) rash[1]++; }   // 復活では 出さない
+            }
             if (e.type === 'spinEnd' && e.fig === 1 && e.plan.type === 'reach') {
                 if (e.plan.lever) { lever[0]++; if (e.plan.win) lever[1]++; }
                 if (e.plan.leverBuru) { spin[0]++; if (e.plan.win) spin[1]++; }
@@ -447,7 +451,9 @@ test('レバー・レバブル (2026-10-23): レバーが出たら 90% 越えで
             if (e.type === 'hold' && e.fig === 1 && !e.result.extra && e.result.leverBuru) { hold[0]++; if (e.result.kind === 'hit') hold[1]++; }
         }
         assert(lever[0] > 30, `${specId} でレバーが少ない (${lever[0]})`);
-        assert(lever[1] / lever[0] > 0.85, `${specId} のレバーが出たら当たる割合 ${(lever[1] / lever[0]).toFixed(3)} (90% 越えのはず)`);
+        assertBetween(lever[1] / lever[0], show.lever.reliability - 0.07, show.lever.reliability + 0.07, `${specId} のレバーを引け！が出たら当たる割合`);
+        assert(rash[0] > 0 && rash[1] === rash[0], `${specId} の RASH 中のレバーを引け！ (${rash[1]} / ${rash[0]}。出たら確定・復活では出ないはず)`);
+        assertBetween(change[1] / change[0], show.lever.change - 0.12, show.lever.change + 0.12, `${specId} の PUSH！ からレバーを引け！に変わる割合`);
         assert(spin[0] > 30 && hold[0] > 30, `${specId} でレバブルが少ない (変動中 ${spin[0]} / 保留 ${hold[0]})`);
         assertBetween(spin[1] / spin[0], show.leverBuru.spinReliability - 0.12, show.leverBuru.spinReliability + 0.12, `${specId} の変動中のレバブル`);
         assertBetween(hold[1] / hold[0], show.leverBuru.holdReliability - 0.15, show.leverBuru.holdReliability + 0.15, `${specId} の保留のレバブル`);

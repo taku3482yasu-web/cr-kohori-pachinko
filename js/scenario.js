@@ -353,10 +353,11 @@ const Scenario = (() => {
                 if (p.cutin) p.phases.splice(battleAt(), 0, { name: 'cutin', t: show.cutin.time });
                 const gm = show.gimmick;
                 p.gimmick = Boolean(result.forceGimmick || rng() < (hit ? gm.hit : revealRate(gm.hit, gm.reliability, hReach)));
-                // レバー PUSH (2026-10-23 ユーザー指定): ボタンの かわりに レバー。出たら 当たる 割合が lever.reliability (90% 越え)
+                // レバーを引け！ (2026-10-24 ユーザー指定): PUSH の かわりに レバーを 引く。出たら 当たる 割合が lever.reliability (85%)
                 const lvr = show.lever;
                 //   (レバー・レバブルは 見た目だけの 演出なので fxRandom。台の 抽選の 乱数の 並びを かえない)
                 p.lever = Boolean(result.forceLever || (lvr && fxRandom() < (hit ? lvr.hit : revealRate(lvr.hit, lvr.reliability, hReach))));
+                if (p.lever) p.leverChange = result.forceLeverChange ?? fxRandom() < lvr.change;   // はじめは PUSH！ で、とちゅうから レバーを引け！ に 変わる
                 // レバブル (変動中: リーチに なったとき)
                 const lbs = show.leverBuru;
                 p.leverBuru = Boolean(lbs && fxRandom() < (hit ? lbs.spinHit : revealRate(lbs.spinHit, lbs.spinReliability, hReach)));
@@ -626,6 +627,12 @@ const Scenario = (() => {
                         { name: 'rvstill', t: rt.still }, { name: 'rvsoredemo', t: rt.soredemo }, { name: 'rvflash', t: rt.flash },
                         { name: 'rvkill', t: rt.kill });
                     p.reveal = { phase: 'rvflash', at: 0.3 };
+                }
+                // レバーを引け！ (2026-10-24 ユーザー指定: RASH 中に 出たら 当たり確定): 当たりの バトルだけ (復活は 負けに 見せるので 出さない)
+                const lvr = show.lever;
+                if (win && !p.revival && lvr && (result.forceLever || fxRandom() < lvr.rashHit)) {
+                    p.lever = true;
+                    p.leverChange = result.forceLeverChange ?? fxRandom() < lvr.change;
                 }
                 // お仲間の応援 (0〜3人): 人数が多いほど勝ちやすい
                 p.cheer = Number(weighted(show.cheer[win ? 'win' : 'miss'], rng));

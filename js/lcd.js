@@ -196,7 +196,7 @@ const Lcd = (() => {
             Sound.play(e.level === 6 ? 'win' : 'success');
         } else if (e.type === 'spinStart') {
             if (trophy) trophy.until = Math.max(now, trophy.start + summaryTime) + CONFIG.show.settingHint.trophy.minShow;
-            spinView = { plan: e.plan, gaugeStop: 0.55 + Math.random() * 0.35, pushedAt: null };
+            spinView = { plan: e.plan, gaugeStop: 0.55 + Math.random() * 0.35, pushedAt: null, pullAt: null };
             if (e.plan.talk) {
                 say(e.plan.talk.text, e.plan.talk.color, now);
                 // ステップアップ予告のあいだは、文字に重ならないよう予告が終わってからしゃべる
@@ -370,13 +370,26 @@ const Lcd = (() => {
     const rashName = () => CONFIG.show.rash.modes[rashMode || CONFIG.show.rash.defaultMode].name;
     const rashColor = () => CONFIG.show.rash.modes[rashMode || CONFIG.show.rash.defaultMode].color;
 
-    // 台のボタンが押された (バトルの PUSH)
-    function push(now) {
-        if (spinView && currentPhase && currentPhase.pushing && spinView.pushedAt === null) {
-            spinView.pushedAt = now;
-            Sound.play('attack');
+    // 台のボタンが押された (バトルの PUSH)。how: 'button' 台の ボタン / 'pull' 筐体の レバーを 引いた / 'any' どちらでも (レバーが 出ていないとき)
+    //   レバーを引け！ (2026-10-24 ユーザー指定) は レバーを 引いたときだけ。はじめ PUSH！ の ときは、ボタンを 押すと レバーを引け！ に 変わる
+    function push(now, how = 'any') {
+        if (!(spinView && currentPhase && currentPhase.pushing && spinView.pushedAt === null)) return;
+        if (spinView.plan.lever && spinView.pullAt === null && how !== 'pull') { leverOn(now); return; }
+        if (spinView.pullAt !== null && how === 'button') return;
+        if (spinView.plan.lever && spinView.pullAt === null) spinView.pullAt = now;
+        spinView.pushedAt = now;
+        Sound.play(spinView.pullAt !== null ? 'pull' : 'attack');
+    }
+    // 「レバーを引け！」を 出す (PUSH！ から 変わるときは ガコッと 音を 鳴らして レバーを 震わせる)
+    function leverOn(now) {
+        spinView.pullAt = now;
+        if (spinView.plan.leverChange) {
+            Sound.play('lever');
+            MachineButton.buru(now);
         }
     }
+    // PUSH を 待つ 秒 (レバーを 引くときは 長く)
+    const pushTimeOf = plan => plan && plan.lever ? CONFIG.show.lever.time : CONFIG.show.pushTime;
 
     // ----- 描く道具 -----
     function rainbow(now, offset = 0) {
@@ -778,7 +791,7 @@ const Lcd = (() => {
                 return { id: members[idx], idx, kind: 'intro', line: talkOf(members[idx]).intro };
             }
             // 敵の 攻撃 (奇数の ターン。drawBattle と 同じ 1.2 秒ごと): 攻撃した 人の 必殺技
-            const pushStart = phase.t - CONFIG.show.pushTime;
+            const pushStart = phase.t - pushTimeOf(plan);
             const turn = Math.floor(Math.min(l, pushStart) / 1.2);
             if (l < pushStart && turn % 2 === 1 && l >= INTRO_AT + INTRO_STEP * members.length) {
                 const idx = Math.floor(turn / 2) % members.length;
@@ -936,7 +949,7 @@ const Lcd = (() => {
             once('develop', 'reach');
         } else if (phase.name === 'battle') {
             // 1.2秒ごとに攻撃しあう (偶数回目はこおりくん、奇数回目は相手)
-            const pushStart = phase.t - CONFIG.show.pushTime;
+            const pushStart = phase.t - pushTimeOf(plan);
             const fightT = Math.min(phase.local, pushStart);
             const turn = Math.floor(fightT / 1.2);
             const inTurn = (fightT % 1.2) / 1.2;
@@ -1029,8 +1042,15 @@ const Lcd = (() => {
             const pushed = spinView.pushedAt !== null;
             if (!pushed) {
                 band(66, 26, 0.5);
-                if (spinView.plan.lever) text('レバーを押せ！', W / 2, 79, 18, 'rainbow', 'center', now);   // レバー (90% 越え)
-                else text('PUSH！', W / 2, 79, 22, Math.floor(now * 8) % 2 ? '#ffe066' : '#ff3a3a');
+                if (spinView.pullAt !== null) {
+                    // レバーを引け！ (85%。RASH 中は 確定): 変わった 瞬間は 白く 光って 文字が 大きく 出てくる
+                    const since = now - spinView.pullAt;
+                    if (spinView.plan.leverChange && since < 0.3) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * (1 - since / 0.3)})`;
+                        ctx.fillRect(0, 0, W, H);
+                    }
+                    text('レバーを引け！', W / 2, 79, Math.round(18 + Math.max(0, 0.25 - since) * 24), 'rainbow', 'center', now);
+                } else text('PUSH！', W / 2, 79, 22, Math.floor(now * 8) % 2 ? '#ffe066' : '#ff3a3a');
             } else {
                 ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, 0.8 - (now - spinView.pushedAt) * 2)})`;
                 ctx.fillRect(0, 0, W, H);
@@ -1618,7 +1638,10 @@ const Lcd = (() => {
         ctx.imageSmoothingEnabled = false;
         const plan = m && m.spin && spinView ? spinView.plan : null;
         const phase = plan ? phaseAt(plan, m.spin.elapsed) : null;
-        if (phase && (phase.name === 'battle' || phase.name === 'cfinal')) phase.pushing = phase.local >= phase.t - CONFIG.show.pushTime;
+        if (phase && (phase.name === 'battle' || phase.name === 'cfinal')) phase.pushing = phase.local >= phase.t - (phase.name === 'battle' ? pushTimeOf(plan) : CONFIG.show.pushTime);
+        // レバーを引け！: はじめから 出るか、PUSH！ から changeAt 秒で 変わる (その前に ボタンを 押しても 変わる。push)
+        if (plan && plan.lever && phase && phase.name === 'battle' && phase.pushing && spinView.pushedAt === null && spinView.pullAt === null
+            && (!plan.leverChange || phase.local >= phase.t - pushTimeOf(plan) + CONFIG.show.lever.changeAt)) leverOn(now);
         currentPhase = phase;
         lightSpin = plan ? { plan, elapsed: m.spin.elapsed } : null;
         reverseText = Boolean(plan && plan.kind === 'onioni' && plan.pattern === 'reverse' && phase && phase.name === 'anomaly');
@@ -1634,8 +1657,8 @@ const Lcd = (() => {
         if (!m) return canvas;
         phaseSounds(plan, phase);
 
-        // バトル中は PUSH の案内を台のボタンにも出す (レバーの ときは「レバーを押せ！」)
-        MachineButton.prompt(Boolean(phase && phase.pushing && spinView.pushedAt === null), Boolean(plan && plan.lever));
+        // バトル中は PUSH の案内を台のボタンにも出す (レバーの ときは「レバーを引け！」。筐体の レバーが 光る)
+        MachineButton.prompt(Boolean(phase && phase.pushing && spinView.pushedAt === null), Boolean(plan && plan.lever && spinView.pullAt !== null));
         // レバブル (変動中: リーチに なったとき 1 回)
         if (plan && plan.leverBuru && phase && phase.name === 'reach' && !spinView.buru) {
             spinView.buru = true;

@@ -56,7 +56,7 @@ function features(config) {
     Object.entries(show.cutin.colors).forEach(([id, c]) => add('こおりカットイン', `${c.name}`, p => p.cutin === id));
     add('バトル', '盤面の役物が落ちる', p => p.gimmick);
     add('バトル', '追撃チャンス', p => p.pursuit);
-    add('バトル', 'レバーを押せ！', p => p.lever);
+    add('バトル', 'レバーを引け！', p => p.lever);
     add('バトル', 'レバブル（リーチ）', p => p.leverBuru);
     if (show.iwakan) Object.entries(show.iwakan.kinds).forEach(([id, k]) => add('違和感', k.name, p => p.iwakan === id));
     add('プレミア', '全回転', p => p.type === 'zenkaiten');

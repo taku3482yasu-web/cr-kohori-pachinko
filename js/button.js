@@ -50,7 +50,7 @@ const MachineButton = (() => {
         }
     }
 
-    // lever: ボタンの かわりに「レバーを押せ！」(2026-10-23 ユーザー指定。台の ボタン・筐体の レバーの どちらを 押しても よい)
+    // lever: ボタンの かわりに「レバーを引け！」(2026-10-24 ユーザー指定。筐体の レバーを 引く。レバーが 出ていない 画面では 台の ボタン)
     function prompt(on, lever = false) {
         if (!el) return;
         el.classList.toggle('push', on);
@@ -69,7 +69,18 @@ const MachineButton = (() => {
         }
     }
 
+    // レバーを 引く (筐体の 絵が 使う): pull(0〜1) ドラッグで 引いている 量 / pulled(now) 引ききった (ばねで もどる)
+    let pullDrag = 0, pulledAt = null, pullShown = 0;
+    function pull(amount) { pullDrag = Math.max(0, Math.min(1, amount)); }
+    function pulled(now) { pullDrag = 0; pulledAt = now; }
+
     function update(now) {
+        pullShown = pullDrag;
+        if (!pullDrag && pulledAt !== null) {
+            const d = now - pulledAt;
+            pullShown = d < 0.2 ? 1 : Math.max(0, 1 - (d - 0.2) / 0.35);
+            if (d >= 0.55) pulledAt = null;
+        }
         if (el && buruUntil && now >= buruUntil) {
             el.classList.remove('fx-buru');
             buruUntil = 0;
@@ -82,7 +93,7 @@ const MachineButton = (() => {
     }
     // いまの 光り方 (筐体の PUSH が 使う)
     const state = () => ({ kind: lit, lit: Boolean(lit), push: Boolean(el && el.classList.contains('push')), pressed: Boolean(el && el.classList.contains('pressed')),
-        lever: Boolean(el && el.classList.contains('lever')), buru: Boolean(buruUntil) });
+        lever: Boolean(el && el.classList.contains('lever')), buru: Boolean(buruUntil), pull: pullShown });
 
-    return { init, trigger, prompt, buru, update, state, LONG_PRESS };
+    return { init, trigger, prompt, buru, pull, pulled, update, state, LONG_PRESS };
 })();

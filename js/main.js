@@ -81,11 +81,30 @@
         if (typeof Cabinet !== 'undefined' && !game.cabinet) {
             game.cabinet = (Cabinet.create($('cabinet-art'), canvas, { outline: BoardView.outline(game.board), width: CONFIG.board.width, lcd: CONFIG.board.lcd }), true);
             // 筐体の 下の PUSH: 押すと 台の ボタンを 押したのと 同じ (長押しの 早送りも)
+            //   「レバーを引け！」の あいだは、レバーを つかんで 手前 (下) へ 引く (2026-10-24 ユーザー指定)
             const push = $('cabinet-push'), kb = $('koori-button');
+            let grab = null;   // レバーを つかんで いる { id, y, amount }
             ['pointerdown', 'pointerup', 'pointercancel', 'pointerleave'].forEach(type => push.addEventListener(type, e => {
                 e.preventDefault();
+                if (type === 'pointerdown' && MachineButton.state().lever) {
+                    try { push.setPointerCapture(e.pointerId); } catch (err) { /* つかめない 環境 */ }
+                    grab = { id: e.pointerId, y: e.clientY, amount: 0 };
+                    return;
+                }
+                if (grab && grab.id === e.pointerId) {
+                    if (type === 'pointerleave') return;   // つかんだ まま 外に 出ても 引きつづける
+                    if (grab.amount >= 0.5) pullLever(); else MachineButton.pull(0);
+                    grab = null;
+                    return;
+                }
                 kb.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: e.pointerId, pointerType: e.pointerType }));
             }));
+            push.addEventListener('pointermove', e => {
+                if (!grab || grab.id !== e.pointerId) return;
+                grab.amount = (e.clientY - grab.y) / Math.max(24, push.offsetHeight * 1.5);
+                MachineButton.pull(grab.amount);
+                if (grab.amount >= 1) { grab = null; pullLever(); }
+            });
         }
         game.spinsBase = saved ? saved.spinsBase : 0;
         game.stats = saved ? { ...saved.stats } : { launched: 0, launchedLeft: 0, foul: 0, foulLeft: 0, heso: 0, gate: 0, denchu: 0, attacker: 0, general: 0, warp: 0, out: 0, paid: 0, firstHits: 0 };
@@ -391,6 +410,7 @@
         if (e.code === 'KeyB' && e.repeat && keyBDown !== null && time - keyBDown >= MachineButton.LONG_PRESS) { keyBDown = null; skipShow(); }
         if (e.code === 'Space' && Lcd.storyPlaying() === 'opening') { Lcd.skipStory(); e.preventDefault(); return; }
         if (e.code === 'Space') { game.firing = true; e.preventDefault(); }
+        if (e.code === 'ArrowDown' && !e.repeat && MachineButton.state().lever) { pullLever(); e.preventDefault(); }   // レバーを引け！
         if (e.code === 'ArrowRight') setStrength(game.strength + (e.shiftKey ? 10 : 1));
         if (e.code === 'ArrowLeft') setStrength(game.strength - (e.shiftKey ? 10 : 1));
     });
@@ -442,7 +462,14 @@
             Lcd.show(`${CONFIG.show.rash.modes[m.rashMode].name}！`, CONFIG.show.rash.modes[m.rashMode].color, time, 1);
             return;
         }
-        Lcd.push(time);
+        // 筐体の レバーが 出ているときの「レバーを引け！」は ボタンでは 進まない (レバーが 出ていない 画面では ボタンで よい)
+        Lcd.push(time, $('cabinet-push').hidden ? 'any' : 'button');
+    }
+    // 筐体の レバーを 引いた (ドラッグ・↓ キー)
+    function pullLever() {
+        if (!MachineButton.state().lever) { MachineButton.pull(0); return; }
+        MachineButton.pulled(time);
+        Lcd.push(time, 'pull');
     }
 
     // ----- RASH の選択 -----

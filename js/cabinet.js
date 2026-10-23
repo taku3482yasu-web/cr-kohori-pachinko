@@ -406,7 +406,8 @@ const Cabinet = (() => {
     function bottom(pts, st, t) {
         const L = lever(pts);
         if (!L) return;
-        const { cx, capR, baseY, baseW, y0, bh } = L;
+        const { cx, baseY, baseW, y0, bh } = L;
+        let { capR } = L;
         // 左右の スピーカーの 網
         for (const [gx, gw] of [[W * 0.05, W * 0.3], [W * 0.65, W * 0.3]]) {
             const gy = y0 + bh * 0.3, gh = bh * 0.52;
@@ -455,10 +456,14 @@ const Cabinet = (() => {
         g.moveTo(cx + baseW * 0.32, baseY - 2);
         g.quadraticCurveTo(cx + baseW * 0.2, baseY - bh * 0.26, cx + baseW * 0.12, baseY - bh * 0.32);
         g.stroke();
-        // レバーの 棒 (上へ 細くなる。押すと 少し 沈む)。レバブルで ぶるぶる、「レバーを押せ！」で 虹色に 光る (2026-10-23)
+        // レバーの 棒 (上へ 細くなる。押すと 少し 沈む)。レバブルで ぶるぶる、「レバーを引け！」で 虹色に 光る (2026-10-23)
+        //   引くと (bs.pull 0〜1。2026-10-24) 手前に 倒れて くるので、ボタンが 下がって 少し 大きく 見える
         const bs = st.button || {};
-        const sink = bs.pressed ? capR * 0.25 : 0;
-        const capY = L.capY + sink;
+        const pull = bs.pull || 0;
+        const sink = bs.pressed && !bs.lever ? capR * 0.25 : 0;
+        const capY = L.capY + sink + pull * capR * 1.5;
+        const capR0 = capR;
+        capR *= 1 + pull * 0.3;
         const jig = bs.buru ? Math.sin(t * 90) * capR * 0.14 : 0;
         g.save();
         g.translate(jig, bs.buru ? Math.cos(t * 70) * capR * 0.05 : 0);
@@ -520,16 +525,26 @@ const Cabinet = (() => {
         g.fillText('PUSH', 0, 1);
         g.restore();
         g.restore();   // ぶるぶる の 位置を もどす
-        // 「レバーを押せ！」: ボタンの 上に ▼ が 点滅
-        if (bs.lever && Math.floor(t * 6) % 2) {
-            g.font = `bold ${Math.round(capR * 0.9)}px ${FONT}`;
+        // 「レバーを引け！」: ボタンの 左右に「引け」と、手前 (下) へ 流れる ▼
+        if (bs.lever && !pull) {
+            g.font = `bold ${Math.round(capR0 * 0.8)}px ${FONT}`;
             g.textAlign = 'center';
             g.textBaseline = 'middle';
             g.lineWidth = 3;
             g.strokeStyle = '#000000';
-            g.strokeText('▼', cx, capY - capR * 1.15);
-            g.fillStyle = '#ffe066';
-            g.fillText('▼', cx, capY - capR * 1.15);
+            const k = (t * 2) % 1;
+            for (const dx of [-1, 1]) {
+                const x = cx + dx * capR0 * 1.7;
+                g.globalAlpha = 1;
+                g.strokeText('引け', x, capY - capR0 * 0.6);
+                g.fillStyle = hsl(t * 400 + dx * 90, 95, 65);
+                g.fillText('引け', x, capY - capR0 * 0.6);
+                g.globalAlpha = 1 - k;
+                g.strokeText('▼', x, capY + capR0 * (0.2 + k * 0.8));
+                g.fillStyle = '#ffe066';
+                g.fillText('▼', x, capY + capR0 * (0.2 + k * 0.8));
+            }
+            g.globalAlpha = 1;
             g.textAlign = 'left';
         }
         // ハンドルの 飾り (右下の オレンジの 玉)
