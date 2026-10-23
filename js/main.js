@@ -322,7 +322,7 @@
         }
         // BGM: 台の状態で曲を変える。消音・BGM OFF・窓を開いているあいだは止める
         Bgm.play(Bgm.trackFor(game.machine, Lcd.storyPlaying()));
-        Bgm.setPaused(Sound.muted || Customize.get('bgm') === 'off' || game.paused);
+        Bgm.setPaused(Sound.muted || Sound.hushed || Customize.get('bgm') === 'off' || game.paused);   // hushed: 違和感の 無音 (P4)
         saveTimer += 1;
         if (saveTimer >= 180 && !game.paused) { saveTimer = 0; saveNow(); }   // 約3秒ごと
         MachineButton.update(time);
@@ -602,6 +602,7 @@
         const enemy = () => $('debug-enemy').value || undefined;
         ['debug-hit', 'debug-hit-rush'].forEach(id => $(id).addEventListener('click', () => {
             if (enemy()) game.machine.holds[1][0].forceEnemy = enemy();
+            if ($('debug-iwakan').value) game.machine.holds[1][0].forceIwakan = $('debug-iwakan').value;   // P4
         }));
         $('debug-reach').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'reach', null, { enemy: enemy() === 'naitei' ? undefined : enemy() }));
         $('debug-fail').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'fail', null));

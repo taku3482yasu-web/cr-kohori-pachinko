@@ -44,7 +44,7 @@ const Cabinet = (() => {
         B.s = B.w / ((shape && shape.width) || 360);
     }
     function lamp(kind, now) {
-        if (kind === 'red' || kind === 'purple' || kind === 'rainbow') lampState = { kind, at: now };
+        if (kind === 'red' || kind === 'purple' || kind === 'rainbow' || kind === 'glitch') lampState = { kind, at: now };   // glitch: 違和感 (P4)
     }
     const lampOn = t => (lampState && t - lampState.at >= 0 && t - lampState.at < LAMP_TIME ? lampState : null);
 
@@ -344,8 +344,8 @@ const Cabinet = (() => {
         let fill;
         if (on) {
             const e = t - on.at;
-            const blink = 0.65 + 0.35 * Math.sin(e * 18);
-            const c = on.kind === 'rainbow' ? hsl(e * 540, 95, 62) : on.kind === 'purple' ? `rgba(190,80,255,${blink})` : `rgba(255,40,60,${blink})`;
+            const blink = on.kind === 'glitch' ? (Math.random() < 0.5 ? 1 : 0.08) : 0.65 + 0.35 * Math.sin(e * 18);
+            const c = on.kind === 'glitch' ? `rgba(240,250,255,${blink})` : on.kind === 'rainbow' ? hsl(e * 540, 95, 62) : on.kind === 'purple' ? `rgba(190,80,255,${blink})` : `rgba(255,40,60,${blink})`;
             const edge = on.kind === 'purple' ? '#3a0a5a' : on.kind === 'rainbow' ? hsl(e * 540 + 120, 90, 40) : '#5a0410';
             fill = rad(cx - R * 0.25, cy - R * 0.25, R * 0.05, R * 0.9, [[0, '#ffffff'], [0.35, c], [1, edge]]);
             g.shadowColor = on.kind === 'rainbow' ? hsl(e * 540) : on.kind === 'purple' ? '#be50ff' : '#ff2838';

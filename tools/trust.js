@@ -57,6 +57,7 @@ function features(config) {
     add('バトル', '追撃チャンス', p => p.pursuit);
     add('バトル', 'レバーを押せ！', p => p.lever);
     add('バトル', 'レバブル（リーチ）', p => p.leverBuru);
+    if (show.iwakan) Object.entries(show.iwakan.kinds).forEach(([id, k]) => add('違和感', k.name, p => p.iwakan === id));
     add('プレミア', '全回転', p => p.type === 'zenkaiten');
     add('プレミア', 'こおりいきていける！', p => p.type === 'ikiteru');
     return list;

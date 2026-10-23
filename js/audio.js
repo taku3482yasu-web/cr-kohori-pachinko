@@ -133,8 +133,15 @@ const Sound = (() => {
         round: () => tone(988, 0, 0.12, { volume: 0.05 })
     };
 
+    // 違和感演出の「音が 消える」(P4): しばらく 効果音を 鳴らさない
+    let hushUntil = 0;
+    const hushed = () => typeof performance !== 'undefined' && performance.now() < hushUntil;
+    function hush(ms) {
+        hushUntil = performance.now() + ms;
+    }
+
     function play(name) {
-        if (muted || !ctx || ctx.state !== 'running' || !SOUNDS[name]) return;
+        if (muted || hushed() || !ctx || ctx.state !== 'running' || !SOUNDS[name]) return;
         SOUNDS[name]();
     }
 
@@ -143,5 +150,5 @@ const Sound = (() => {
         try { localStorage.setItem('koori-pachinko-muted', value ? '1' : '0'); } catch (e) { /* 無視 */ }
     }
 
-    return { unlock, play, playVoice, setMuted, get muted() { return muted; }, get voiceReady() { return Boolean(voiceBuffer); }, get context() { return ctx; } };
+    return { unlock, play, playVoice, setMuted, hush, get hushed() { return hushed(); }, get muted() { return muted; }, get voiceReady() { return Boolean(voiceBuffer); }, get context() { return ctx; } };
 })();

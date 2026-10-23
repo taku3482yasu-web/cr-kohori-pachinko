@@ -488,9 +488,13 @@ const Lcd = (() => {
     }
 
     // 回っている図柄 (縦に流れる)
+    // 違和感 (P4): 図柄の 回り方を かえる 時計 (null なら ふつう。reverse は 逆回り、stop は 止まる)
+    let rollClock = null;
+    let iwakanNow = null;   // この フレームの 違和感 { kind, t, start }
     function drawRolling(layout, i, now, speed) {
         const x = layout.xs[i];
         const { w, h, y } = layout;
+        if (rollClock) now = rollClock(now);
         const pos = now * speed + i * 2.3;
         const frac = pos % 1;
         const first = Math.floor(pos) % Figures.COUNT + 1;
@@ -771,6 +775,27 @@ const Lcd = (() => {
             text(plan.win ? `こおりくんの ${name}!!` : `${b.name} の ${name}!!`, W / 2, 103, name.length > 9 ? 10 : 12, plan.win ? 'rainbow' : '#ff6a6a', 'center', now);
             once('special', plan.win ? 'win' : 'hurt');
         } else if (phase.name === 'result' && phase.local < phase.t) bubbleAt(plan.win ? lines.lose : lines.win, 100);
+    }
+
+    // ----- 違和感演出 (2026-10-23 アップグレード P4) -----
+    // ノイズは 液晶に すじ、無音は しばらく 音を 止める、ランプは 筐体の 先バレの ランプが チカチカ (変動ごとに 1 回)
+    function drawIwakan(now, iw) {
+        if (iw.kind === 'noise') {
+            for (let i = 0; i < 26; i++) {
+                const v = Math.floor(Math.random() * 255);
+                ctx.fillStyle = `rgba(${v},${v},${v},${0.25 + Math.random() * 0.45})`;
+                ctx.fillRect(0, Math.floor(Math.random() * H), W, 1 + Math.floor(Math.random() * 3));
+            }
+            if (Math.random() < 0.3) {
+                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                ctx.fillRect(0, 0, W, H);
+            }
+        }
+        if (!spinView || spinView.iwakanDone) return;
+        spinView.iwakanDone = true;
+        if (iw.kind === 'silent') Sound.hush(2600);
+        if (iw.kind === 'lamp' && typeof Cabinet !== 'undefined') Cabinet.lamp('glitch', now);
+        if (iw.kind === 'noise') Sound.play('hurt');
     }
 
     // ----- こおりいきていける！ (P3): ノイズ → 暗転 → 虹色の こおりくん -----
@@ -1570,7 +1595,13 @@ const Lcd = (() => {
                     ctx.fillRect(W / 2 - 30 + i * 16, 82, 10, 8);
                 }
             }
+            // 違和感演出 (P4): 変動の はじめに 図柄が 逆に 回る / 一瞬 止まる
+            const iw = plan && plan.iwakan && m.spin ? { kind: plan.iwakan, t: m.spin.elapsed, start: now - m.spin.elapsed } : null;
+            const iwOn = iw && iw.t < CONFIG.show.iwakan.time;
+            rollClock = iwOn && iw.kind === 'reverse' ? n => 2 * iw.start - n + 50 : iwOn && iw.kind === 'stop' && iw.t > 0.2 ? () => iw.start + 0.2 : null;
             const state = drawReels(now, plan, phase);
+            rollClock = null;
+            iwakanNow = iwOn ? iw : null;   // ノイズなどは いちばん 上に 描く (drawHeaven の まえ)
             if (phase && phase.name === 'stepup') drawStepUp(now, plan, phase);
             if (phase && phase.name === 'gun') drawGun(now, plan, phase);
             if (phase && phase.name === 'cutin') drawCutin(now, plan, phase);
@@ -1646,6 +1677,8 @@ const Lcd = (() => {
         }
         drawTrophy(now);
         drawHeaven(now);   // 天国の カットイン (P3)
+        if (iwakanNow) drawIwakan(now, iwakanNow);   // 違和感 (P4)
+        iwakanNow = null;
         if (flash && now < flash.until) {
             const t = 1 - (flash.until - now) / flash.length;
             band(44, 44, 0.45);

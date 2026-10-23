@@ -362,6 +362,8 @@ const Scenario = (() => {
                 p.defeatLine = hit && f.defeatLines[p.enemy] ? pickFrom(f.defeatLines[p.enemy], rng) : null;
             }
         }
+        // 違和感演出 (P4): 見た目だけ (長さは 変えない) なので fxRandom。出たら 当たる 割合は config.show.iwakan
+        if (show.iwakan && !spin.rush) p.iwakan = result.forceIwakan || pickReveal(show.iwakan.kinds, spec.hitRate, hit, fxRandom);
         // 擬似連: チャレンジに入る変動だけ、回り始めのあとに「NEXT」を gizi 回
         if (type !== 'plain') {
             const g = show.gizi;
