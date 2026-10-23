@@ -138,6 +138,11 @@
         <h3>図柄と昇格</h3>
         <p>図柄は 1〜7。奇数（赤）でそろうと突破チャレンジ・大きい出玉、偶数（青）は出玉だけ。偶数でそろっても、ラウンド中に奇数へ<b>昇格</b>することがあります。RASH の小当たり（V入賞）は V でそろうほか、ふつうの図柄でそろって、ラウンドの始めに <b>V に昇格</b>することもあります。こおりRASH のバトルでは、図柄はいつもリーチになっています。</p>
 
+        <h3 id="trust">期待度の表</h3>
+        <p>通常時の演出ごとの「出たら当たる割合」と「当たりのうち出る割合」。台の演出の決まり方で <span id="trust-spins"></span> 変動ずつはかった値です（<code>node tools/trust.js</code>）。保留の色・ボタンなどの先読みは、カスタマイズの「先読み」で変わります。</p>
+        <p><label>スペック <select id="trust-spec"></select></label></p>
+        <div class="table-wrap"><table id="trust-table"></table></div>
+
         <h2 id="challenge">突破チャレンジ</h2>
         <p>おにおにとのバトル。たまった保留1つが1ラウンドで、保留ごとにこおりくんの武器が変わります。武器が強いほど突破のチャンス。</p>
         <div class="table-wrap"><table id="weapon-table"></table></div>
@@ -200,6 +205,7 @@
 
     <script src="js/config.js?v=5f35ffa0"></script>
     <script src="js/updates.js?v=ad485cb0"></script>
+    <script src="js/trust-table.js?v=f191f6d7"></script>
     <script>
         (() => {
             const $ = id => document.getElementById(id);
@@ -207,6 +213,21 @@
             const s = c.show;
             const pct = p => `${Math.round(p * 100)}%`;
             const odds = p => `1/${(1 / p).toFixed(1).replace(/\.0$/, '')}`;
+            // 期待度の表 (js/trust-table.js。2026-10-23 アップグレード P2)
+            const tt = window.TRUST_TABLE;
+            if (tt) {
+                const sel = $('trust-spec');
+                sel.innerHTML = Object.entries(tt).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
+                const render = () => {
+                    const t = tt[sel.value];
+                    $('trust-spins').textContent = t.spins.toLocaleString();
+                    const p1 = v => (v === null ? '-' : `${(v * 100).toFixed(1)}%`);
+                    $('trust-table').innerHTML = '<thead><tr><th>種類</th><th>演出</th><th>出たら当たる</th><th>当たりのうち</th></tr></thead><tbody>'
+                        + t.rows.map(r => `<tr><td>${r.group}</td><td>${r.name}</td><td><b>${p1(r.trust)}</b></td><td>${p1(r.share)}</td></tr>`).join('') + '</tbody>';
+                };
+                sel.addEventListener('change', render);
+                render();
+            }
             const table = (id, head, rows) => {
                 $(id).innerHTML = `<thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead>`
                     + `<tbody>${rows.map(r => `<tr>${r.map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody>`;

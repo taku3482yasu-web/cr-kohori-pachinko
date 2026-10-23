@@ -1041,6 +1041,25 @@ test('ページ: index.html と tools/fast.html が js/ のファイルをすべ
     assert(scripts(howto).includes('js/config.js'), 'howto.html が config.js を読み込んでいない');
 });
 
+// ----- 期待度の表 (2026-10-23 アップグレード P2。tools/trust.js) -----
+test('期待度の表: 色・段・相手の 順に 出たら 当たる 割合が 上がる', () => {
+    const { measure } = require('./trust.js');
+    const table = measure(3e5, 11);
+    for (const t of Object.values(table)) {
+        const order = (group, label) => {
+            const v = t.rows.filter(r => r.group === group).map(r => r.trust).filter(x => x !== null);
+            for (let k = 1; k < v.length; k++) assert(v[k] >= v[k - 1] - 0.03, `${t.label} ${label}: ${v.map(x => (x * 100).toFixed(1)).join(' < ')}`);
+        };
+        order('ステップアップ予告', 'ステップアップ');
+        order('擬似連', '擬似連');
+        order('チャレンジ', 'チャレンジ');
+        order('バトルの相手', 'バトルの相手');
+        order('こおりカットイン', 'カットイン');
+    }
+    // 書き出した 表が ある
+    assert(fs.existsSync(path.join(JS_DIR, 'trust-table.js')), 'js/trust-table.js が ない (node tools/trust.js)');
+});
+
 // ----- 結果 -----
 for (const r of results) console.log(`${r.ok ? '  ✔' : '  ✘'} ${r.name}${r.ok ? '' : `\n      → ${r.message}`}`);
 const failed = results.filter(r => !r.ok).length;
