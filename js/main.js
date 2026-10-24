@@ -11,7 +11,7 @@
 //   &skip=30               開いた直後に 30 秒ぶん早送りする (ヘッドレスChromeでは時間が進まないため)
 //   &balls=99999           はじめの持ち玉
 //   &force=rush            はじめの保留を決める (hit: 大当たり / rush: 突破チャレンジへ行く大当たり / small: 小当たり / jitan: RASH の時短から
-//                          / reach: リーチ外れ / fail: チャレンジ失敗 / challenge: 突破チャレンジから)。&enemy=onioni でバトルの相手、&mode=onioni で RASH のモード
+//                          / reach: リーチ外れ / fail: チャレンジ失敗 / challenge: 突破チャレンジから / crack: 1・3・5 の ひび割れ)。&enemy=onioni でバトルの相手、&mode=onioni で RASH のモード
 //   &story=opening         はじめにオープニング (ending でエンディング) を流す
 // =====================================================================
 
@@ -337,7 +337,7 @@
         BoardView.draw(game.view, game.world, lcdCanvas, gimmick, time, Lcd.zoom(time));   // 可動液晶 (P1)
         // 台の筐体: 状態で 光り方・役物が かわる (js/cabinet.js)
         if (game.cabinet) {
-            Cabinet.draw(time, { mode: modeClass(game.machine), premium: Boolean(game.machine.bonus && game.machine.bonus.alloc && game.machine.bonus.alloc.premium), gimmick, balls: game.balls, button: MachineButton.state(), cue: Lcd.light() });   // cue: 演出の 光 (当たりは 虹色)
+            Cabinet.draw(time, { mode: modeClass(game.machine), premium: Boolean(game.machine.bonus && game.machine.bonus.alloc && game.machine.bonus.alloc.premium), gimmick, yaku: Lcd.yaku(), balls: game.balls, button: MachineButton.state(), cue: Lcd.light() });   // cue: 演出の 光 (当たりは 虹色)
             // 筐体の PUSH の 位置を 絵に 合わせる (下の 段が せまい スマホでは 出さない)
             const r = Cabinet.pushRect(MachineButton.state().lever), push = $('cabinet-push');
             push.hidden = !r;
@@ -641,6 +641,10 @@
         }));
         $('debug-reach').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'reach', null, { enemy: enemy() === 'naitei' ? undefined : enemy() }));
         $('debug-fail').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'fail', null));
+        $('debug-crack').addEventListener('click', () => {   // 1・3・5 の ひび割れ (2026-10-24)
+            Machine.debugHold(game.machine, 1, 'hit', null);
+            game.machine.holds[1][0].forceCrack = true;
+        });
         $('debug-ikiteru').addEventListener('click', () => {   // P3
             Machine.debugHold(game.machine, 1, 'hit', null);
             game.machine.holds[1][0].forceIkiteru = true;
@@ -688,6 +692,10 @@
     const forceEnemy = params.get('enemy') || undefined;
     if (force === 'hit' || force === 'rush') Machine.debugHold(game.machine, 1, 'hit', force === 'rush' ? 'jitan' : null, { enemy: forceEnemy });
     if (force === 'reach' || force === 'fail') Machine.debugHold(game.machine, 1, force, null, { enemy: forceEnemy });
+    if (force === 'crack') {   // 1・3・5 の ひび割れ (2026-10-24)
+        Machine.debugHold(game.machine, 1, 'hit', 'jitan');
+        game.machine.holds[1][0].forceCrack = true;
+    }
     if (force === 'small') Machine.debugHold(game.machine, 2, 'small', null);
     if (force === 'jitan') Machine.debugJitan(game.machine);
     if (force === 'challenge') Machine.debugChallenge(game.machine, 0);   // 突破チャレンジから (保留は玉を打ってためる)

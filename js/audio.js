@@ -132,6 +132,10 @@ const Sound = (() => {
         pull: () => { tone(90, 0, 0.35, { slideTo: 40, volume: 0.14, type: 'sawtooth' }); tone(880, 0.05, 0.3, { slideTo: 1760, volume: 0.07 }); },
         // レバーを 引いている あいだの カチッ (2026-10-24)
         leverTick: () => { tone(1400, 0, 0.03, { volume: 0.06, type: 'square' }); tone(180, 0, 0.05, { volume: 0.08, type: 'triangle' }); },
+        // 1・3・5 の ひび割れ (2026-10-24): ピキッ / バリィン / おにおに・怪の 咆哮
+        crack: () => { tone(2400, 0, 0.05, { volume: 0.08, type: 'square' }); tone(1800, 0.07, 0.05, { volume: 0.07, type: 'square' }); tone(3000, 0.16, 0.08, { volume: 0.08, type: 'square', slideTo: 900 }); },
+        smash: () => { for (let i = 0; i < 8; i++) tone(1500 + i * 420, i * 0.03, 0.12, { volume: 0.05, type: 'square', slideTo: 300 }); tone(80, 0, 0.5, { volume: 0.14, type: 'sawtooth', slideTo: 40 }); },
+        roar: () => { tone(70, 0, 1.4, { volume: 0.16, type: 'sawtooth', slideTo: 45 }); tone(105, 0.05, 1.3, { volume: 0.12, type: 'sawtooth', slideTo: 60 }); tone(140, 0.1, 1.1, { volume: 0.08, type: 'square', slideTo: 70 }); },
         win: () => [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.11, 0.2, { volume: 0.08 })),
         lose: () => [392, 330, 262].forEach((f, i) => tone(f, i * 0.18, 0.25, { volume: 0.06, type: 'triangle' })),
         v: () => [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, i * 0.06, 0.15, { volume: 0.07 })),

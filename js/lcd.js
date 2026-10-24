@@ -566,6 +566,12 @@ const Lcd = (() => {
         const n = phase.name;
         const local = phase.local;
         const last = phase.index === plan.phases.length - 1;
+        if (n === 'yaku') return { hidden: true };   // 当たりの 役物 (2026-10-24): 液晶は 役物の 背景
+        if (plan.crack && CRACK_PHASES.includes(n)) {
+            // 1・3・5 の ひび割れ: 止まった 1・3・5 が 割れて、粉砕と 咆哮の あいだは 隠し、7・7・7 で そろう
+            if (n === 'xsmash' || n === 'xroar') return { hidden: true };
+            return { stop: [true, true, true], big: true };
+        }
         if (plan.revival && (n === 'result' || n.startsWith('rv'))) {   // こおりRASH・通常時の 引け！の 復活 (2026-10-24)
             // 復活: 負けて見せる result では中を止めず、暗転のあいだは隠す。撃破 (rvkill) で そろって大きく
             if (n === 'result') return { stop: [true, false, true], big: false };
@@ -661,7 +667,7 @@ const Lcd = (() => {
             return { reach: false, aligned: false, big: false };
         }
         // 後告知の当たり: 図柄はいったん外れの目で止まり、告知のあと (postnotice の 0.8秒) にそろう
-        const fake = plan && plan.type === 'post' && phase && (phase.name === 'roll' || phase.local < 0.8);
+        const fake = plan && phase && ((plan.type === 'post' && (phase.name === 'roll' || phase.local < 0.8)) || (plan.crack && phase.name !== 'xalign'));
         const digits = plan ? (fake ? plan.fakeDigits : plan.digits) : shown;
         const state = plan ? reelState(plan, phase) : { stop: [true, true, true], big: true };
         if (state.hidden) return { reach: false, aligned: false, big: false };
@@ -1010,6 +1016,265 @@ const Lcd = (() => {
                 once('klive', 'win');
             }
         }
+    }
+
+    // ----- 1・3・5 の ひび割れ (2026-10-24 ユーザー指定) -----
+    // 止まった 1・3・5 の 画面が まっぷたつに ひび割れ (xcrack) → すき間が 開いて おにおに・怪が 出てくる (xemerge) →
+    // 画面が 粉々に 砕けて 飛ぶ (xsmash) → 赤い 画面で 咆哮 (xroar) → 7・7・7 で そろって「おめでとう!!」(xalign)
+    const CRACK_PHASES = ['xstop', 'xcrack', 'xemerge', 'xsmash', 'xroar', 'xalign'];
+    // ひびの 形 (上から 下への ジグザグ。x は 真ん中からの ずれ) と 枝 ([ひびの 点, 枝の のび])
+    const CRACK_PATH = [[0, 0], [-6, 14], [5, 27], [-4, 41], [8, 55], [-3, 70], [6, 84], [-5, 98], [3, 113], [-2, 128], [0, 144]];
+    const CRACK_BRANCH = [[2, [-18, 8]], [4, [20, 6]], [6, [-16, 10]], [7, [18, 12]], [8, [-14, 6]]];
+    let crackSnap = null;   // 割れる 前の 画面 (止まった 1・3・5 と ひび) の 写し (RES 倍)
+    function snapCrack() {
+        if (!crackSnap) {
+            crackSnap = document.createElement('canvas');
+            crackSnap.width = canvas.width;
+            crackSnap.height = canvas.height;
+        }
+        const g = crackSnap.getContext('2d');
+        g.clearRect(0, 0, crackSnap.width, crackSnap.height);
+        g.drawImage(canvas, 0, 0);
+    }
+    const jolt = mag => [Math.round((Math.random() * 2 - 1) * mag), Math.round((Math.random() * 2 - 1) * mag)];
+    // ひび (k: 0〜1 で 上から のびる)
+    function crackLine(k, width, color) {
+        const n = CRACK_PATH.length - 1, upto = k * n;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(W / 2 + CRACK_PATH[0][0], CRACK_PATH[0][1]);
+        for (let i = 1; i <= n; i++) {
+            const [x0, y0] = CRACK_PATH[i - 1], [x1, y1] = CRACK_PATH[i];
+            const f = Math.min(1, Math.max(0, upto - (i - 1)));
+            if (f <= 0) break;
+            ctx.lineTo(W / 2 + x0 + (x1 - x0) * f, y0 + (y1 - y0) * f);
+        }
+        ctx.stroke();
+        for (const [i, [bx, by]] of CRACK_BRANCH) {
+            if (upto < i) continue;
+            const [x, y] = CRACK_PATH[i];
+            const f = Math.min(1, upto - i);
+            ctx.beginPath();
+            ctx.moveTo(W / 2 + x, y);
+            ctx.lineTo(W / 2 + x + bx * f, y + by * f);
+            ctx.stroke();
+        }
+    }
+    // 割れた 画面の 半分 (side -1 左 / 1 右) を すき間 gap だけ ずらして 描く。ひびに 沿って 切る
+    function halfScreen(side, gap) {
+        if (!crackSnap) return;
+        ctx.save();
+        ctx.translate(side * gap, 0);
+        ctx.beginPath();
+        const edge = side < 0 ? -2 : W + 2;
+        ctx.moveTo(edge, 0);
+        for (const [x, y] of CRACK_PATH) ctx.lineTo(W / 2 + x, y);
+        ctx.lineTo(edge, H);
+        ctx.closePath();
+        ctx.save();
+        ctx.clip();
+        ctx.drawImage(crackSnap, 0, 0, W, H);
+        ctx.restore();
+        ctx.strokeStyle = '#ffb0a0';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+    }
+    function drawCrack(now, plan, phase) {
+        const n = phase.name, k = phase.local / phase.t;
+        if (n === 'xstop') {
+            // 1・3・5 … 外れ? 画面が だんだん 暗くなり、赤い ノイズが まじる
+            ctx.fillStyle = `rgba(0,0,0,${0.45 * k})`;
+            ctx.fillRect(0, 0, W, H);
+            if (k > 0.6 && Math.random() < 0.4) {
+                ctx.fillStyle = 'rgba(255,40,40,0.3)';
+                ctx.fillRect(0, Math.floor(Math.random() * H), W, 2);
+            }
+        } else if (n === 'xcrack') {
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillRect(0, 0, W, H);
+            const g = Math.min(1, k / 0.55);
+            ctx.save();
+            const [dx, dy] = jolt(g >= 1 ? 2 : 1);
+            ctx.translate(dx, dy);
+            crackLine(g, 5, 'rgba(255,40,40,0.75)');
+            crackLine(g, 1.5, '#ffffff');
+            ctx.restore();
+            if (g >= 1 && Math.floor(now * 8) % 2) {
+                ctx.fillStyle = 'rgba(255,0,0,0.14)';
+                ctx.fillRect(0, 0, W, H);
+            }
+            snapCrack();   // 割れる 画面は ここで 写した ものを 使う
+        } else if (n === 'xemerge') {
+            // 画面の 左右が すき間を あけて ずれ、赤い 光の 中から おにおに・怪が せり上がる
+            const gap = Math.round(Math.min(1, k / 0.35) * 30);
+            const rise = Math.min(1, Math.max(0, (k - 0.2) / 0.6));
+            ctx.fillStyle = '#100000';
+            ctx.fillRect(0, 0, W, H);
+            const glow = ctx.createLinearGradient(W / 2 - gap - 10, 0, W / 2 + gap + 10, 0);
+            glow.addColorStop(0, 'rgba(255,0,0,0)');
+            glow.addColorStop(0.5, `rgba(255,${90 + Math.floor(60 * Math.sin(now * 20))},40,0.95)`);
+            glow.addColorStop(1, 'rgba(255,0,0,0)');
+            ctx.fillStyle = glow;
+            ctx.fillRect(W / 2 - gap - 10, 0, gap * 2 + 20, H);
+            const sz = Characters.size('onioni');
+            const scale = Math.min(3, 100 / sz.h);
+            Characters.drawEnemy(ctx, 'onioni', W / 2, H + 6 + (1 - rise) * sz.h * scale, { scale, kai: true, frame: Math.floor(now * 4) % 2 });
+            ctx.save();
+            const [dx, dy] = jolt(1 + rise * 2);
+            ctx.translate(dx, dy);
+            halfScreen(-1, gap + rise * 40);
+            halfScreen(1, gap + rise * 40);
+            ctx.restore();
+            if (rise > 0.5) text('グ……', W / 2, 14, 12, '#ff6060');
+        } else if (n === 'xsmash') {
+            // 割れた 画面が 粉々に なって 飛び散る
+            ctx.fillStyle = '#200000';
+            ctx.fillRect(0, 0, W, H);
+            if (crackSnap) {
+                const cols = 6, rows = 4, cw = W / cols, ch = H / rows, e = k * k;
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const cx = (c + 0.5) * cw, cy = (r + 0.5) * ch;
+                        const vx = (cx - W / 2) * 3.2 + ((r * 7 + c * 13) % 9 - 4) * 12, vy = (cy - H / 2) * 3.2 - 40 + ((r * 5 + c * 3) % 7) * 6;
+                        ctx.save();
+                        ctx.globalAlpha = Math.max(0, 1 - k * 1.1);
+                        ctx.translate(cx + vx * e, cy + vy * e + 160 * e * e);
+                        ctx.rotate(((r + c) % 2 ? 1 : -1) * k * 4);
+                        ctx.beginPath();
+                        // かけらは 三角と 四角を まぜる
+                        if ((r + c) % 3 === 0) { ctx.moveTo(-cw / 2, -ch / 2); ctx.lineTo(cw / 2, -ch / 2); ctx.lineTo(0, ch / 2); ctx.closePath(); }
+                        else ctx.rect(-cw / 2, -ch / 2, cw, ch);
+                        ctx.clip();
+                        ctx.drawImage(crackSnap, (cx - cw / 2) * RES, (cy - ch / 2) * RES, cw * RES, ch * RES, -cw / 2, -ch / 2, cw, ch);
+                        ctx.restore();
+                    }
+                }
+            }
+            if (k < 0.25) {
+                ctx.fillStyle = `rgba(255,255,255,${0.9 * (1 - k / 0.25)})`;
+                ctx.fillRect(0, 0, W, H);
+            }
+            const [tx, ty] = jolt(3);
+            text('バリィィン!!', W / 2 + tx, 72 + ty, 22, '#ffffff');
+        } else if (n === 'xroar') {
+            // 赤い 画面で おにおに・怪が 咆哮
+            const bg = ctx.createRadialGradient(W / 2, 80, 6, W / 2, 80, 160);
+            bg.addColorStop(0, '#ff4020');
+            bg.addColorStop(0.5, '#801010');
+            bg.addColorStop(1, '#100000');
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = 'rgba(255,220,180,0.3)';
+            for (let i = 0; i < 20; i++) {
+                const a = i / 20 * Math.PI * 2 + now * 0.8;
+                ctx.beginPath();
+                ctx.moveTo(W / 2, 70);
+                ctx.lineTo(W / 2 + Math.cos(a) * 300, 70 + Math.sin(a) * 300);
+                ctx.lineTo(W / 2 + Math.cos(a + 0.08) * 300, 70 + Math.sin(a + 0.08) * 300);
+                ctx.fill();
+            }
+            // 咆哮の 輪
+            for (let j = 0; j < 3; j++) {
+                const r = ((now * 1.6 + j / 3) % 1) * 170;
+                ctx.strokeStyle = `rgba(255,255,255,${0.6 * (1 - r / 170)})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(W / 2, 62, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            const sz = Characters.size('onioni');
+            const scale = Math.min(3.4, 118 / sz.h) * (1 + 0.04 * Math.sin(now * 30));
+            ctx.save();
+            const [dx, dy] = jolt(3);
+            ctx.translate(dx, dy);
+            Characters.drawEnemy(ctx, 'onioni', W / 2, H - 2, { scale, kai: true, frame: 1 });
+            ctx.restore();
+            const [tx, ty] = jolt(2);
+            text('グオオオオオ!!', W / 2 + tx, 18 + ty, 22, Math.floor(now * 10) % 2 ? '#ffe066' : '#ffffff');
+        } else if (n === 'xalign') {
+            // 7・7・7 (図柄は drawReels が 描く) に 白い 光と「おめでとう!!」
+            if (k < 0.2) {
+                ctx.fillStyle = `rgba(255,255,255,${0.9 * (1 - k / 0.2)})`;
+                ctx.fillRect(0, 0, W, H);
+            }
+            band(118, 24, 0.55);
+            text('おめでとう!!', W / 2, 130, 18 + Math.round(Math.max(0, 0.3 - k) * 20), 'rainbow', 'center', now);
+        }
+    }
+
+    // ----- 当たりの 役物の 背景 (2026-10-24 ユーザー指定) -----
+    // 役物 (筐体が 液晶の 前に 描く) が 落ちて → 回って → 展開して → 立体の こおりくん。液晶は 暗くして 光で もり上げる
+    function drawYakuScreen(now, plan, phase) {
+        const k = phase.local / phase.t;
+        ctx.fillStyle = '#04060c';
+        ctx.fillRect(0, 0, W, H);
+        if (k < 0.12) {
+            text('!?', W / 2, 72, 30, '#ffffff');
+            return;
+        }
+        const open = k >= 0.44;
+        for (let i = 0; i < 18; i++) {
+            const a = i / 18 * Math.PI * 2 + now * (open ? 0.6 : 2.4);
+            ctx.fillStyle = open ? `hsla(${(i * 20 + now * 200) % 360}, 95%, 60%, 0.35)` : 'rgba(127,211,247,0.25)';
+            ctx.beginPath();
+            ctx.moveTo(W / 2, H / 2);
+            ctx.lineTo(W / 2 + Math.cos(a) * 300, H / 2 + Math.sin(a) * 300);
+            ctx.lineTo(W / 2 + Math.cos(a + 0.12) * 300, H / 2 + Math.sin(a + 0.12) * 300);
+            ctx.fill();
+        }
+        if (k >= 0.44 && k < 0.56) {
+            ctx.fillStyle = `rgba(255,255,255,${0.9 * (1 - (k - 0.44) / 0.12)})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+        if (k >= 0.56) {
+            band(120, 22, 0.55);
+            text('こおりくん 降臨!!', W / 2, 131, 16, 'rainbow', 'center', now);
+        }
+    }
+
+    // ----- 熱いときに 震える 枠 (2026-10-24 ユーザー指定: 映像の 中の 外枠が 震える) -----
+    // 1 赤 / 2 金 / 3 虹 (確定級)。演出の 強さ 控えめ では 出さない
+    const HOT_OF = { red: 1, gold: 2, rainbow: 3 };
+    function hotLevel(plan, phase) {
+        if (!plan || !phase || Customize.get('fx') === 'quiet') return 0;
+        const n = phase.name;
+        if (plan.crack && ['xcrack', 'xemerge', 'xsmash', 'xroar'].includes(n)) return 3;
+        if (n === 'stepup' && plan.stepUp && plan.stepUp.step === 3) return HOT_OF[plan.stepUp.color] || 0;
+        const late = (n === 'reach' && phase.local >= 1.4) || ['develop', 'cutin', 'battle', 'pursuit', 'cfinal'].includes(n);
+        if (!late) return 0;
+        let lv = Math.max(HOT_OF[plan.cutin] || 0, HOT_OF[plan.leverColor] || 0, HOT_OF[plan.pushColor] || 0);
+        if (plan.lever || plan.develop) lv = Math.max(lv, 1);
+        if (plan.kai || plan.gimmick || plan.premium) lv = 3;
+        return lv;
+    }
+    function drawHotFrame(now, lv) {
+        if (!lv) return;
+        const mag = lv + 1;
+        const [dx, dy] = jolt(mag);
+        const th = 4 + lv;
+        const color = lv >= 3 ? rainbow(now) : lv === 2 ? '#ffd23a' : '#ff3040';
+        ctx.save();
+        ctx.translate(dx, dy);
+        ctx.globalAlpha = 0.75 + 0.25 * Math.sin(now * 16);
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(-4, -4, W + 8, th + 5);
+        ctx.fillRect(-4, H - th - 1, W + 8, th + 5);
+        ctx.fillRect(-4, -4, th + 5, H + 8);
+        ctx.fillRect(W - th - 1, -4, th + 5, H + 8);
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, W, th);
+        ctx.fillRect(0, H - th, W, th);
+        ctx.fillRect(0, 0, th, H);
+        ctx.fillRect(W - th, 0, th, H);
+        // 内側の 光る すじ
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillRect(th, th, W - th * 2, 1);
+        ctx.fillRect(th, H - th - 1, W - th * 2, 1);
+        ctx.fillRect(th, th, 1, H - th * 2);
+        ctx.fillRect(W - th - 1, th, 1, H - th * 2);
+        ctx.restore();
     }
 
     // 天国の カットイン (P3): RUSH が 終わったとき、残りの 保留に 当たりが あれば ときどき シーシャ・ナイテイ
@@ -1504,6 +1769,16 @@ const Lcd = (() => {
         if (t > 0.25) once('gimmickWin', 'win');
         return t;
     }
+    // 当たりの 役物 (2026-10-24 ユーザー指定): yaku の 場面の 進み具合 (0〜1)。筐体 (js/cabinet.js の yakuMedal) が 描く
+    function yaku() {
+        const phase = currentPhase;
+        if (!spinView || !phase || phase.name !== 'yaku') return null;
+        const t = Math.min(0.999, phase.local / phase.t);
+        once('yaku', 'hurt');
+        if (t > 0.44) once('yakuOpen', 'win');
+        return t;
+    }
+
     // お仲間召喚: 仲間が降りてくる (〜SUMMON_LAND 秒) → SUMMON_STRIKE 秒で相手に体当たり
     const SUMMON_LAND = 0.9, SUMMON_STRIKE = 1.8;
 
@@ -1773,10 +2048,17 @@ const Lcd = (() => {
         if (phase.name === 'bokoori' || phase.name === 'atari') Sound.play('reach');
         if (phase.name === 'itadaki') Sound.play('win');
         if (phase.name === 'open') Sound.play('win');
+        // 1・3・5 の ひび割れ・当たりの 役物 (2026-10-24)
+        if (phase.name === 'xcrack') Sound.play('crack');
+        if (phase.name === 'xemerge') Sound.play('fail');
+        if (phase.name === 'xsmash') Sound.play('smash');
+        if (phase.name === 'xroar') Sound.play('roar');
+        if (phase.name === 'xalign') { Sound.play('win'); Sound.play('v'); }
+        if (phase.name === 'yaku') Sound.play('reach');
     }
 
     // 可動液晶 (2026-10-23 アップグレード P1): 見せ場の 場面で 液晶が 前に せり出す (js/render.js が 描く)。0〜1 で なめらかに
-    const ZOOM_PHASES = ['battle', 'pursuit', 'result', 'zenkaiten', 'zend', 'cfinal', 'cresult', 'klive', 'kend'];
+    const ZOOM_PHASES = ['battle', 'pursuit', 'result', 'zenkaiten', 'zend', 'cfinal', 'cresult', 'klive', 'kend', 'xroar', 'xalign'];
     let zoomNow = 0, zoomAt = 0;
     function zoom(now) {
         // 演出の 強さ (2026-10-24): 控えめ は 出さない、派手 は 可動液晶の 設定に かかわらず 出す
@@ -1827,7 +2109,8 @@ const Lcd = (() => {
         if (n === 'cutin' && plan.cutin) return { kind: 'color', color: show.cutin.colors[plan.cutin].color, speed: 34 };
         if (n === 'battle' || n === 'cfinal') return { kind: 'color', color: plan.cutin ? show.cutin.colors[plan.cutin].color : foe, speed: 28 };
         if (n === 'pursuit') return { kind: 'color', color: '#ff3a4a', speed: 36 };
-        if (n === 'zenkaiten') return { kind: 'hit' };
+        if (n === 'zenkaiten' || n === 'yaku') return { kind: 'hit' };
+        if (plan.crack && ['xcrack', 'xemerge', 'xsmash', 'xroar'].includes(n)) return { kind: 'color', color: '#ff2a2a', speed: 44 };
         if ((n === 'result' || n === 'fail' || n === 'cresult' || n === 'rvdark') && !plan.win) return { kind: 'dim' };
         return null;
     }
@@ -1972,6 +2255,7 @@ const Lcd = (() => {
             if (phase && phase.name === 'next') drawNext(now, plan, phase);
             if (plan && plan.type === 'zenkaiten' && phase) drawZenkaiten(now, plan, phase);
             if (plan && plan.type === 'ikiteru' && phase) drawIkiteru(now, plan, phase);   // こおりいきていける！ (P3)
+            if (plan && plan.crack && phase && CRACK_PHASES.includes(phase.name)) drawCrack(now, plan, phase);   // 1・3・5 の ひび割れ
             if (talkResult) drawBattleTalk(now, plan, phase);   // 決着の 必殺技と セリフ (大きい 図柄の 下に)
             // 擬似連のあと (チャレンジのあいだ) は右上に「擬似〇連」
             if (plan && plan.gizi && phase && phase.name === 'challenge') text(`擬似${plan.gizi + 1}連`, W - 6, 9, 9, '#ffe066', 'right');
@@ -1990,6 +2274,7 @@ const Lcd = (() => {
                 text('遊タイム', W / 2, 105, 12, 'rainbow', 'center', now);
                 text(Machine.inJitan(m) ? `時短 残り ${left}回  当たれば RASH 突入！` : '残り保留', W / 2, 117, 10, '#ffffff');
             }
+            if (phase && phase.name === 'yaku') drawYakuScreen(now, plan, phase);   // 当たりの 役物の 背景 (いちばん 上に)
         }
 
         // ふるカワのバトルの返事・撃破のひとこと
@@ -2045,10 +2330,11 @@ const Lcd = (() => {
             text(flash.text, W / 2, 66, 20 + Math.round(Math.sin(Math.min(1, t * 4) * Math.PI / 2) * 4), flash.color);
         }
         applyEffect(RashView.postEffect(plan, phase));
+        drawHotFrame(now, m && !m.bonus ? hotLevel(plan, phase) : 0);   // 熱いときに 震える 枠 (2026-10-24)
         return canvas;
     }
 
-    return { init, reset, draw, event, aim, show, push, release, busy, setChoosing, gimmick, zoom, light, W, H,
+    return { init, reset, draw, event, aim, show, push, release, busy, setChoosing, gimmick, yaku, zoom, light, W, H,
         __phase: () => (currentPhase ? currentPhase.name : null),   // 確認用 (いまの 場面の 名前)
         playStory: (name, now) => Story.play(name, now), skipStory: () => Story.skip(),
         storyPlaying: () => Story.active() ? Story.name : null };

@@ -212,7 +212,7 @@ function run(game, specId, setting, hours, mode = 'koori') {
                 pr.wins++;
                 if (e.plan.premium) pr.premiums++;
                 const shown = m.rashMode === 'koori' ? Boolean(e.plan.kai) : m.rashMode === 'onioni' ? e.plan.pattern === 'goldDogSit' : e.plan.kind === 'blackout';
-                if (shown !== Boolean(e.plan.premium) || (e.plan.premium && !e.plan.gimmickPhase)) pr.wrongShow++;
+                if (shown !== Boolean(e.plan.premium) || (e.plan.premium && !e.plan.gimmickPhase && !e.plan.yaku)) pr.wrongShow++;   // プレミアは 前の 役物の 落下か 当たりの 役物 (2026-10-24)
             }
             if (e.type === 'bonusStart' && e.premium) {
                 log.premium.bonuses++;
@@ -530,7 +530,7 @@ test('追撃チャンス: 通常時のバトルで出て、出たほうが勝ち
             if (e.type !== 'spinEnd' || e.fig !== 1 || e.plan.type !== 'reach') continue;
             const p = e.plan;
             // 予告 (ステップアップ・群)・擬似連・発展・カットインは除いて流れを見る
-            const names = p.phases.map(ph => ph.name).filter(n => !['stepup', 'gun', 'next', 'develop', 'cutin'].includes(n) && !n.startsWith('rv')).join();   // rv○○: 引け！の 復活
+            const names = p.phases.map(ph => ph.name).filter(n => !['stepup', 'gun', 'next', 'develop', 'cutin', 'yaku'].includes(n) && !n.startsWith('rv')).join();   // rv○○: 引け！の 復活 / yaku: 当たりの 役物
             assertEqual(names, p.pursuit ? 'roll,challenge,reach,battle,pursuit,result' : 'roll,challenge,reach,battle,result', `${specId} の追撃の流れ`);
             const c = n[p.pursuit ? 'on' : 'off'];
             c[0]++;
@@ -586,6 +586,36 @@ function fig1Plans(specId, count, seed) {
     }
     return { CONFIG, Scenario, plans };
 }
+
+// ----- 1・3・5 の ひび割れ と 当たりの 役物 (2026-10-24 ユーザー指定) -----
+test('1・3・5 の ひび割れ: 通常時の 当たりの 約1割、1・3・5 で 止まって 7・7・7 で そろう。バトルの 当たりは 図柄の 前に 役物', () => {
+    for (const specId of ['s99', 's159']) {
+        const { CONFIG, plans } = fig1Plans(specId, 400000, 21);
+        const hits = plans.filter(p => p.win);
+        const crack = hits.filter(p => p.crack);
+        // 7 (奇数) の 当たりから 選び、本当の 振り分け (重み) で 当たり 全体の 1 割に なる。fig1Plans は 振り分けを 同じ 割合で 選ぶので、その分 なおして 見る
+        const list = CONFIG.specs[specId].firstHit, isOdd = a => a.label >= CONFIG.show.bigLabel || a.next === 'jitan';
+        const oddWeight = list.filter(isOdd).reduce((a, x) => a + x.weight, 0) / list.reduce((a, x) => a + x.weight, 0);
+        const oddEven = list.filter(isOdd).length / list.length;
+        const share = crack.length / hits.length / oddEven * oddWeight;
+        assert(share > 0.08 && share < 0.12, `${specId}: ひび割れが 当たりの ${(share * 100).toFixed(1)}% (約10%の はず)`);
+        assert(plans.every(p => !p.crack || p.win), 'ひび割れは 当たりだけ');
+        for (const p of crack) {
+            assert(p.fakeDigits.join() === '1,3,5' && p.digits.join() === '7,7,7', '1・3・5 → 7・7・7');
+            const names = p.phases.map(ph => ph.name);
+            assert(['xstop', 'xcrack', 'xemerge', 'xsmash', 'xroar', 'xalign'].every(n => names.includes(n)), `ひび割れの 場面が そろって いない: ${names}`);
+            assert(p.reveal.phase === 'xalign', '当たりが 見えるのは 7・7・7');
+        }
+        assert(crack.some(p => p.type === 'fail') && crack.some(p => p.type === 'plain'), 'チャレンジ失敗の あとと、そのまま 止まる 両方が ある');
+        // 当たりの 役物: バトルの 当たりは みんな、図柄が そろう (result / 復活は rvkill) 前に yaku
+        for (const p of hits.filter(x => x.type === 'reach')) {
+            const names = p.phases.map(ph => ph.name);
+            const at = names.indexOf('yaku');
+            assert(at >= 0 && names[at + 1] === (p.leverRevival ? 'rvkill' : 'result'), `役物の 場所が ちがう: ${names}`);
+        }
+        assert(plans.every(p => p.win || !p.yaku), '外れには 役物なし');
+    }
+});
 
 test('ステップアップ予告: 3段目の金文字は約90%、赤文字はチャンス、3段目まで行くと白でも期待できる。3段目の外れはチャレンジに入る', () => {
     for (const specId of ['s99', 's159']) {
@@ -885,9 +915,11 @@ test('プレミアボーナス: RASH の当たりの約3%で、出玉は 1/99 18
             const koori = Scenario.plan(CONFIG, spec, spin('koori'), game.rng);
             assert(koori.kind === 'rashBattle' && koori.kai && koori.premium === spec.premium.name && !koori.revival && !koori.summon, `${specId} のこおりRASH`);
             const onioni = Scenario.plan(CONFIG, spec, spin('onioni'), game.rng);
-            assert(onioni.pattern === 'goldDogSit' && onioni.gimmickPhase === 'anomaly', `${specId} のおにおにRASH`);
+            // プレミアボーナスは 当たりが 見える 場面の 前に 当たりの 役物 (2026-10-24。前の 役物の 落下の かわり)
+            const yakuBefore = (p, name) => { const n = p.phases.map(ph => ph.name); return p.yaku && n[n.indexOf('yaku') + 1] === name; };
+            assert(onioni.pattern === 'goldDogSit' && yakuBefore(onioni, 'open'), `${specId} のおにおにRASH`);
             const oka = Scenario.plan(CONFIG, spec, spin('okapipo'), game.rng);
-            assert(oka.kind === 'blackout' && oka.gimmickPhase === 'bokoori', `${specId} のおかピポRASH`);
+            assert(oka.kind === 'blackout' && yakuBefore(oka, 'itadaki'), `${specId} のおかピポRASH`);
             // ふつうの当たりでは怪・金面犬がとなりに座る・おかピポRASH のブラックアウトは出ない
             for (let i = 0; i < 300; i++) {
                 const plain = { kind, alloc: spec.rushHit[0] };

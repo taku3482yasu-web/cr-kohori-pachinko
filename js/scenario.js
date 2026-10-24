@@ -308,6 +308,9 @@ const Scenario = (() => {
         // ステップアップ予告・群予告 (通常時だけ)
         const step = spin.rush ? null : stepUp(show, spec, hit, result, rng);
         const gun = spin.rush ? null : result.forceGun || pickReveal(show.gun.kinds, spec.hitRate, hit, rng);
+        // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 7・7・7 (奇数) で 見せるので、奇数の 当たりから 選ぶ。変動の 長さが 変わるので rng。
+        //   予告 (ステップアップ・群) は ほかの 当たりと 同じに 出す (出たら 当たる 割合を かえない)
+        if (hit && !spin.rush && show.crack && (result.forceCrack || (isOddHit(show, result, 1) && rng() < crackRate(show, spec)))) return crackPlan(config, spin, rng, step, gun);
         let type;   // 'plain' / 'fail' / 'reach'
         if (hit || result.force === 'reach') type = 'reach';
         else if (result.force === 'fail') type = 'fail';
@@ -412,6 +415,8 @@ const Scenario = (() => {
             p.stepUp = step;
             p.phases.unshift({ name: 'stepup', t: step.step * show.stepUp.stepTime + show.stepUp.tail });
         }
+        // 当たりの 役物 (2026-10-24 ユーザー指定): 通常時の バトルの 当たりは、図柄が そろう 前に 役物 (復活は 撃破の 前)
+        if (hit && !spin.rush && type === 'reach') addYaku(show, p, p.leverRevival ? 'rvkill' : 'result');
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         // 通常時だけ、ふるカワが変動の始まりにしゃべる
         if (!spin.rush) p.talk = talk(show, p, spin, rng);
@@ -446,7 +451,7 @@ const Scenario = (() => {
 
     // リーチ (バトル) の変動のうち当たりの割合
     function reachHitShare(show, spec) {
-        const h = spec.hitRate;
+        const h = spec.hitRate * (1 - (show.crack ? show.crack.rate : 0));   // ひび割れの 当たりは リーチに ならない (2026-10-24)
         return h / (h + (1 - h) * reachMissRate(show, spec));
     }
 
@@ -534,6 +539,52 @@ const Scenario = (() => {
         const p = { fig: 1, type: 'ikiteru', win: true, talk: null, digits: [d, d, d],
             phases: ['kroll', 'knoise', 'kdark', 'klive', 'kend'].map(name => ({ name, t: t[name] })),
             reveal: { phase: 'klive', at: 0.5 }, defeatLine: show.furukawa.congratsLine, defeatColor: 6 };
+        p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
+        return p;
+    }
+
+    // 当たりの 役物 (yaku) の 場面を before の 場面の 前に 入れる (入れたら true)
+    function addYaku(show, p, before) {
+        const i = show.yaku ? p.phases.findIndex(ph => ph.name === before) : -1;
+        if (i < 0) return false;
+        p.phases.splice(i, 0, { name: 'yaku', t: show.yaku.time });
+        p.yaku = true;
+        return true;
+    }
+
+    // 奇数 (大きい 当たり・時短へ) で そろう 当たりか (hitDigit と 同じ 決め方)
+    const isOddHit = (show, result, fig) => Boolean(result.alloc) && (result.alloc.label >= show.bigLabel || (fig === 1 && result.alloc.next === 'jitan'));
+    // 奇数の 当たりの うち ひび割れに する 割合 (通常時の 当たり 全体で crack.rate に なるように)
+    function crackRate(show, spec) {
+        const list = spec.firstHit || [];
+        const total = list.reduce((a, x) => a + x.weight, 0);
+        const odd = list.filter(x => x.label >= show.bigLabel || x.next === 'jitan').reduce((a, x) => a + x.weight, 0);
+        return odd > 0 ? Math.min(1, show.crack.rate * total / odd) : 0;
+    }
+
+    // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 外れの ように 1・3・5 で 止まり (40% は チャレンジ失敗の あと)、
+    //   ひび割れ → おにおに・怪 → 粉砕 → 咆哮 → 7・7・7。type は 止まるまでの 見せ方 (plain / fail)、p.crack で 見分ける
+    function crackPlan(config, spin, rng, step = null, gun = null) {
+        const show = config.show;
+        const t = show.timing, ct = show.crack.timing;
+        const fail = rng() < show.crack.failRate;
+        const p = { fig: 1, type: fail ? 'fail' : 'plain', win: true, crack: true, talk: null, digits: [7, 7, 7], fakeDigits: [1, 3, 5] };
+        if (fail) {
+            p.challenge = weighted(Object.fromEntries(Object.keys(show.challenges).map(id => [id, show.challenges[id].miss])), rng);
+            p.phases = [{ name: 'roll', t: t.roll }, { name: 'challenge', t: t.challenge }, { name: 'fail', t: t.fail }];
+        } else p.phases = [{ name: 'roll', t: t.miss[Math.min(t.miss.length, spin.holdsLeft + 1) - 1] }];
+        p.phases.push(...['xstop', 'xcrack', 'xemerge', 'xsmash', 'xroar', 'xalign'].map(name => ({ name, t: ct[name] })));
+        if (gun) {
+            p.gun = gun;
+            p.phases.unshift({ name: 'gun', t: show.gun.time });
+        }
+        if (step) {
+            p.stepUp = step;
+            p.phases.unshift({ name: 'stepup', t: step.step * show.stepUp.stepTime + show.stepUp.tail });
+        }
+        p.reveal = { phase: 'xalign', at: 0.3 };
+        p.defeatLine = show.furukawa.congratsLine;
+        p.defeatColor = 6;
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         return p;
     }
@@ -705,6 +756,8 @@ const Scenario = (() => {
             p.kind = 'plain';
             p.phases = [{ name: 'roll', t: plain }];
         }
+        // RASH 中の 当たりの 役物は プレミアボーナスの ときだけ (2026-10-24 ユーザー指定)。当たりが 見える 場面の 前に 入れ、前の 役物の 落下は やめる
+        if (premium && p.reveal && addYaku(show, p, p.reveal.phase)) delete p.gimmickPhase;
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         // 当たりが決まった瞬間に、ふるカワが虹色で「おめでとう！」 (演出のない当たりは変動の終わり)
         if (win) {
