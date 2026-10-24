@@ -899,6 +899,9 @@ const CONFIG = {
             { id: 'leverRainbow', name: '虹の引け！', desc: '虹色の「レバーを引け！」を見る', stat: 'seen:lever:rainbow', value: 1 },
             { id: 'leverRash', name: '引け！確定', desc: 'RASH 中に「レバーを引け！」(当たり確定) を見る', stat: 'seen:lever:rash', value: 1 },
             { id: 'leverRevival', name: 'もう一回引け', desc: '引いても負けたあと、「もう一回 レバーを引け！」で復活する', stat: 'seen:lever:revival', value: 1 },
+            { id: 'crack', name: 'ひび割れ', desc: '1・3・5 で止まった画面が ひび割れて、おにおに・怪が現れる', stat: 'seen:premiumFx:crack', value: 1 },
+            { id: 'yaku', name: 'こおりくん 降臨', desc: '当たりの役物が 絵本のように開いて、こおりくんに変形する', stat: 'seen:premiumFx:yaku', value: 1 },
+            { id: 'yakuRash', name: 'プレミアの 降臨', desc: 'RASH 中のプレミアボーナスで、役物の変形を見る', stat: 'seen:premiumFx:yakuRash', value: 1 },
             { id: 'allLever', name: 'レバーマスター', desc: '「レバーを引け！」を全種類見る', stat: 'seen:lever', value: 'all' },
             { id: 'spins3000', name: '打ち込み3000回転', desc: '合計 3000回転 まわす', stat: 'spins', value: 3000 }
         ]

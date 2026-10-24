@@ -430,6 +430,8 @@
     function skipShow() {
         const m = game.machine;
         if (game.paused || Customize.get('skip') === 'off' || !m.spin || m.bonus || Lcd.busy()) return;   // 長押しの ため の ときは 早送りしない
+        // プレミア演出は 早送りしない (2026-10-24 ユーザー指定: 見逃さないように)
+        if (Scenario.isPremium(m.spin.plan)) { Lcd.show('プレミアは 早送りできません', '#ffe066', time, 0.8); return; }
         const to = Scenario.skipPoint(m.spin.plan);
         if (m.spin.elapsed >= to) return;
         m.spin.elapsed = to;
@@ -641,6 +643,7 @@
         }));
         $('debug-reach').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'reach', null, { enemy: enemy() === 'naitei' ? undefined : enemy() }));
         $('debug-fail').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'fail', null));
+        $('debug-yaku').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'hit', null, { noPremium: true, enemy: enemy() }));   // 当たりの 役物 (2026-10-24)
         $('debug-crack').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'hit', 'jitan', { crack: true }));   // 1・3・5 の ひび割れ (2026-10-24)
         $('debug-ikiteru').addEventListener('click', () => {   // P3
             Machine.debugHold(game.machine, 1, 'hit', null);

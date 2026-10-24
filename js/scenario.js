@@ -56,7 +56,7 @@ const Scenario = (() => {
         const hit = result.kind === 'hit';
         // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 保留に 入った ときに 決め、先読み演出は すべて 出さない (白い 保留の まま そろう)。
         //   7・7・7 (奇数) で 見せるので 奇数の 当たりから 選ぶ (当たり 全体で crack.rate)
-        if (hit && show.crack && (result.forceCrack || (isOddHit(show, result, 1) && rng() < crackRate(show, spec)))) {
+        if (hit && show.crack && !result.noPremium && (result.forceCrack || (isOddHit(show, result, 1) && rng() < crackRate(show, spec)))) {
             return { crack: true, holdColor: 'white', shownColor: 'white', change: null, changed: false, button: null, hiStage: false, voice: false,
                 leverBuru: false, handleBuru: false, leverHold: false, question: false };
         }
@@ -308,10 +308,10 @@ const Scenario = (() => {
         // 告知のタイプ (カスタマイズ。後告知・一発告知) は演出なし
         if (!spin.rush && (spin.notice === 'post' || spin.notice === 'oneshot')) return noticePlan(config, spin, rng);
         // 全回転 (プレミア): 通常時の当たりの変動の rate
-        if (hit && !spin.rush && (result.forceZenkaiten || rng() < show.zenkaiten.rate)) return zenkaitenPlan(config, spin, rng);
+        if (hit && !spin.rush && !result.noPremium && (result.forceZenkaiten || rng() < show.zenkaiten.rate)) return zenkaitenPlan(config, spin, rng);
         // こおりいきていける！ (P3): ノイズ → 暗転 → 虹色の こおりくん → そろう。
         //   変動の 長さが 変わるので 全回転と 同じく 台の 乱数 (rng) で 決める (fxRandom に すると テストの 結果が 毎回 変わる)
-        if (hit && !spin.rush && show.ikiteru && (result.forceIkiteru || rng() < show.ikiteru.rate)) return ikiteruPlan(config, spin, rng);
+        if (hit && !spin.rush && show.ikiteru && !result.noPremium && (result.forceIkiteru || rng() < show.ikiteru.rate)) return ikiteruPlan(config, spin, rng);
 
         // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 保留に 入った ときに 決めて ある (Scenario.hold)。予告も 先読みも なしで 1・3・5 → 7・7・7
         if (hit && !spin.rush && show.crack && (result.crack || result.forceCrack)) return crackPlan(config, spin, rng);
@@ -490,6 +490,9 @@ const Scenario = (() => {
     //   当たりが見える場面 (reveal。復活は虹色のフラッシュ、お仲間召喚は召喚) か、リーチの結果・チャレンジ失敗の始めまで。
     //   それ以外 (外れ・特図2 のふつうの変動) は止まる SKIP_TAIL 秒前まで
     const SKIP_TAIL = 0.6;
+    // プレミア演出 (ひび割れ・全回転・こおりいきていける！・RASH 中の プレミアボーナス) は 早送りしない (2026-10-24 ユーザー指定)
+    const isPremium = plan => Boolean(plan && (plan.crack || plan.type === 'zenkaiten' || plan.type === 'ikiteru' || plan.premium));
+
     function skipPoint(plan) {
         const names = plan.phases.map(ph => ph.name);
         let index = plan.reveal ? names.indexOf(plan.reveal.phase) : -1;
@@ -802,5 +805,5 @@ const Scenario = (() => {
         return { text, color };
     }
 
-    return { hold, hold2, challengePlan, plan, skipPoint, stepUpRates, revealRate, reachHitShare, reachMissRate, missBattleMass, kooriEnemies, kaiRate, revivalRate, newStage, stepStage, endStage, stageMap };
+    return { hold, hold2, challengePlan, plan, skipPoint, isPremium, stepUpRates, revealRate, reachHitShare, reachMissRate, missBattleMass, kooriEnemies, kaiRate, revivalRate, newStage, stepStage, endStage, stageMap };
 })();

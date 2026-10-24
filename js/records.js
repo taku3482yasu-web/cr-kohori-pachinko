@@ -88,6 +88,9 @@ const Collection = (() => {
                 ...Object.entries(s.lever.colors).map(([id, c]) => ({ id, name: `${c.name}の 引け！` })),
                 { id: 'rash', name: 'RASH 中の 引け！ (確定)' }, { id: 'hold', name: '保留に 引け！' }, { id: 'revival', name: 'もう一回 引け！ (復活)' }],
                 battle: true, winLabel: '当たり' },
+            // プレミア演出 (2026-10-24 ユーザー指定): 1・3・5 の ひび割れ・当たりの 役物の 変形
+            { id: 'premiumFx', name: 'プレミア演出', items: [{ id: 'crack', name: '1・3・5 の ひび割れ' }, { id: 'yaku', name: '当たりの 役物 (変形)' },
+                { id: 'yakuRash', name: 'RASH 中の プレミアの 役物' }] },
             { id: 'rashHold', name: 'RASH 中の保留', items: [{ id: 'black', name: '黒い保留' }, { id: 'spin', name: '回る保留' }] },
             { id: 'button', name: '台のボタン', items: [
                 { id: 'red', name: '赤く光る' }, { id: 'shake', name: '震える' }, { id: 'beep', name: '高い音' },
@@ -142,6 +145,9 @@ const Collection = (() => {
         if (p.lever) lever(p.fig === 2 ? 'rash' : p.leverColor || 'rainbow');
         if (p.leverRevival) lever('revival');
         if (e.result.leverHold) lever('hold');
+        // プレミア演出 (2026-10-24)
+        if (p.crack) see('premiumFx', 'crack');
+        if (p.yaku) see('premiumFx', p.fig === 2 ? 'yakuRash' : 'yaku');
         if (e.fig === 1) {
             see('hold', e.result.holdColor || 'white');
             if (p.zenkaiten) see('zenkaiten', p.zenkaiten);

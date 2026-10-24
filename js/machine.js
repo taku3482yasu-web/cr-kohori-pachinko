@@ -472,7 +472,8 @@ const Machine = (() => {
         const pool = allocNext ? list.filter(a => a.next === allocNext) : list;
         const result = kind === 'hit' ? { kind, alloc: weightedPick(pool.length ? pool : list, m.rng) }
             : kind === 'reach' || kind === 'fail' ? { kind: 'miss', force: kind } : { kind };
-        if (options.crack) result.forceCrack = true;   // 1・3・5 の ひび割れ (先読みを つけないので addExtras の 前に)
+        if (options.crack) result.forceCrack = true;
+        if (options.noPremium) result.noPremium = true;   // プレミア (ひび割れ・全回転など) に しない (役物の 確認用)   // 1・3・5 の ひび割れ (先読みを つけないので addExtras の 前に)
         // options.premium: プレミアボーナス (怪の先バレは addExtras で決めるので、その前に)
         if (options.premium && fig === 2 && result.kind !== 'miss' && m.spec.premium) result.alloc = m.spec.premium;
         addExtras(m, fig, result);
