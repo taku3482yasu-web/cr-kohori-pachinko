@@ -71,6 +71,18 @@ body {
 /* 筐体の 絵は 盤面の 上に 重ねる (盤面の 丸い 形の 窓を くりぬいて 描く) */
 .cabinet .cabinet-art { z-index: 1; }
 .cabinet .cabinet-push { z-index: 2; }
+.cabinet-push.grab { border-radius: 0; cursor: grab; }
+.cabinet-push.grab:active { box-shadow: none; cursor: grabbing; }
+/* レバーを 引ききった ガコン: 筐体が ずしんと 揺れる (2026-10-24 js/button.js) */
+.cabinet.lever-thud { animation: lever-thud 0.32s ease-out; }
+@keyframes lever-thud {
+    0% { transform: translateY(0); }
+    20% { transform: translateY(6px); }
+    45% { transform: translateY(-3px); }
+    70% { transform: translateY(1.5px); }
+    100% { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .cabinet.lever-thud { animation: none; } }
 
 .controls {
     flex: 1 1 280px;

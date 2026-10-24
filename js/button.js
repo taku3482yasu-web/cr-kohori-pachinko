@@ -96,11 +96,37 @@ const MachineButton = (() => {
     }
 
     // レバーを 引く (筐体の 絵が 使う): pull(0〜1) ドラッグで 引いている 量 / pulled(now) 引ききった (ばねで もどる)
-    let pullDrag = 0, pulledAt = null, pullShown = 0;
-    function pull(amount) { pullDrag = Math.max(0, Math.min(1, amount)); }
-    function pulled(now) { pullDrag = 0; pulledAt = now; }
+    //   引いている あいだは 4 段の カチッ (音と 小さな 振動)、引ききると ガコン (2026-10-24 ユーザー指定: 引く 感覚を わかりやすく)
+    let pullDrag = 0, pulledAt = null, pullShown = 0, pullNotch = 0;
+    function pull(amount) {
+        pullDrag = Math.max(0, Math.min(1, amount));
+        const notch = Math.min(3, Math.floor(pullDrag * 4));
+        if (notch > pullNotch) {
+            Sound.play('leverTick');
+            if (navigator.vibrate && Customize.get('vibrate') === 'on') {
+                try { navigator.vibrate(12); } catch (e) { /* 振動できない環境 */ }
+            }
+        }
+        pullNotch = notch;
+    }
+    function pulled(now) {
+        pullDrag = 0;
+        pullNotch = 0;
+        pulledAt = now;
+        const cab = document.getElementById('cabinet');
+        if (cab) {
+            cab.classList.remove('lever-thud');
+            void cab.offsetWidth;
+            cab.classList.add('lever-thud');
+        }
+        if (navigator.vibrate && Customize.get('vibrate') === 'on') {
+            try { navigator.vibrate([50, 30, 120]); } catch (e) { /* 振動できない環境 */ }
+        }
+    }
 
+    let lastNow = 0;
     function update(now) {
+        lastNow = now;
         if (handleUntil && now >= handleUntil) {
             const h = document.getElementById('handle');
             if (h) h.classList.remove('fx-buru');
@@ -108,9 +134,10 @@ const MachineButton = (() => {
         }
         pullShown = pullDrag;
         if (!pullDrag && pulledAt !== null) {
+            // 引ききって 一瞬 止まり、ばねで びよんと もどる (少し 上へ はねかえる)
             const d = now - pulledAt;
-            pullShown = d < 0.2 ? 1 : Math.max(0, 1 - (d - 0.2) / 0.35);
-            if (d >= 0.55) pulledAt = null;
+            pullShown = d < 0.15 ? 1 : Math.exp(-(d - 0.15) * 6) * Math.cos((d - 0.15) * 14);
+            if (d >= 0.9) { pulledAt = null; pullShown = 0; }
         }
         if (el && buruUntil && now >= buruUntil) {
             el.classList.remove('fx-buru');
@@ -124,7 +151,7 @@ const MachineButton = (() => {
     }
     // いまの 光り方 (筐体の PUSH が 使う)
     const state = () => ({ kind: lit, lit: Boolean(lit), push: Boolean(el && el.classList.contains('push')), pressed: Boolean(el && el.classList.contains('pressed')),
-        lever: Boolean(el && el.classList.contains('lever')), buru: Boolean(buruUntil), pull: pullShown, leverColor, pushStyle });
+        lever: Boolean(el && el.classList.contains('lever')), buru: Boolean(buruUntil), pull: pullShown, grabbing: pullDrag > 0, pulledAge: pulledAt === null ? null : lastNow - pulledAt, leverColor, pushStyle });
 
     return { init, trigger, prompt, buru, handleBuru, pull, pulled, update, state, LONG_PRESS };
 })();

@@ -84,6 +84,9 @@
             //   「レバーを引け！」の あいだは、レバーを つかんで 手前 (下) へ 引く (2026-10-24 ユーザー指定)
             const push = $('cabinet-push'), kb = $('koori-button');
             let grab = null;   // レバーを つかんで いる { id, y, amount }
+            // 引きやすく (2026-10-24 ユーザー指定): レバーの まわりの 広い ところを つかめて、指で 約 40px 下げれば 引ける。
+            //   とちゅうで 離しても 1/3 まで 引けて いれば 引いたことに する
+            const PULL_DIST = 40, PULL_RELEASE = 0.35;
             ['pointerdown', 'pointerup', 'pointercancel', 'pointerleave'].forEach(type => push.addEventListener(type, e => {
                 e.preventDefault();
                 if (type === 'pointerdown' && MachineButton.state().lever) {
@@ -93,7 +96,7 @@
                 }
                 if (grab && grab.id === e.pointerId) {
                     if (type === 'pointerleave') return;   // つかんだ まま 外に 出ても 引きつづける
-                    if (grab.amount >= 0.5) pullLever(); else MachineButton.pull(0);
+                    if (grab.amount >= PULL_RELEASE) pullLever(); else MachineButton.pull(0);
                     grab = null;
                     return;
                 }
@@ -101,7 +104,7 @@
             }));
             push.addEventListener('pointermove', e => {
                 if (!grab || grab.id !== e.pointerId) return;
-                grab.amount = (e.clientY - grab.y) / Math.max(24, push.offsetHeight * 1.5);
+                grab.amount = (e.clientY - grab.y) / PULL_DIST;
                 MachineButton.pull(grab.amount);
                 if (grab.amount >= 1) { grab = null; pullLever(); }
             });
@@ -335,8 +338,9 @@
         if (game.cabinet) {
             Cabinet.draw(time, { mode: modeClass(game.machine), premium: Boolean(game.machine.bonus && game.machine.bonus.alloc && game.machine.bonus.alloc.premium), gimmick, balls: game.balls, button: MachineButton.state(), cue: Lcd.light() });   // cue: 演出の 光 (当たりは 虹色)
             // 筐体の PUSH の 位置を 絵に 合わせる (下の 段が せまい スマホでは 出さない)
-            const r = Cabinet.pushRect(), push = $('cabinet-push');
+            const r = Cabinet.pushRect(MachineButton.state().lever), push = $('cabinet-push');
             push.hidden = !r;
+            push.classList.toggle('grab', MachineButton.state().lever);   // レバーを つかむ ところ (広い)
             if (r) Object.assign(push.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
         }
         // BGM: 台の状態で曲を変える。消音・BGM OFF・窓を開いているあいだは止める

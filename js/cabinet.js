@@ -461,9 +461,11 @@ const Cabinet = (() => {
         const bs = st.button || {};
         const pull = bs.pull || 0;
         const sink = bs.pressed && !bs.lever ? capR * 0.25 : 0;
-        const capY = L.capY + sink + pull * capR * 1.5;
+        // 引く 量は 前より 大きく 動かす (2026-10-24 ユーザー指定: 引く 感覚を わかりやすく)。棒の 根元は こえない
+        const drop = Math.min(capR * 1.8, Math.max(capR * 0.8, baseY - bh * 0.32 - L.capY - capR * 0.3));
+        const capY = L.capY + sink + pull * drop;
         const capR0 = capR;
-        capR *= 1 + pull * 0.3;
+        capR *= 1 + pull * 0.4;
         // 引け！の 色 (2026-10-24 ユーザー指定: 色の 段階)。虹は 色が 流れる、ほかは その 色で 明るさが 脈打つ
         const LEVER_HUE = { blue: 212, red: 355, gold: 46 };
         const hue = LEVER_HUE[bs.leverColor];
@@ -537,6 +539,7 @@ const Cabinet = (() => {
         g.fillText('PUSH', 0, 1);
         g.restore();
         g.restore();   // ぶるぶる の 位置を もどす
+        leverGuide(L, bs, t, capR0, drop, lc);
         // 「レバーを引け！」: ボタンの 左右に「引け」と、手前 (下) へ 流れる ▼
         if (bs.lever && !pull) {
             g.font = `bold ${Math.round(capR0 * 0.8)}px ${FONT}`;
@@ -567,11 +570,96 @@ const Cabinet = (() => {
         g.fill();
     }
 
+    // レバーを 引く 手がかり (2026-10-24 ユーザー指定: 引くのを わかりやすく)
+    //   待っている あいだ: うすい ボタンの 影が 下へ すべって「下へ 引く」動きを 見せる
+    //   引いている あいだ: 右に 引いた 量の ゲージ (4 段の 目もり。カチッと 合わせる)
+    //   引ききった 瞬間: 光の 輪が 広がって「ガコン!!」
+    function leverGuide(L, bs, t, capR, drop, lc) {
+        const { cx } = L;
+        const top = L.capY, end = L.capY + drop;
+        if (bs.lever && !bs.grabbing && bs.pulledAge == null) {
+            const k = (t * 1.2) % 1;
+            const y = top + drop * Math.min(1, k * 1.4);
+            g.globalAlpha = 0.45 * (1 - k);
+            g.beginPath();
+            g.ellipse(cx, y, capR * 1.1, capR * 0.6, 0, 0, Math.PI * 2);
+            g.fillStyle = lc(0, 95, 70);
+            g.fill();
+            g.globalAlpha = 1;
+            g.font = `bold ${Math.round(Math.max(10, capR * 0.62))}px ${FONT}`;
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.lineWidth = 3;
+            g.strokeStyle = '#000000';
+            const ly = Math.min(H - capR * 0.4, end + capR * 1.0);
+            g.strokeText('↓ 下へ引く ↓', cx, ly);
+            g.fillStyle = Math.floor(t * 4) % 2 ? '#ffffff' : '#ffe066';
+            g.fillText('↓ 下へ引く ↓', cx, ly);
+            g.textAlign = 'left';
+        }
+        if (bs.grabbing) {
+            const gx = cx + capR * 2.1, gw = Math.max(5, capR * 0.32);
+            const gy = top - capR * 0.4, gh = drop + capR * 0.8;
+            g.fillStyle = 'rgba(0,0,0,.65)';
+            g.fillRect(gx - 1, gy - 1, gw + 2, gh + 2);
+            g.fillStyle = bs.pull >= 0.75 ? '#ff3a4a' : bs.pull >= 0.5 ? '#ffd23a' : '#4aa8ff';
+            g.fillRect(gx, gy, gw, gh * bs.pull);
+            g.fillStyle = '#ffffff';
+            for (let i = 1; i < 4; i++) g.fillRect(gx - 2, gy + gh * i / 4, gw + 4, 1.5);
+            if (bs.pull >= 0.5) {
+                g.font = `bold ${Math.round(Math.max(9, capR * 0.5))}px ${FONT}`;
+                g.textAlign = 'left';
+                g.textBaseline = 'middle';
+                g.lineWidth = 3;
+                g.strokeStyle = '#000000';
+                g.strokeText('あと少し！', gx + gw + 4, gy + gh * bs.pull);
+                g.fillStyle = '#ffe066';
+                g.fillText('あと少し！', gx + gw + 4, gy + gh * bs.pull);
+            }
+        }
+        if (bs.pulledAge != null && bs.pulledAge < 0.55) {
+            const a = bs.pulledAge / 0.55;
+            g.globalAlpha = 1 - a;
+            g.strokeStyle = '#ffffff';
+            g.lineWidth = 4 * (1 - a) + 1;
+            g.beginPath();
+            g.ellipse(cx, end, capR * (1.2 + a * 4), capR * (0.7 + a * 2.2), 0, 0, Math.PI * 2);
+            g.stroke();
+            g.fillStyle = '#ffe066';
+            for (let i = 0; i < 10; i++) {
+                const ang = i / 10 * Math.PI * 2;
+                const r = capR * (1.4 + a * 3.5);
+                g.fillRect(cx + Math.cos(ang) * r - 2, end + Math.sin(ang) * r * 0.6 - 2, 4, 4);
+            }
+            // 文字は 左右の スピーカーの 上 (レバーの 上は 盤面の 窓で かくれる)
+            let size = Math.round(capR * (1.1 + Math.max(0, 0.15 - bs.pulledAge) * 4));
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.font = `bold ${size}px ${FONT}`;
+            while (size > 8 && g.measureText('ガコン!!').width > W * 0.3) g.font = `bold ${--size}px ${FONT}`;
+            g.lineWidth = 4;
+            g.strokeStyle = '#000000';
+            g.fillStyle = hsl(t * 400, 95, 65);
+            for (const x of [W * 0.2, W * 0.8]) {
+                g.strokeText('ガコン!!', x, L.y0 + L.bh * 0.55);
+                g.fillText('ガコン!!', x, L.y0 + L.bh * 0.55);
+            }
+            g.globalAlpha = 1;
+            g.textAlign = 'left';
+        }
+    }
+
     // 下の PUSH (レバーの 上の ボタン) の 位置 (#cabinet-push を 重ねる)。下の 段が せまいときは null
     // (スマホも 筐体を 縦に 長くして 段を 残している。css/style.css の @media)
-    function pushRect() {
+    //   wide: 「レバーを引け！」の あいだは、レバーの 左右・下を ふくむ 広い ところを つかめる (2026-10-24 ユーザー指定: 引きやすく)
+    function pushRect(wide = false) {
         const L = cv && lever(windowPoints());
         if (!L) return null;
+        if (wide) {
+            const w = Math.max(L.capR * 5, L.baseW * 1.4);
+            const y = L.capY - L.capR * 1.6;
+            return { x: L.cx - w / 2, y, w, h: H - y };
+        }
         return { x: L.cx - L.capR * 1.1, y: L.capY - L.capR * 0.7, w: L.capR * 2.2, h: L.capR * 1.6 };
     }
 
