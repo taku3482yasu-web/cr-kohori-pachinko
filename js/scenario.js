@@ -54,6 +54,14 @@ const Scenario = (() => {
         const sy = show.senyomi;
         const lv = sy.levels[level] || sy.levels.recommend;
         const hit = result.kind === 'hit';
+        // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 保留に 入った ときに 決め、先読み演出は すべて 出さない (白い 保留の まま そろう)。
+        //   7・7・7 (奇数) で 見せるので 奇数の 当たりから 選ぶ (当たり 全体で crack.rate)
+        if (hit && show.crack && (result.forceCrack || (isOddHit(show, result, 1) && rng() < crackRate(show, spec)))) {
+            return { crack: true, holdColor: 'white', shownColor: 'white', change: null, changed: false, button: null, hiStage: false, voice: false,
+                leverBuru: false, handleBuru: false, leverHold: false, question: false };
+        }
+        // 先読みの 出たら 当たる 割合の 計算は、ひび割れ (先読みなし) の ぶんを 除いた 当たりで する
+        spec = noCrack(show, spec);
         // レバブル (保留が 入ったとき。カスタマイズで 見せるかを 決める): 出たら 当たる 割合が leverBuru.holdReliability
         const lb = show.leverBuru;
         const hh = spec.hitRate;
@@ -131,13 +139,13 @@ const Scenario = (() => {
         // 高確率ステージ中: きっかけの保留まではそのまま
         if (state.hi) return null;
         // 高確率ステージへ (外れの保留は、ステージが変わってすぐの間は移らない)
-        const trigger = all.find(h => h.hiStage && (h.kind === 'hit' || state.since > st.quick.window));
+        const trigger = all.find(h => h.hiStage && ((h.kind === 'hit' && !h.crack) || state.since > st.quick.window));
         if (trigger) {
             state.hi = { target: trigger, id: st.hi.ids[Math.floor(rng() * st.hi.ids.length)] };
             return { id: state.hi.id, kind: 'hi' };
         }
         // すぐ変わる (当たり濃厚): ステージが変わってから window 回転以内に当たりの保留があれば、1回だけ抽選
-        if (state.since <= st.quick.window && !state.rolled && all.some(h => h.kind === 'hit')) {
+        if (state.since <= st.quick.window && !state.rolled && all.some(h => h.kind === 'hit' && !h.crack)) {   // ひび割れは 先読みなし
             state.rolled = true;
             if (rng() < st.quick.rate) return goNext('quick');
         }
@@ -305,12 +313,13 @@ const Scenario = (() => {
         //   変動の 長さが 変わるので 全回転と 同じく 台の 乱数 (rng) で 決める (fxRandom に すると テストの 結果が 毎回 変わる)
         if (hit && !spin.rush && show.ikiteru && (result.forceIkiteru || rng() < show.ikiteru.rate)) return ikiteruPlan(config, spin, rng);
 
+        // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 保留に 入った ときに 決めて ある (Scenario.hold)。予告も 先読みも なしで 1・3・5 → 7・7・7
+        if (hit && !spin.rush && show.crack && (result.crack || result.forceCrack)) return crackPlan(config, spin, rng);
+        // 予告の 出たら 当たる 割合の 計算は、ひび割れ (予告なし) の ぶんを 除いた 当たりで する
+        spec = spin.rush ? spec : noCrack(show, spec);
         // ステップアップ予告・群予告 (通常時だけ)
         const step = spin.rush ? null : stepUp(show, spec, hit, result, rng);
         const gun = spin.rush ? null : result.forceGun || pickReveal(show.gun.kinds, spec.hitRate, hit, rng);
-        // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 7・7・7 (奇数) で 見せるので、奇数の 当たりから 選ぶ。変動の 長さが 変わるので rng。
-        //   予告 (ステップアップ・群) は ほかの 当たりと 同じに 出す (出たら 当たる 割合を かえない)
-        if (hit && !spin.rush && show.crack && (result.forceCrack || (isOddHit(show, result, 1) && rng() < crackRate(show, spec)))) return crackPlan(config, spin, rng, step, gun);
         let type;   // 'plain' / 'fail' / 'reach'
         if (hit || result.force === 'reach') type = 'reach';
         else if (result.force === 'fail') type = 'fail';
@@ -451,7 +460,7 @@ const Scenario = (() => {
 
     // リーチ (バトル) の変動のうち当たりの割合
     function reachHitShare(show, spec) {
-        const h = spec.hitRate * (1 - (show.crack ? show.crack.rate : 0));   // ひび割れの 当たりは リーチに ならない (2026-10-24)
+        const h = spec.hitRate;
         return h / (h + (1 - h) * reachMissRate(show, spec));
     }
 
@@ -562,22 +571,17 @@ const Scenario = (() => {
         return odd > 0 ? Math.min(1, show.crack.rate * total / odd) : 0;
     }
 
+    // ひび割れの 当たりを 除いた スペック (先読み・予告の 出たら 当たる 割合を 保つ。ひび割れには 先読みも 予告も 出さない)
+    const noCrack = (show, spec) => show.crack ? { ...spec, hitRate: spec.hitRate * (1 - show.crack.rate) } : spec;
+
     // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 外れの ように 1・3・5 で 止まり (チャレンジ失敗は なし)、
     //   ひび割れ → おにおに・怪 → 粉砕 → 咆哮 → 7・7・7 (確定)。止まるまでは ふつうの 外れと 同じ (type plain)、p.crack で 見分ける
-    function crackPlan(config, spin, rng, step = null, gun = null) {
+    function crackPlan(config, spin, rng) {
         const show = config.show;
         const t = show.timing, ct = show.crack.timing;
         const p = { fig: 1, type: 'plain', win: true, crack: true, talk: null, digits: [7, 7, 7], fakeDigits: [1, 3, 5] };
         p.phases = [{ name: 'roll', t: t.miss[Math.min(t.miss.length, spin.holdsLeft + 1) - 1] }];
         p.phases.push(...['xstop', 'xcrack', 'xemerge', 'xsmash', 'xroar', 'xalign'].map(name => ({ name, t: ct[name] })));
-        if (gun) {
-            p.gun = gun;
-            p.phases.unshift({ name: 'gun', t: show.gun.time });
-        }
-        if (step) {
-            p.stepUp = step;
-            p.phases.unshift({ name: 'stepup', t: step.step * show.stepUp.stepTime + show.stepUp.tail });
-        }
         p.reveal = { phase: 'xalign', at: 0.3 };
         p.defeatLine = show.furukawa.congratsLine;
         p.defeatColor = 6;

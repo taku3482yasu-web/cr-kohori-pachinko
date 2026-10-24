@@ -641,10 +641,7 @@
         }));
         $('debug-reach').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'reach', null, { enemy: enemy() === 'naitei' ? undefined : enemy() }));
         $('debug-fail').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'fail', null));
-        $('debug-crack').addEventListener('click', () => {   // 1・3・5 の ひび割れ (2026-10-24)
-            Machine.debugHold(game.machine, 1, 'hit', null);
-            game.machine.holds[1][0].forceCrack = true;
-        });
+        $('debug-crack').addEventListener('click', () => Machine.debugHold(game.machine, 1, 'hit', 'jitan', { crack: true }));   // 1・3・5 の ひび割れ (2026-10-24)
         $('debug-ikiteru').addEventListener('click', () => {   // P3
             Machine.debugHold(game.machine, 1, 'hit', null);
             game.machine.holds[1][0].forceIkiteru = true;
@@ -692,10 +689,7 @@
     const forceEnemy = params.get('enemy') || undefined;
     if (force === 'hit' || force === 'rush') Machine.debugHold(game.machine, 1, 'hit', force === 'rush' ? 'jitan' : null, { enemy: forceEnemy });
     if (force === 'reach' || force === 'fail') Machine.debugHold(game.machine, 1, force, null, { enemy: forceEnemy });
-    if (force === 'crack') {   // 1・3・5 の ひび割れ (2026-10-24)
-        Machine.debugHold(game.machine, 1, 'hit', 'jitan');
-        game.machine.holds[1][0].forceCrack = true;
-    }
+    if (force === 'crack') Machine.debugHold(game.machine, 1, 'hit', 'jitan', { crack: true });   // 1・3・5 の ひび割れ (2026-10-24)
     if (force === 'small') Machine.debugHold(game.machine, 2, 'small', null);
     if (force === 'jitan') Machine.debugJitan(game.machine);
     if (force === 'challenge') Machine.debugChallenge(game.machine, 0);   // 突破チャレンジから (保留は玉を打ってためる)

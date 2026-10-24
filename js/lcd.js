@@ -300,7 +300,7 @@ const Lcd = (() => {
                 MachineButton.trigger('rainbow', now);
                 Sound.play('v');
             }
-            if (Customize.get('notice') === 'pre' && e.fig === 1 && e.result.kind === 'hit') {
+            if (Customize.get('notice') === 'pre' && e.fig === 1 && e.result.kind === 'hit' && !e.result.crack) {   // ひび割れは 先告知も なし
                 MachineButton.trigger('rainbow', now);
                 show('当たり確定！', 'rainbow', now, 1.5);
             }
@@ -354,7 +354,8 @@ const Lcd = (() => {
                 // 大当たり中の レバー (2026-10-24): 昇格を「レバーを引け！ 上乗せチャンス」で 見せる ことが ある (V への 昇格は そのまま)
                 if (!pr.toV && Math.random() < bl.promote) bonusLever = { start: now + bl.delay, promote: pr, bonus: machineRef.bonus };
                 else promoteFx = { start: now + (pr.toV ? CONFIG.show.promote.vDelay : CONFIG.show.promote.delay), from: shown[0], to: pr.to, bonus: machineRef.bonus };
-            } else if (e.round === 1 && machineRef && machineRef.bonus && bonusLabel < CONFIG.show.bigLabel && Math.random() < bl.gasa) {
+            } else if (e.round === 1 && machineRef && machineRef.bonus && bonusLabel < CONFIG.show.bigLabel && !(typeof shown[0] === 'number' && shown[0] % 2 === 1)
+                && Math.random() < bl.gasa) {   // 奇数の 図柄で 当たったときは 出さない (2026-10-24 ユーザー指定: 昇格しないので いらない)
                 bonusLever = { start: now + bl.delay, promote: null, bonus: machineRef.bonus };   // ガセ (昇格しない)
             }
             const f = CONFIG.show.furukawa;
@@ -381,7 +382,7 @@ const Lcd = (() => {
             summary = { hits: e.hits - 1, balls: e.balls, failed: e.challengeFailed, until: now + summaryTime };
             // 天国の カットイン (P3): 残りの 保留に 当たりが あれば ときどき (結果の 表示の あと)
             const left = machineRef ? [...machineRef.holds[1], ...machineRef.holds[2]] : [];
-            if (CONFIG.show.heavenCutin && left.some(h => h && h.kind === 'hit') && Math.random() < CONFIG.show.heavenCutin.rate) {
+            if (CONFIG.show.heavenCutin && left.some(h => h && h.kind === 'hit' && !h.crack) && Math.random() < CONFIG.show.heavenCutin.rate) {   // ひび割れは 先読みなし
                 heavenFx = { who: Math.random() < 0.5 ? 'naitei' : 'aruaru', start: now + summaryTime * 0.6 };
             }
         }
@@ -1214,7 +1215,7 @@ const Lcd = (() => {
             text('!?', W / 2, 72, 30, '#ffffff');
             return;
         }
-        const open = k >= 0.4;
+        const open = k >= 0.38;
         for (let i = 0; i < 18; i++) {
             const a = i / 18 * Math.PI * 2 + now * (open ? 0.6 : 2.4);
             ctx.fillStyle = open ? `hsla(${(i * 20 + now * 200) % 360}, 95%, 60%, 0.35)` : 'rgba(127,211,247,0.25)';
@@ -1224,15 +1225,15 @@ const Lcd = (() => {
             ctx.lineTo(W / 2 + Math.cos(a + 0.12) * 300, H / 2 + Math.sin(a + 0.12) * 300);
             ctx.fill();
         }
-        if (k >= 0.4 && k < 0.46) {
-            ctx.fillStyle = `rgba(255,255,255,${0.8 * (1 - (k - 0.4) / 0.06)})`;
+        if (k >= 0.38 && k < 0.44) {
+            ctx.fillStyle = `rgba(255,255,255,${0.8 * (1 - (k - 0.38) / 0.06)})`;
             ctx.fillRect(0, 0, W, H);
         }
-        if (k >= 0.4 && k < 0.64) {
+        if (k >= 0.38 && k < 0.62) {
             band(120, 22, 0.55);
             text('変形!!', W / 2, 131, 16, Math.floor(now * 8) % 2 ? '#ffe066' : '#ffffff');
         }
-        if (k >= 0.64) {
+        if (k >= 0.62) {
             band(120, 22, 0.55);
             text('こおりくん 降臨!!', W / 2, 131, 16, 'rainbow', 'center', now);
         }
@@ -1779,10 +1780,13 @@ const Lcd = (() => {
         if (!spinView || !phase || phase.name !== 'yaku') return null;
         const t = Math.min(0.999, phase.local / phase.t);
         once('yaku', 'hurt');
-        // 変形の 音: 六角 → 四角 で ガシャッ、奥へ のびる 3 段で ガコッ、立方体に なったら ファンファーレ
-        if (t > 0.4) once('yakuMorph', 'lever');
-        [0.5, 0.547, 0.594].forEach((at, i) => { if (t > at) once('yakuStep' + i, 'lever'); });
-        if (t > 0.64) once('yakuDone', 'win');
+        // 機械の 音 (js/cabinet.js の YAKU と 同じ 時刻): ガツンと 落ちる → カクッ × 4 → わくが 開く → ピストン ガシャン × 3 → 完成 → 引き上げ
+        if (t > 0.1) once('yakuDrop', 'pull');
+        [0.18, 0.23, 0.28, 0.33].forEach((at, i) => { if (t > at) once('yakuRot' + i, 'lever'); });
+        if (t > 0.38) once('yakuOpen', 'push');
+        [0.48, 0.53, 0.58].forEach((at, i) => { if (t > at) once('yakuPush' + i, 'lever'); });
+        if (t > 0.62) once('yakuDone', 'win');
+        if (t > 0.92) once('yakuUp', 'attack');
         return t;
     }
 

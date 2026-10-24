@@ -607,6 +607,8 @@ test('1・3・5 の ひび割れ: 通常時の 当たりの 約1割、1・3・5 
             assert(p.reveal.phase === 'xalign', '当たりが 見えるのは 7・7・7');
         }
         assert(crack.every(p => p.type === 'plain' && !p.challenge), 'ひび割れに チャレンジ失敗は ない (そのまま 1・3・5 で 止まる)');
+        // 先読みも 予告も なし (2026-10-24 ユーザー指定)
+        assert(crack.every(p => !p.stepUp && !p.gun && !p.iwakan && !p.gizi), 'ひび割れに 予告 (ステップアップ・群・違和感・擬似連) が 出た');
         // 当たりの 役物: バトルの 当たりは みんな、図柄が そろう (result / 復活は rvkill) 前に yaku
         for (const p of hits.filter(x => x.type === 'reach')) {
             const names = p.phases.map(ph => ph.name);
@@ -615,6 +617,22 @@ test('1・3・5 の ひび割れ: 通常時の 当たりの 約1割、1・3・5 
         }
         assert(plans.every(p => p.win || !p.yaku), '外れには 役物なし');
     }
+});
+
+test('1・3・5 の ひび割れ: 保留に 入った ときに 決まり、先読み (色・保留変化・ボタン・先バレ音・高確率ステージ・レバブル) が 出ない', () => {
+    const game = loadGame(5);
+    const { CONFIG, Scenario } = game;
+    const spec = CONFIG.specs.s99;
+    let n = 0;
+    for (let i = 0; i < 200000; i++) {
+        const result = { kind: 'hit', alloc: spec.firstHit[1] };   // 時短へ (奇数)
+        const h = Scenario.hold(CONFIG, spec, result, game.rng, 'hot');
+        if (!h.crack) continue;
+        n++;
+        assert(h.holdColor === 'white' && h.shownColor === 'white' && !h.change && !h.button && !h.hiStage && !h.voice && !h.leverBuru && !h.handleBuru,
+            'ひび割れの 保留に 先読みが ついた');
+    }
+    assert(n > 0, 'ひび割れの 保留が 出ない');
 });
 
 test('ステップアップ予告: 3段目の金文字は約90%、赤文字はチャンス、3段目まで行くと白でも期待できる。3段目の外れはチャレンジに入る', () => {
