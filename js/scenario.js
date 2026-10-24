@@ -425,7 +425,7 @@ const Scenario = (() => {
             p.phases.unshift({ name: 'stepup', t: step.step * show.stepUp.stepTime + show.stepUp.tail });
         }
         // 当たりの 役物 (2026-10-24 ユーザー指定): 通常時の バトルの 当たりは、図柄が そろう 前に 役物 (復活は 撃破の 前)
-        if (hit && !spin.rush && type === 'reach') addYaku(show, p, p.leverRevival ? 'rvkill' : 'result');
+        if (hit && !spin.rush && type === 'reach' && yakuOn(show, spin, rng)) addYaku(show, p, p.leverRevival ? 'rvkill' : 'result');
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         // 通常時だけ、ふるカワが変動の始まりにしゃべる
         if (!spin.rush) p.talk = talk(show, p, spin, rng);
@@ -554,6 +554,10 @@ const Scenario = (() => {
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         return p;
     }
+
+    // 当たりの 役物を 出すか (カスタマイズ「当たりの役物」2026-10-24: 毎回 / ときどき (show.yaku.sometimes) / なし)。
+    //   変動の 長さが 変わるので、ときどきは 台の 乱数 (rng)。毎回・なしでは 乱数を 使わない
+    const yakuOn = (show, spin, rng) => spin.yaku === 'off' ? false : spin.yaku === 'sometimes' ? rng() < show.yaku.sometimes : true;
 
     // 当たりの 役物 (yaku) の 場面を before の 場面の 前に 入れる (入れたら true)
     function addYaku(show, p, before) {
@@ -760,7 +764,7 @@ const Scenario = (() => {
             p.phases = [{ name: 'roll', t: plain }];
         }
         // RASH 中の 当たりの 役物は プレミアボーナスの ときだけ (2026-10-24 ユーザー指定)。当たりが 見える 場面の 前に 入れ、前の 役物の 落下は やめる
-        if (premium && p.reveal && addYaku(show, p, p.reveal.phase)) delete p.gimmickPhase;
+        if (premium && p.reveal && spin.yaku !== 'off' && addYaku(show, p, p.reveal.phase)) delete p.gimmickPhase;   // なし なら 前の 役物の 落下
         p.duration = p.phases.reduce((a, ph) => a + ph.t, 0);
         // 当たりが決まった瞬間に、ふるカワが虹色で「おめでとう！」 (演出のない当たりは変動の終わり)
         if (win) {

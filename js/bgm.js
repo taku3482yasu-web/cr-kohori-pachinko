@@ -166,7 +166,7 @@ const Bgm = (() => {
     let step = 0;
     let nextTime = 0;
     let timer = null;
-    const volume = 0.5;
+    let volume = 0.5;   // カスタマイズ「BGM の音量」で 変わる (2026-10-24。setVolume)
     let paused = true;
 
     // 台の状態とオープニング・エンディングから曲を決める (画面・音には触らない)
@@ -259,5 +259,11 @@ const Bgm = (() => {
         applyVolume();
     }
 
-    return { init, play, setPaused, trackFor, get track() { return trackName; } };
+    // BGM の 音量 (level: 1 が ふつう)
+    function setVolume(level) {
+        volume = 0.5 * level;
+        applyVolume();
+    }
+
+    return { init, play, setPaused, setVolume, trackFor, get track() { return trackName; } };
 })();

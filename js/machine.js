@@ -45,6 +45,7 @@ const Machine = (() => {
             gatherTime: 0,            // 突破チャレンジで保留がたまるのを待っている秒
             rashMode: config.show.rash.defaultMode,
             senyomi: 'recommend',          // 先読みの量 (カスタマイズ。Machine.setSenyomi)
+            yaku: 'always',                // 当たりの 役物 (カスタマイズ。Machine.setYaku。always 毎回 / sometimes ときどき / off なし)
             notice: 'normal',              // 告知のタイプ (カスタマイズ。Machine.setNotice。後告知・一発告知は通常時の演出なし)
             stage: Scenario.newStage(),   // 通常時のステージ (背景)
             holds: { 1: [], 2: [] },  // 保留 (それぞれの結果)
@@ -166,6 +167,7 @@ const Machine = (() => {
                 rushStreak: m.rush.active && !m.rush.challenge ? m.rush.hits - 1 : 0,   // いまの RASH の連チャン数 (表示の「〇連」)
                 yutime: m.yutime,
                 notice: m.notice,
+                yaku: m.yaku,
                 // RASH の最後の変動 (このあと時短も保留もない)
                 isLast: fig === 2 && m.rush.active && !m.rush.challenge && m.jitanLeft - (jitanSpin ? 1 : 0) <= 0 && m.holds[2].length === 0
             }, m.rng);
@@ -242,6 +244,9 @@ const Machine = (() => {
 
     function setNotice(m, notice) {
         m.notice = notice;
+    }
+    function setYaku(m, mode) {
+        m.yaku = mode;
     }
 
     // 保留変化: 変動が始まるとき、その保留 (self) と、1つ進んだ残りの保留 (next) の色を変える
@@ -523,5 +528,5 @@ const Machine = (() => {
         }
     }
 
-    return { create, enter, update, aim, inJitan, yutimeLeft, setRashMode, rashModes, nextRashMode, setSenyomi, setNotice, snapshot, restore, debugHold, debugJitan, debugChallenge };
+    return { create, enter, update, aim, inJitan, yutimeLeft, setRashMode, rashModes, nextRashMode, setSenyomi, setNotice, setYaku, snapshot, restore, debugHold, debugJitan, debugChallenge };
 })();

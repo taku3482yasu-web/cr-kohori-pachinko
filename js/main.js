@@ -74,6 +74,7 @@
         game.machine = saved ? Machine.restore(CONFIG, saved.machine) : Machine.create(CONFIG, specId);
         Machine.setSenyomi(game.machine, Customize.get('senyomi'));
         Machine.setNotice(game.machine, Customize.get('notice'));
+        Machine.setYaku(game.machine, Customize.get('yaku'));
         game.board = Board.build(CONFIG, board);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
@@ -402,6 +403,8 @@
     ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => {
         Sound.unlock();
         Bgm.init(Sound.context);
+        Sound.setVolume(Customize.volume('seVolume'));   // 音量 (2026-10-24)
+        Bgm.setVolume(Customize.volume('bgmVolume'));
     }));
     MachineButton.init($('koori-button'), pressButton, skipShow, () => Lcd.release(time));   // 離したとき: 長押しの ため を 止める (2026-10-24)
     const updateSoundButton = () => { $('sound-button').textContent = `音: ${Sound.muted ? 'OFF' : 'ON'}`; };
@@ -553,6 +556,9 @@
         if ((key === 'theme' || key === 'ball') && game.view) BoardView.redraw(game.view);
         if (key === 'senyomi' && game.machine) Machine.setSenyomi(game.machine, value);
         if (key === 'notice' && game.machine) Machine.setNotice(game.machine, value);
+        if (key === 'yaku' && game.machine) Machine.setYaku(game.machine, value);
+        if (key === 'seVolume') Sound.setVolume(Customize.volume('seVolume'));
+        if (key === 'bgmVolume') Bgm.setVolume(Customize.volume('bgmVolume'));
     });
 
     // ----- 前回から続ける / 新しく始める -----

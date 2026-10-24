@@ -29,6 +29,14 @@ const Customize = (() => {
             choices: { on: 'あり', off: 'なし' }, default: 'on' },
         vibrate: { label: 'ボタンの振動', group: '演出', note: 'スマホの本体の振動',
             choices: { on: 'ON', off: 'OFF' }, default: 'on' },
+        // 音量 (2026-10-24 ユーザー指定)。VOLUMES の 倍率
+        bgmVolume: { label: 'BGM の音量', group: '演出', note: 'BGM の大きさ (「BGM: OFF」・「音: OFF」のときは鳴らない)',
+            choices: { low: '小', normal: 'ふつう', high: '大' }, default: 'normal' },
+        seVolume: { label: '効果音の音量', group: '演出', note: '効果音・ファンファーレ・入賞時の音の大きさ',
+            choices: { low: '小', normal: 'ふつう', high: '大' }, default: 'normal' },
+        // 当たりの 役物 (2026-10-24 ユーザー指定): 通常時の バトルの 当たりで 役物が 変形する 演出 (約 6 秒)。RASH 中の プレミアは なし 以外 いつも
+        yaku: { label: '当たりの役物', group: '演出', note: '通常時のバトルで勝ったとき、役物が絵本のように開いて こおりくんに変形する演出 (約 6 秒)。ときどき: 3 回に 1 回くらい',
+            choices: { always: '毎回', sometimes: 'ときどき', off: 'なし' }, default: 'always' },
         bgm: { label: 'BGM', group: '演出', note: '通常時・突破チャレンジ・RASH・大当たり中で曲が変わる (「音: OFF」のときは鳴らない)',
             choices: { on: 'ON', off: 'OFF' }, default: 'on' },
         skip: { label: '早送り', group: '操作', note: '台のボタン (B キー) を長押しすると、演出を結果の手前まで飛ばす (2026-10-20)',
@@ -116,5 +124,9 @@ const Customize = (() => {
         return { ...THEMES[get('theme')], ...BALLS[get('ball')] };
     }
 
-    return { OPTIONS, load, get, set, onChange, boardColors };
+    // 音量の 倍率
+    const VOLUMES = { low: 0.45, normal: 1, high: 1.6 };
+    const volume = key => VOLUMES[get(key)] || 1;
+
+    return { OPTIONS, load, get, set, onChange, boardColors, volume };
 })();

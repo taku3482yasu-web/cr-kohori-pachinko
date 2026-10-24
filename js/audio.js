@@ -10,13 +10,26 @@ const Sound = (() => {
     let muted = false;
     try { muted = localStorage.getItem('koori-pachinko-muted') === '1'; } catch (e) { /* 保存できない環境 */ }
 
+    let seOut = null, seLevel = 1;
+    // 効果音の 音量 (0〜)。1 が ふつう
+    function setVolume(level) {
+        seLevel = level;
+        if (seOut) seOut.gain.setTargetAtTime(level, ctx.currentTime, 0.02);
+    }
+
     function unlock() {
         if (ctx) {
             if (ctx.state === 'suspended') ctx.resume();
             return;
         }
         const AC = window.AudioContext || window.webkitAudioContext;
-        if (AC) ctx = new AC();
+        if (AC) {
+            ctx = new AC();
+            // 効果音の 音量 (カスタマイズ「効果音の音量」2026-10-24)。効果音は みな ここを 通す
+            seOut = ctx.createGain();
+            seOut.gain.value = seLevel;
+            seOut.connect(ctx.destination);
+        }
         loadVoice();
     }
 
@@ -42,7 +55,7 @@ const Sound = (() => {
         const gain = ctx.createGain();
         src.buffer = voiceBuffer;
         gain.gain.value = v.gain;
-        src.connect(gain).connect(ctx.destination);
+        src.connect(gain).connect(seOut);
         src.start(0, v.start, Math.max(0.1, v.end - v.start));
     }
 
@@ -54,7 +67,7 @@ const Sound = (() => {
         const length = (v.end - v.start) / e.rate;   // 実際に鳴る秒
         const out = ctx.createGain();
         out.gain.value = v.gain;
-        out.connect(ctx.destination);
+        out.connect(seOut);
         const muffle = ctx.createBiquadFilter();
         muffle.type = 'lowpass';
         muffle.frequency.value = e.lowpass;
@@ -94,7 +107,7 @@ const Sound = (() => {
             gain.gain.setValueAtTime(0.0001, t0);
             gain.gain.exponentialRampToValueAtTime(0.05, t0 + 0.4);
             gain.gain.exponentialRampToValueAtTime(0.0001, t0 + length + 0.8);
-            osc.connect(gain).connect(ctx.destination);
+            osc.connect(gain).connect(seOut);
             osc.start(t0);
             osc.stop(t0 + length + 0.9);
         });
@@ -110,7 +123,7 @@ const Sound = (() => {
         if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + length);
         gain.gain.setValueAtTime(volume, t0);
         gain.gain.exponentialRampToValueAtTime(0.0001, t0 + length);
-        osc.connect(gain).connect(ctx.destination);
+        osc.connect(gain).connect(seOut);
         osc.start(t0);
         osc.stop(t0 + length + 0.02);
     }
@@ -178,5 +191,5 @@ const Sound = (() => {
         try { localStorage.setItem('koori-pachinko-muted', value ? '1' : '0'); } catch (e) { /* 無視 */ }
     }
 
-    return { unlock, play, playVoice, setMuted, hush, get hushed() { return hushed(); }, get muted() { return muted; }, get voiceReady() { return Boolean(voiceBuffer); }, get context() { return ctx; } };
+    return { unlock, play, playVoice, setMuted, setVolume, hush, get hushed() { return hushed(); }, get muted() { return muted; }, get voiceReady() { return Boolean(voiceBuffer); }, get context() { return ctx; } };
 })();

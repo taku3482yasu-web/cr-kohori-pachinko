@@ -635,6 +635,27 @@ test('1・3・5 の ひび割れ: 保留に 入った ときに 決まり、先�
     assert(n > 0, 'ひび割れの 保留が 出ない');
 });
 
+test('当たりの役物の カスタマイズ: 毎回 / ときどき (約3割) / なし', () => {
+    const game = loadGame(9);
+    const { CONFIG, Scenario } = game;
+    const spec = CONFIG.specs.s99;
+    const count = mode => {
+        let hits = 0, yaku = 0;
+        for (let i = 0; i < 3000; i++) {
+            const result = { kind: 'hit', alloc: spec.firstHit[0], noPremium: true };
+            const p = Scenario.plan(CONFIG, spec, { fig: 1, result, holdsLeft: 1, rush: false, notice: 'normal', yaku: mode, specId: 's99' }, game.rng);
+            if (p.type !== 'reach') continue;
+            hits++;
+            if (p.yaku) yaku++;
+        }
+        return yaku / hits;
+    };
+    assertEqual(count('always'), 1, '毎回');
+    assertEqual(count('off'), 0, 'なし');
+    const some = count('sometimes');
+    assert(Math.abs(some - CONFIG.show.yaku.sometimes) < 0.05, `ときどき (${(some * 100).toFixed(1)}%)`);
+});
+
 test('ステップアップ予告: 3段目の金文字は約90%、赤文字はチャンス、3段目まで行くと白でも期待できる。3段目の外れはチャレンジに入る', () => {
     for (const specId of ['s99', 's159']) {
         const { CONFIG, plans } = fig1Plans(specId, 600000, 7);
