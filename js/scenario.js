@@ -562,17 +562,13 @@ const Scenario = (() => {
         return odd > 0 ? Math.min(1, show.crack.rate * total / odd) : 0;
     }
 
-    // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 外れの ように 1・3・5 で 止まり (40% は チャレンジ失敗の あと)、
-    //   ひび割れ → おにおに・怪 → 粉砕 → 咆哮 → 7・7・7。type は 止まるまでの 見せ方 (plain / fail)、p.crack で 見分ける
+    // 1・3・5 の ひび割れ (2026-10-24 ユーザー指定): 外れの ように 1・3・5 で 止まり (チャレンジ失敗は なし)、
+    //   ひび割れ → おにおに・怪 → 粉砕 → 咆哮 → 7・7・7 (確定)。止まるまでは ふつうの 外れと 同じ (type plain)、p.crack で 見分ける
     function crackPlan(config, spin, rng, step = null, gun = null) {
         const show = config.show;
         const t = show.timing, ct = show.crack.timing;
-        const fail = rng() < show.crack.failRate;
-        const p = { fig: 1, type: fail ? 'fail' : 'plain', win: true, crack: true, talk: null, digits: [7, 7, 7], fakeDigits: [1, 3, 5] };
-        if (fail) {
-            p.challenge = weighted(Object.fromEntries(Object.keys(show.challenges).map(id => [id, show.challenges[id].miss])), rng);
-            p.phases = [{ name: 'roll', t: t.roll }, { name: 'challenge', t: t.challenge }, { name: 'fail', t: t.fail }];
-        } else p.phases = [{ name: 'roll', t: t.miss[Math.min(t.miss.length, spin.holdsLeft + 1) - 1] }];
+        const p = { fig: 1, type: 'plain', win: true, crack: true, talk: null, digits: [7, 7, 7], fakeDigits: [1, 3, 5] };
+        p.phases = [{ name: 'roll', t: t.miss[Math.min(t.miss.length, spin.holdsLeft + 1) - 1] }];
         p.phases.push(...['xstop', 'xcrack', 'xemerge', 'xsmash', 'xroar', 'xalign'].map(name => ({ name, t: ct[name] })));
         if (gun) {
             p.gun = gun;

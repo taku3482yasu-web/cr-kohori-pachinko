@@ -1205,7 +1205,7 @@ const Lcd = (() => {
     }
 
     // ----- 当たりの 役物の 背景 (2026-10-24 ユーザー指定) -----
-    // 役物 (筐体が 液晶の 前に 描く) が 落ちて → 回って → 展開して → 立体の こおりくん。液晶は 暗くして 光で もり上げる
+    // 役物 (筐体が 液晶の 前に 描く) が 落ちて → 回って → 変形して → 立体の こおりくん。液晶は 暗くして 光で もり上げる
     function drawYakuScreen(now, plan, phase) {
         const k = phase.local / phase.t;
         ctx.fillStyle = '#04060c';
@@ -1214,7 +1214,7 @@ const Lcd = (() => {
             text('!?', W / 2, 72, 30, '#ffffff');
             return;
         }
-        const open = k >= 0.44;
+        const open = k >= 0.4;
         for (let i = 0; i < 18; i++) {
             const a = i / 18 * Math.PI * 2 + now * (open ? 0.6 : 2.4);
             ctx.fillStyle = open ? `hsla(${(i * 20 + now * 200) % 360}, 95%, 60%, 0.35)` : 'rgba(127,211,247,0.25)';
@@ -1224,11 +1224,15 @@ const Lcd = (() => {
             ctx.lineTo(W / 2 + Math.cos(a + 0.12) * 300, H / 2 + Math.sin(a + 0.12) * 300);
             ctx.fill();
         }
-        if (k >= 0.44 && k < 0.56) {
-            ctx.fillStyle = `rgba(255,255,255,${0.9 * (1 - (k - 0.44) / 0.12)})`;
+        if (k >= 0.4 && k < 0.46) {
+            ctx.fillStyle = `rgba(255,255,255,${0.8 * (1 - (k - 0.4) / 0.06)})`;
             ctx.fillRect(0, 0, W, H);
         }
-        if (k >= 0.56) {
+        if (k >= 0.4 && k < 0.64) {
+            band(120, 22, 0.55);
+            text('変形!!', W / 2, 131, 16, Math.floor(now * 8) % 2 ? '#ffe066' : '#ffffff');
+        }
+        if (k >= 0.64) {
             band(120, 22, 0.55);
             text('こおりくん 降臨!!', W / 2, 131, 16, 'rainbow', 'center', now);
         }
@@ -1775,7 +1779,10 @@ const Lcd = (() => {
         if (!spinView || !phase || phase.name !== 'yaku') return null;
         const t = Math.min(0.999, phase.local / phase.t);
         once('yaku', 'hurt');
-        if (t > 0.44) once('yakuOpen', 'win');
+        // 変形の 音: 六角 → 四角 で ガシャッ、奥へ のびる 3 段で ガコッ、立方体に なったら ファンファーレ
+        if (t > 0.4) once('yakuMorph', 'lever');
+        [0.5, 0.547, 0.594].forEach((at, i) => { if (t > at) once('yakuStep' + i, 'lever'); });
+        if (t > 0.64) once('yakuDone', 'win');
         return t;
     }
 

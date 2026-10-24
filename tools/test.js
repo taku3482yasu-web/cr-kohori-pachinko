@@ -606,7 +606,7 @@ test('1・3・5 の ひび割れ: 通常時の 当たりの 約1割、1・3・5 
             assert(['xstop', 'xcrack', 'xemerge', 'xsmash', 'xroar', 'xalign'].every(n => names.includes(n)), `ひび割れの 場面が そろって いない: ${names}`);
             assert(p.reveal.phase === 'xalign', '当たりが 見えるのは 7・7・7');
         }
-        assert(crack.some(p => p.type === 'fail') && crack.some(p => p.type === 'plain'), 'チャレンジ失敗の あとと、そのまま 止まる 両方が ある');
+        assert(crack.every(p => p.type === 'plain' && !p.challenge), 'ひび割れに チャレンジ失敗は ない (そのまま 1・3・5 で 止まる)');
         // 当たりの 役物: バトルの 当たりは みんな、図柄が そろう (result / 復活は rvkill) 前に yaku
         for (const p of hits.filter(x => x.type === 'reach')) {
             const names = p.phases.map(ph => ph.name);
