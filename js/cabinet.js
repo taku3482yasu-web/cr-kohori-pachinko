@@ -663,186 +663,103 @@ const Cabinet = (() => {
         return { x: L.cx - L.capR * 1.1, y: L.capY - L.capR * 0.7, w: L.capR * 2.2, h: L.capR * 1.6 };
     }
 
-    // ----- 当たりの 役物 (2026-10-24 ユーザー指定: 役物が 変形して 立体の こおりくんに なる。機械っぽく。参考: 役物集の 動画の ロゴ役物・拳の 役物) -----
-    // 金属の アームに ぶらさがった メダルが、レールに 沿って ガツンと 落ちて 跳ね返り (〜0.16)、カクッ カクッと 90 度ずつ 4 回 回り (〜0.38)、
-    // 外の わくが 左右に スライドして 開いて 中の 四角い 板が 出て (〜0.46)、ピストンで 3 段に ガシャン ガシャン と 押し出されて 立方体に なり
-    // ななめに カクッと 向く (〜0.64)。ふちの LED が 走り、アームで ゆれる (〜0.92)。最後は アームが 上へ 一気に 引き上げる
-    const YAKU = { drop: 0.1, settle: 0.16, rot: [0.18, 0.23, 0.28, 0.33], rotEnd: 0.38, open: 0.46, push: [0.48, 0.53, 0.58], turn: 0.62, up: 0.92 };
-    const ease = x => { const v = Math.max(0, Math.min(1, x)); return v * v * (3 - 2 * v); };
-    // 機械の 止まり方: 少し 行きすぎて もどる
-    const snap = x => { const v = Math.max(0, Math.min(1, x)) - 1; return 1 + 2.7 * v ** 3 + 1.7 * v ** 2; };
-    // ガツン の 揺れ (当たった 瞬間から すぐ 弱まる)
-    function knock(y, at) {
-        const d = y - at;
-        return d < 0 || d > 0.05 ? 0 : Math.exp(-d * 90) * Math.sin(d * 900);
-    }
-    const CHROME = [[0, '#f6f8fc'], [0.25, '#a4aebc'], [0.5, '#eef2f8'], [0.75, '#6a7484'], [1, '#d6dce6']];
+    // ----- 当たりの 役物 (2026-10-24 ユーザー指定: 役物が 変形して こおりくんに なる。3D の 立方体より 機械の 役物らしい 立体感で) -----
+    // y (Lcd.yaku の 0〜1): 落ちてくる (〜0.12) → 液晶の 前で 回って 正面で 止まる (〜0.40) →
+    // 変形 1: 六角の メダルが 四角に なる (0.40〜0.50) → 変形 2: 3 段で ガシャン と 部品が 組み上がる (0.50〜0.64。厚み → 顔の 部品 → 角金具と 足) →
+    // 組み上がった こおりくん (ふちの LED が 走り、光が 横切る) (〜0.94) → 光って 消える
     function yakuMedal(pts, st, t) {
         const y = st.yaku;
+        if (y < 0.4) {
+            // 落下と 回転は ふだんの 役物の 動きを 使う (ちょうど 2 回転して 正面で 止まる ところまで)
+            const gt = y < 0.12 ? y / 0.12 * 0.18 : 0.18 + (y - 0.12) / 0.28 * (0.64 * 2 / 3);
+            medal(pts, { ...st, gimmick: gt }, t);
+            return;
+        }
         const lcd = (shape && shape.lcd) || { x: 90, y: 118, w: 180, h: 101 };
-        const restR = B.w * 0.12, R0 = B.w * 0.18;
-        const restX = B.x + B.w / 2, restY = winTop(pts) - restR * 0.05;   // ふだんの メダルの 場所
-        const topX = restX, topY = restY - restR * 1.1;                    // アームの 付け根
-        const downX = X(lcd.x + lcd.w / 2), downY = Y(lcd.y + lcd.h / 2);
-        // 位置: 落ちる (重力で 速く) → ガツン → 最後に 引き上げ
-        let k = y < YAKU.drop ? (y / YAKU.drop) ** 2 : 1;
-        if (y > YAKU.up) k = 1 - ease((y - YAKU.up) / 0.06);
-        const bounce = y >= YAKU.drop && y < YAKU.settle ? Math.sin((y - YAKU.drop) / (YAKU.settle - YAKU.drop) * Math.PI) * R0 * 0.18 * (1 - (y - YAKU.drop) / (YAKU.settle - YAKU.drop)) : 0;
-        const jolt = [YAKU.drop, ...YAKU.rot, YAKU.open, ...YAKU.push, YAKU.turn].reduce((a, at) => a + knock(y, at), 0) * R0 * 0.06;
-        // アームの ゆれ (立方体に なってから ふりこ)
-        const swing = y > YAKU.turn && y < YAKU.up ? Math.sin((y - YAKU.turn) * 30) * 0.05 * Math.exp(-(y - YAKU.turn) * 4) : 0;
-        const R = restR + (R0 - restR) * k;
-        const cx0 = restX + (downX - restX) * k, cy0 = restY + (downY - restY) * k - bounce;
-        const cx = cx0 + jolt + Math.sin(swing) * (cy0 - topY), cy = cy0 + jolt * 0.5;
+        const cx = X(lcd.x + lcd.w / 2), cy = Y(lcd.y + lcd.h / 2);
+        const R = B.w * 0.18;   // 落ちてきた メダルの 大きさ (medal の downR)
         const hue = (t * 360) % 360;
-        // 後ろの 光 (止まってから)
-        if (y > YAKU.settle && y < YAKU.up) {
-            g.save();
-            g.globalAlpha = Math.min(1, (y - YAKU.settle) / 0.05);
-            for (let i = 0; i < 20; i++) {
-                const a = i / 20 * Math.PI * 2 + t * 0.9;
-                g.strokeStyle = hsl(hue + i * 18, 95, 65, 0.5);
-                g.lineWidth = Math.max(3, R * 0.1);
-                g.beginPath();
-                g.moveTo(cx + Math.cos(a) * R * 1.0, cy + Math.sin(a) * R * 1.0);
-                g.lineTo(cx + Math.cos(a) * R * 2.6, cy + Math.sin(a) * R * 2.6);
-                g.stroke();
-            }
-            g.restore();
-        }
-        // アーム (2 本の 金属の 棒と、つなぎの 板。付け根は 歯車)
-        const armW = R * 0.12;
-        for (const side of [-1, 1]) {
+        // 後ろの 虹の 光
+        g.save();
+        for (let i = 0; i < 20; i++) {
+            const a = i / 20 * Math.PI * 2 + t * 0.9;
+            g.strokeStyle = hsl(hue + i * 18, 95, 65, 0.55);
+            g.lineWidth = Math.max(3, R * 0.1);
             g.beginPath();
-            g.moveTo(topX + side * R * 0.32 - armW / 2, topY);
-            g.lineTo(cx + side * R * 0.32 - armW / 2, cy - R * 0.6);
-            g.lineTo(cx + side * R * 0.32 + armW / 2, cy - R * 0.6);
-            g.lineTo(topX + side * R * 0.32 + armW / 2, topY);
-            g.closePath();
-            g.fillStyle = lin(topX - R, 0, topX + R, 0, CHROME);
-            g.fill();
-            g.strokeStyle = '#2a2f3a';
-            g.lineWidth = 1;
+            g.moveTo(cx + Math.cos(a) * R * 0.9, cy + Math.sin(a) * R * 0.9);
+            g.lineTo(cx + Math.cos(a) * R * 2.6, cy + Math.sin(a) * R * 2.6);
             g.stroke();
         }
-        gear(topX, topY, R * 0.3, t * (k < 1 && y < YAKU.drop ? 12 : y > YAKU.up ? -14 : 0));
-        // 本体
-        const rotAt = YAKU.rot.reduce((a, at) => a + snap((y - at) / 0.04), 0);   // 90 度ずつ カクッと
-        if (y < YAKU.rotEnd) plate(cx, cy, R, rotAt * Math.PI / 2, 0, t);
-        else if (y < YAKU.open) plate(cx, cy, R, 0, ease((y - YAKU.rotEnd) / (YAKU.open - YAKU.rotEnd)), t);
-        else {
-            // ピストンで 3 段に 押し出す (段ごとに 行きすぎて もどる)
-            const depth = YAKU.push.reduce((a, at) => a + snap((y - at) / 0.035), 0) / 3;
-            const turn = snap((y - (YAKU.turn - 0.03)) / 0.03);   // 最後に ななめへ カクッ
-            const a = R * 0.72 + R * 0.13 * turn;
-            // ピストンの 棒 (板の 後ろから 見える)
-            if (depth > 0 && depth < 1) {
-                g.fillStyle = lin(cx - a, 0, cx + a, 0, CHROME);
-                for (const px of [-0.6, 0.6]) g.fillRect(cx + a * px - R * 0.05, cy - a * 1.05, R * 0.1, a * 2.1);
-            }
-            cube(cx, cy, a, 0.5 * turn + Math.sin(swing * 8) * 0.08, -0.42 * turn, t, Math.max(0.02, depth));
-        }
-        // 火花 (ガツン・カクッ・ガシャン の 瞬間)
-        for (const at of [YAKU.drop, ...YAKU.rot, YAKU.open, ...YAKU.push, YAKU.turn]) {
-            const d = y - at;
-            if (d >= 0 && d < 0.025) sparks(cx, cy, R * (1.1 + d * 20), t, 14, 1 - d / 0.025);
-        }
-        if (y > YAKU.up) {
-            g.fillStyle = `rgba(255,255,255,${0.6 * (1 - (y - YAKU.up) / 0.08)})`;
-            g.beginPath();
-            g.arc(cx, cy, R * 1.6, 0, Math.PI * 2);
-            g.fill();
-        }
-    }
-    // 付け根の 歯車
-    function gear(x, y, r, ang) {
-        g.save();
-        g.translate(x, y);
-        g.rotate(ang);
-        g.beginPath();
-        for (let i = 0; i < 24; i++) {
-            const rr = i % 2 ? r : r * 0.8;
-            const a = i / 24 * Math.PI * 2;
-            if (i) g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); else g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
-        }
-        g.closePath();
-        g.fillStyle = lin(-r, -r, r, r, CHROME);
-        g.fill();
-        g.strokeStyle = '#2a2f3a';
-        g.lineWidth = 1;
-        g.stroke();
-        g.fillStyle = '#2a2f3a';
-        g.beginPath();
-        g.arc(0, 0, r * 0.25, 0, Math.PI * 2);
-        g.fill();
         g.restore();
-    }
-    // メダルの 板: 金属の 六角の わく (ボルト つき) と、中の 四角い 氷の 板 (こおりくんの 顔)
-    //   ang: 回転 / open: わくが 左右に スライドして 開く 量 (0〜1)
-    function plate(cx, cy, R, ang, open, t) {
-        const sq = R * 0.72;
-        g.save();
-        g.translate(cx, cy);
-        g.rotate(ang);
-        // 中の 板
-        g.fillStyle = lin(-sq, -sq, sq, sq, [[0, '#ffffff'], [0.5, '#bff0ff'], [1, '#4aa8e0']]);
-        g.fillRect(-sq, -sq, sq * 2, sq * 2);
-        g.save();
-        g.translate(-sq, -sq);
-        g.scale(sq * 2, sq * 2);
-        kooriFace(t);
-        g.lineWidth = 0.03;
-        g.strokeStyle = '#1b3a6b';
-        g.strokeRect(0, 0, 1, 1);
-        g.restore();
-        // わく (左右 半分ずつ。open で 外へ スライド)
-        for (const side of [-1, 1]) {
+        const sq = R * 0.72;   // 四角に なったときの 半分の 大きさ
+        if (y < 0.5) {
+            // 変形 1: 六角 → 四角 (外形を 角度ごとに なめらかに 変える)。がたがた 震えて ガシャッ
+            const e = ease((y - 0.4) / 0.1);
+            const jx = e < 1 ? Math.sin(t * 80) * R * 0.03 : 0;
+            const ap = R * Math.cos(Math.PI / 6);
             g.save();
-            g.translate(side * open * R * 1.3, 0);
-            g.globalAlpha = 1 - open * 0.6;
+            g.translate(cx + jx, cy);
             g.beginPath();
-            // 外の 六角の 半分
-            for (let i = 0; i <= 3; i++) {
-                const a = -Math.PI / 2 + side * i * Math.PI / 3;
-                const x = Math.cos(a) * R, yy = Math.sin(a) * R;
-                if (i) g.lineTo(x, yy); else g.moveTo(x, yy);
+            for (let i = 0; i <= 72; i++) {
+                const th = i / 72 * Math.PI * 2;
+                const d = ((th + Math.PI / 6) % (Math.PI / 3)) - Math.PI / 6;
+                const rHex = ap / Math.cos(d);
+                const rSq = sq / Math.max(Math.abs(Math.cos(th)), Math.abs(Math.sin(th)));
+                const r = rHex + (rSq - rHex) * e;
+                if (i) g.lineTo(Math.cos(th) * r, Math.sin(th) * r); else g.moveTo(Math.cos(th) * r, Math.sin(th) * r);
             }
-            // 内の 四角の 半分 (くりぬき)
-            g.lineTo(0, sq);
-            g.lineTo(side * sq, sq);
-            g.lineTo(side * sq, -sq);
-            g.lineTo(0, -sq);
             g.closePath();
-            g.fillStyle = lin(-R, -R, R, R, CHROME);
+            g.fillStyle = lin(-R, -R, R, R, [[0, '#ffffff'], [0.5, '#bff0ff'], [1, '#4aa8e0']]);
             g.fill();
-            g.strokeStyle = '#2a2f3a';
-            g.lineWidth = 1.2;
+            g.lineWidth = 2;
+            g.strokeStyle = '#1b3a6b';
             g.stroke();
-            // ボルト
-            for (let i = 0; i <= 3; i++) {
-                const a = -Math.PI / 2 + side * i * Math.PI / 3;
-                g.fillStyle = '#5a6472';
-                g.beginPath();
-                g.arc(Math.cos(a) * R * 0.86, Math.sin(a) * R * 0.86, R * 0.04, 0, Math.PI * 2);
-                g.fill();
-            }
+            g.save();
+            g.clip();
+            // 顔 (メダルの こおりくんが そのまま 立方体の 顔に なる)
+            g.translate(-sq, -sq);
+            g.scale(sq * 2, sq * 2);
+            kooriFace(t);
             g.restore();
-        }
-        // わくの LED (閉じて いる あいだ)
-        if (open < 0.5) {
-            for (let i = 0; i < 12; i++) {
-                const a = i / 12 * Math.PI * 2;
-                g.fillStyle = hsl(t * 400 + i * 30, 95, 65, 1 - open * 2);
+            g.restore();
+            // 変形の 火花と、はじまりの 光 (メダルから 切りかわる ところ)
+            if (e > 0.2 && e < 1) sparks(cx, cy, R * (1 + e * 0.4), t, 10);
+            if (y < 0.425) {
+                g.fillStyle = `rgba(255,255,255,${0.85 * (1 - (y - 0.4) / 0.025)})`;
                 g.beginPath();
-                g.arc(Math.cos(a) * R * 0.94, Math.sin(a) * R * 0.94, R * 0.03, 0, Math.PI * 2);
+                g.arc(cx, cy, R * 1.25, 0, Math.PI * 2);
                 g.fill();
             }
+            return;
         }
+        // 変形 2: 3 段で ガシャン・ガシャン・ガシャン と 部品が 組み上がる (正面を 向いたまま。機械の 役物の 立体感)
+        //   1 段目: 体に 厚みが 出る (横と 下の かべ) / 2 段目: 目・ほっぺ・口の 部品が せり出す / 3 段目: 金属の 角金具と 足が はまる
+        const k = Math.min(1, (y - 0.5) / 0.14);
+        const s = k >= 1 ? 3 : Math.floor(k * 3) + snapIn(((k * 3) % 1) * 2);
+        const a = sq + (R * 0.85 - sq) * ease(k);
+        const done = y >= 0.64;
+        // 組み上がったら 小さく 上下に ゆれ、ガシャンの 瞬間は がたっと 震える
+        const bob = done ? Math.sin((y - 0.64) * 40) * a * 0.03 : 0;
+        const shake = !done && (k * 3) % 1 < 0.2 ? Math.sin(t * 90) * a * 0.04 : 0;
+        const fade = y > 0.94 ? 1 - (y - 0.94) / 0.06 : 1;
+        g.save();
+        g.globalAlpha = fade;
+        mechKoori(cx + shake, cy + bob, a * (y > 0.94 ? 1 + (y - 0.94) * 4 : 1), t, s, done);
         g.restore();
+        if (k < 1 && (k * 3) % 1 < 0.25) sparks(cx, cy, a * 1.5, t, 12);   // 段ごとの ガシャン
+        if (y > 0.94) {
+            g.fillStyle = `rgba(255,255,255,${(y - 0.94) / 0.06})`;
+            g.beginPath();
+            g.arc(cx, cy, R * 2.2, 0, Math.PI * 2);
+            g.fill();
+        }
     }
+    const ease = x => { const v = Math.max(0, Math.min(1, x)); return v * v * (3 - 2 * v); };
+    // 機械の はまり方: 少し 行きすぎて もどる
+    const snapIn = x => { const v = Math.max(0, Math.min(1, x)) - 1; return 1 + 2.7 * v ** 3 + 1.7 * v ** 2; };
     // 火花 (変形の ガシャッ)
-    function sparks(cx, cy, r, t, n, alpha = 1) {
-        g.fillStyle = `rgba(255,240,180,${alpha})`;
+    function sparks(cx, cy, r, t, n) {
+        g.fillStyle = '#ffffff';
         for (let i = 0; i < n; i++) {
             const a = i / n * Math.PI * 2 + Math.floor(t * 20) * 0.7;
             const s = 2 + (i % 3);
@@ -863,77 +780,182 @@ const Cabinet = (() => {
         g.fillStyle = '#10162a';
         g.fillRect(0.44, 0.62, 0.12, 0.05);
     }
-    // 氷の 立方体の こおりくん (a: 半分の 大きさ。yaw: 横の 回転 / pitch: 上から 見る 角度。平行投影)
-    //   depth: 奥行きの 割合 (0 で 平らな 板 → 1 で 立方体)。ふちは 金属の わくと 走る LED (機械の 役物)
-    function cube(cx, cy, a, yaw, pitch, t, depth = 1) {
-        const cy0 = Math.cos(yaw), sy0 = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-        // 回して 画面へ (x 右・y 下・z 手前)。返りの 3 つめ (z) で 見えるか どうか
-        const rot = ([x, y, z]) => {
-            const x1 = x * cy0 + z * sy0, z1 = -x * sy0 + z * cy0;
-            return [x1, y * cp - z1 * sp, y * sp + z1 * cp];
-        };
-        const P = p => { const [x, y] = rot(p); return [cx + x, cy + y]; };
-        const V = p => { const [x, y] = rot(p); return [x, y]; };
-        const b = a * depth;   // 奥行きの 半分
-        // 影
-        g.fillStyle = `rgba(0,0,0,${0.35 * depth})`;
+    const CHROME = [[0, '#f6f8fc'], [0.25, '#a4aebc'], [0.5, '#eef2f8'], [0.75, '#6a7484'], [1, '#d6dce6']];
+    // 角の 丸い 四角の 道
+    function rrect(x, y, w, h, r) {
         g.beginPath();
-        g.ellipse(cx, cy + a * 1.75, a * 1.3, a * 0.32, 0, 0, Math.PI * 2);
-        g.fill();
-        const faces = [
-            { n: [0, 0, 1], o: [-a, -a, b], u: [2 * a, 0, 0], v: [0, 2 * a, 0], kind: 'front' },
-            { n: [0, 0, -1], o: [a, -a, -b], u: [-2 * a, 0, 0], v: [0, 2 * a, 0], kind: 'back' },
-            { n: [1, 0, 0], o: [a, -a, b], u: [0, 0, -2 * b], v: [0, 2 * a, 0], kind: 'side' },
-            { n: [-1, 0, 0], o: [-a, -a, -b], u: [0, 0, 2 * b], v: [0, 2 * a, 0], kind: 'side' },
-            { n: [0, -1, 0], o: [-a, -a, -b], u: [2 * a, 0, 0], v: [0, 0, 2 * b], kind: 'top' }
-        ];
-        // 足 (下の 面の 下に 2 つ。立方体に なってから 出てくる)
-        if (depth > 0.9) {
-            for (const fx of [-0.55, 0.15]) {
-                const o = P([a * fx, a, b * 0.9]), u = V([a * 0.4, 0, 0]), v = V([0, a * 0.32, 0]);
-                g.save();
-                g.transform(u[0], u[1], v[0], v[1], o[0], o[1]);
+        g.moveTo(x + r, y);
+        g.arcTo(x + w, y, x + w, y + h, r);
+        g.arcTo(x + w, y + h, x, y + h, r);
+        g.arcTo(x, y + h, x, y, r);
+        g.arcTo(x, y, x + w, y, r);
+        g.closePath();
+    }
+    // 機械の 役物の こおりくん (正面。部品を 重ねて 厚みを 出す)。a: 半分の 大きさ / s: 組み上がり 0〜3 / done: 組み上がった
+    function mechKoori(cx, cy, a, t, s, done) {
+        const s1 = Math.min(1, Math.max(0, s)), s2 = Math.min(1, Math.max(0, s - 1)), s3 = Math.min(1, Math.max(0, s - 2));
+        const th = a * 0.24 * s1;   // 厚み (右下へ 見える かべ)
+        g.save();
+        g.translate(cx - th / 2, cy - th / 2);
+        const r = a * 0.14;
+        // 足 (3 段目: 体の 下から すべり 出る)
+        if (s3 > 0) {
+            for (const fx of [-0.62, 0.18]) {
+                const fy = a * (0.75 + 0.35 * s3);
+                g.fillStyle = '#0e2246';
+                g.fillRect(a * fx + th, fy + th * 0.6, a * 0.44, a * 0.3);
                 g.fillStyle = '#1b3a6b';
-                g.fillRect(0, 0, 1, 1);
+                g.fillRect(a * fx, fy, a * 0.44, a * 0.3);
+                g.fillStyle = lin(0, fy, 0, fy + a * 0.08, CHROME);
+                g.fillRect(a * fx, fy, a * 0.44, a * 0.07);
+            }
+        }
+        // 厚みの かべ (右と 下)。パネルの 継ぎ目と リベット
+        if (th > 0.5) {
+            g.beginPath();
+            g.moveTo(a, -a + r);
+            g.lineTo(a + th, -a + r + th);
+            g.lineTo(a + th, a + th - r);
+            g.quadraticCurveTo(a + th, a + th, a + th - r, a + th);
+            g.lineTo(-a + r + th, a + th);
+            g.lineTo(-a + r, a);
+            g.closePath();
+            g.fillStyle = lin(0, -a, 0, a + th, [[0, '#3a86c8'], [1, '#14386a']]);
+            g.fill();
+            g.strokeStyle = '#0a1a33';
+            g.lineWidth = 1.2;
+            g.stroke();
+            g.strokeStyle = 'rgba(255,255,255,0.25)';
+            g.lineWidth = 1;
+            for (const f of [0.33, 0.66]) {
+                g.beginPath();
+                g.moveTo(a, -a + 2 * a * f);
+                g.lineTo(a + th, -a + 2 * a * f + th);
+                g.moveTo(-a + 2 * a * f, a);
+                g.lineTo(-a + 2 * a * f + th, a + th);
+                g.stroke();
+            }
+            g.fillStyle = '#c8d0dc';
+            for (const f of [0.15, 0.5, 0.85]) {
+                g.beginPath();
+                g.arc(a + th / 2, -a + 2 * a * f + th / 2, Math.max(1.2, a * 0.025), 0, Math.PI * 2);
+                g.arc(-a + 2 * a * f + th / 2, a + th / 2, Math.max(1.2, a * 0.025), 0, Math.PI * 2);
+                g.fill();
+            }
+        }
+        // 正面の 板 (氷の 半透明 + 金属の ふち)
+        rrect(-a, -a, a * 2, a * 2, r);
+        g.fillStyle = lin(-a, -a, a, a, [[0, '#ffffff'], [0.45, '#c8f2ff'], [1, '#5ab4e8']]);
+        g.fill();
+        g.lineWidth = a * 0.09;
+        g.strokeStyle = lin(-a, -a, a, a, CHROME);
+        g.stroke();
+        g.lineWidth = 1;
+        g.strokeStyle = '#1b3a6b';
+        g.stroke();
+        // 内側の 段差 (一段 下がった パネル)
+        rrect(-a * 0.82, -a * 0.82, a * 1.64, a * 1.64, r * 0.7);
+        g.strokeStyle = 'rgba(27,58,107,0.35)';
+        g.lineWidth = 1.5;
+        g.stroke();
+        g.strokeStyle = 'rgba(255,255,255,0.7)';
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(-a * 0.8, a * 0.82);
+        g.lineTo(a * 0.82, a * 0.82);
+        g.lineTo(a * 0.82, -a * 0.8);
+        g.stroke();
+        // 顔の 部品 (2 段目: せり出す。影が のびて 浮いて 見える)
+        const pop = s2;
+        const sh = a * 0.06 * pop;
+        const part = (x, y, w, h, fill, rad) => {
+            if (pop <= 0) return;
+            g.fillStyle = 'rgba(10,26,51,0.45)';
+            rrect(x + sh, y + sh, w, h, rad);
+            g.fill();
+            rrect(x, y, w, h, rad);
+            g.fillStyle = fill;
+            g.fill();
+        };
+        const blink = done && Math.floor(t * 1.3) % 5 === 0 && (t * 1.3) % 1 < 0.15;
+        const ew = a * 0.2, eh = blink ? a * 0.06 : a * 0.42 * pop;
+        for (const ex of [-0.44, 0.24]) {
+            const x = a * ex, y = -a * 0.36 + (a * 0.42 - eh) / 2;
+            part(x, y, ew, eh, lin(x, y, x + ew, y + eh, [[0, '#2a3a5a'], [1, '#05080f']]), ew * 0.35);
+            if (pop > 0.6 && !blink) {
+                g.fillStyle = 'rgba(255,255,255,0.85)';
+                g.fillRect(x + ew * 0.22, y + eh * 0.12, ew * 0.22, eh * 0.28);
+            }
+        }
+        // ほっぺ (光る LED)
+        for (const cx2 of [-0.66, 0.4]) {
+            const x = a * cx2, y = a * 0.18;
+            part(x, y, a * 0.26, a * 0.14, '#ff8fb0', a * 0.07);
+            if (pop > 0.6) {
+                const gl = g.createRadialGradient(x + a * 0.13, y + a * 0.07, 0, x + a * 0.13, y + a * 0.07, a * 0.22);
+                gl.addColorStop(0, `rgba(255,170,200,${0.5 + 0.3 * Math.sin(t * 6)})`);
+                gl.addColorStop(1, 'rgba(255,170,200,0)');
+                g.fillStyle = gl;
+                g.fillRect(x - a * 0.1, y - a * 0.1, a * 0.46, a * 0.34);
+            }
+        }
+        part(-a * 0.12, a * 0.3, a * 0.24, a * 0.08, '#0a1022', a * 0.03);
+        // 光の すじ (左上の 窓の 反射)
+        g.fillStyle = 'rgba(255,255,255,0.8)';
+        g.fillRect(-a * 0.78, -a * 0.78, a * 0.12, a * 0.42);
+        // 角金具 (3 段目: 外から すべって はまる) と ねじ
+        if (s3 > 0) {
+            const off = a * 0.5 * (1 - s3);
+            for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+                g.save();
+                g.translate(sx * (a + off), sy * (a + off));
+                g.scale(sx, sy);
+                g.beginPath();
+                g.moveTo(a * 0.06, a * 0.06);
+                g.lineTo(-a * 0.36, a * 0.06);
+                g.lineTo(-a * 0.36, -a * 0.1);
+                g.lineTo(-a * 0.1, -a * 0.1);
+                g.lineTo(-a * 0.1, -a * 0.36);
+                g.lineTo(a * 0.06, -a * 0.36);
+                g.closePath();
+                g.fillStyle = lin(-a * 0.36, -a * 0.36, a * 0.06, a * 0.06, CHROME);
+                g.fill();
+                g.strokeStyle = '#2a2f3a';
+                g.lineWidth = 1;
+                g.stroke();
+                g.fillStyle = '#4a5462';
+                g.beginPath();
+                g.arc(-a * 0.02, -a * 0.02, Math.max(1.3, a * 0.035), 0, Math.PI * 2);
+                g.fill();
                 g.restore();
             }
         }
-        for (const f of faces) {
-            const nz = rot(f.n)[2];
-            if (nz <= 0.02) continue;
-            const o = P(f.o), u = V(f.u), v = V(f.v);
-            const light = f.kind === 'top' ? 1 : f.kind === 'side' ? 0.62 + 0.2 * nz : 0.78 + 0.22 * nz;
+        // ふちを 走る LED (組み上がってから)
+        if (done) {
+            const n = 28;
+            for (let i = 0; i < n; i++) {
+                const p = i / n, q = (p * 4) % 1, e = Math.floor(p * 4);
+                const [lx, ly] = e === 0 ? [-a + 2 * a * q, -a] : e === 1 ? [a, -a + 2 * a * q] : e === 2 ? [a - 2 * a * q, a] : [-a, a - 2 * a * q];
+                const on = (Math.floor(t * 20) - i + n * 10) % n < 6;
+                g.fillStyle = on ? hsl(t * 300 + i * 13, 95, 70) : 'rgba(255,255,255,0.4)';
+                g.beginPath();
+                g.arc(lx, ly, Math.max(1.3, a * 0.03), 0, Math.PI * 2);
+                g.fill();
+            }
+            // 正面を ななめに 横切る 光
+            const sweep = ((t * 0.7) % 1) * 4 - 1.5;
             g.save();
-            g.transform(u[0], u[1], v[0], v[1], o[0], o[1]);
-            const grad = g.createLinearGradient(0, 0, 1, 1);
-            grad.addColorStop(0, `hsl(195, 90%, ${Math.round(96 * light)}%)`);
-            grad.addColorStop(1, `hsl(200, 85%, ${Math.round(70 * light)}%)`);
-            g.fillStyle = grad;
-            g.fillRect(0, 0, 1, 1);
-            if (f.kind === 'front') kooriFace(t);
-            else if (f.kind === 'top') {
-                g.fillStyle = 'rgba(255,255,255,0.5)';
-                g.fillRect(0.12, 0.12, 0.3, 0.08);
-            }
-            // 金属の わく
-            g.lineWidth = 0.07;
-            g.strokeStyle = '#c8d0dc';
-            g.strokeRect(0.035, 0.035, 0.93, 0.93);
-            g.lineWidth = 0.02;
-            g.strokeStyle = '#2a2f3a';
-            g.strokeRect(0, 0, 1, 1);
-            // 走る LED (正面と 上の ふち)
-            if (f.kind !== 'side' && depth > 0.9) {
-                for (let i = 0; i < 16; i++) {
-                    const p = i / 16, q = (p * 4) % 1, e = Math.floor(p * 4);
-                    const [lx, ly] = e === 0 ? [q, 0.035] : e === 1 ? [0.965, q] : e === 2 ? [1 - q, 0.965] : [0.035, 1 - q];
-                    const on = (Math.floor(t * 16) - i + 160) % 16 < 4;
-                    g.fillStyle = on ? hsl(t * 300 + i * 22, 95, 70) : 'rgba(255,255,255,0.35)';
-                    g.fillRect(lx - 0.025, ly - 0.025, 0.05, 0.05);
-                }
-            }
+            rrect(-a, -a, a * 2, a * 2, r);
+            g.clip();
+            const sg = g.createLinearGradient(a * (sweep - 0.4), -a, a * (sweep + 0.4), a);
+            sg.addColorStop(0, 'rgba(255,255,255,0)');
+            sg.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+            sg.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = sg;
+            g.fillRect(-a, -a, a * 2, a * 2);
             g.restore();
         }
+        g.restore();
     }
 
     // ----- 役物: 氷の 結晶の メダル (表: こおりくん / 裏: おにおに) -----
