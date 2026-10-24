@@ -1216,6 +1216,7 @@ const Lcd = (() => {
             return;
         }
         const open = k >= 0.4;
+        const done = k >= 0.68;
         for (let i = 0; i < 18; i++) {
             const a = i / 18 * Math.PI * 2 + now * (open ? 0.6 : 2.4);
             ctx.fillStyle = open ? `hsla(${(i * 20 + now * 200) % 360}, 95%, 60%, 0.35)` : 'rgba(127,211,247,0.25)';
@@ -1225,15 +1226,17 @@ const Lcd = (() => {
             ctx.lineTo(W / 2 + Math.cos(a + 0.12) * 300, H / 2 + Math.sin(a + 0.12) * 300);
             ctx.fill();
         }
-        if (k >= 0.4 && k < 0.46) {
-            ctx.fillStyle = `rgba(255,255,255,${0.8 * (1 - (k - 0.4) / 0.06)})`;
+        // 変形が 終わったら まばゆい フラッシュ (筐体と いっしょに 2 回 光る)
+        const f = k - 0.68;
+        if (f >= 0 && f < 0.1) {
+            ctx.fillStyle = `rgba(255,255,255,${f < 0.02 ? 1 : f < 0.035 ? 0.35 : f < 0.05 ? 0.95 : 0.95 * (1 - (f - 0.05) / 0.05)})`;
             ctx.fillRect(0, 0, W, H);
         }
-        if (k >= 0.4 && k < 0.64) {
+        if (k >= 0.4 && !done) {
             band(120, 22, 0.55);
             text('変形!!', W / 2, 131, 16, Math.floor(now * 8) % 2 ? '#ffe066' : '#ffffff');
         }
-        if (k >= 0.64) {
+        if (done) {
             band(120, 22, 0.55);
             text('こおりくん 降臨!!', W / 2, 131, 16, 'rainbow', 'center', now);
         }
@@ -1780,10 +1783,13 @@ const Lcd = (() => {
         if (!spinView || !phase || phase.name !== 'yaku') return null;
         const t = Math.min(0.999, phase.local / phase.t);
         once('yaku', 'hurt');
-        // 変形の 音: 六角 → 四角 で ガシャッ、部品が 組み上がる 3 段で ガコッ、組み上がったら ファンファーレ
-        if (t > 0.4) once('yakuMorph', 'lever');
-        [0.5, 0.547, 0.594].forEach((at, i) => { if (t > at) once('yakuStep' + i, 'lever'); });
-        if (t > 0.64) once('yakuDone', 'win');
+        // 変形の 音 (js/cabinet.js の YAKU と 同じ 時刻): 回りはじめから 変形の 音楽、横向きで 止まって ガコッ、
+        //   絵本が 開いて キラーン、部品が はまる 3 段で ガシャン、変形が 終わったら ファンファーレ (まばゆい フラッシュと いっしょ)
+        if (t > 0.12) once('yakuMusic', 'yakuMusic');
+        if (t > 0.36) once('yakuEdge', 'lever');
+        if (t > 0.4) once('yakuOpen', 'v');
+        [0.56, 0.6, 0.64].forEach((at, i) => { if (t > at) once('yakuStep' + i, 'lever'); });
+        if (t > 0.68) once('yakuDone', 'fanfare');
         return t;
     }
 

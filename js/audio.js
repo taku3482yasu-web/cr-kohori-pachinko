@@ -132,6 +132,25 @@ const Sound = (() => {
         pull: () => { tone(90, 0, 0.35, { slideTo: 40, volume: 0.14, type: 'sawtooth' }); tone(880, 0.05, 0.3, { slideTo: 1760, volume: 0.07 }); },
         // レバーを 引いている あいだの カチッ (2026-10-24)
         leverTick: () => { tone(1400, 0, 0.03, { volume: 0.06, type: 'square' }); tone(180, 0, 0.05, { volume: 0.08, type: 'triangle' }); },
+        // 当たりの 役物 (2026-10-24 ユーザー指定: 音楽と ともに 変形し、変形後に ファンファーレ)
+        //   yakuMusic: 約 3.3 秒。ベースが 刻み、上がっていく アルペジオで 盛り上げる / fanfare: 金管の ような 和音
+        yakuMusic: () => {
+            const beat = 0.21;
+            for (let i = 0; i < 16; i++) {
+                tone(i % 4 === 0 ? 65 : 98, i * beat, 0.16, { volume: 0.1, type: 'triangle' });
+                if (i % 2 === 1) tone(5200, i * beat, 0.03, { volume: 0.02, type: 'square' });
+            }
+            const notes = [523, 659, 784, 659, 587, 740, 880, 740, 659, 831, 988, 831, 784, 988, 1175, 1568];
+            notes.forEach((f, i) => tone(f, i * beat + 0.02, beat * 0.9, { volume: 0.05, type: 'square' }));
+            tone(392, 2.52, 0.8, { volume: 0.05, type: 'sawtooth', slideTo: 1568 });
+        },
+        fanfare: () => {
+            [[523, 659, 784], [587, 740, 880], [698, 880, 1047], [784, 988, 1175, 1568]].forEach((chord, i) => {
+                const len = i === 3 ? 1.4 : 0.16;
+                chord.forEach(f => { tone(f, i * 0.17, len, { volume: 0.05, type: 'sawtooth' }); tone(f * 2, i * 0.17, len, { volume: 0.02, type: 'square' }); });
+            });
+            tone(1047, 0.51, 1.4, { volume: 0.04, type: 'triangle' });
+        },
         // 1・3・5 の ひび割れ (2026-10-24): ピキッ / バリィン / おにおに・怪の 咆哮
         crack: () => { tone(2400, 0, 0.05, { volume: 0.08, type: 'square' }); tone(1800, 0.07, 0.05, { volume: 0.07, type: 'square' }); tone(3000, 0.16, 0.08, { volume: 0.08, type: 'square', slideTo: 900 }); },
         smash: () => { for (let i = 0; i < 8; i++) tone(1500 + i * 420, i * 0.03, 0.12, { volume: 0.05, type: 'square', slideTo: 300 }); tone(80, 0, 0.5, { volume: 0.14, type: 'sawtooth', slideTo: 40 }); },
