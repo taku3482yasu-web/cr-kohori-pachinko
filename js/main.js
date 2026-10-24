@@ -96,7 +96,8 @@
                 }
                 if (grab && grab.id === e.pointerId) {
                     if (type === 'pointerleave') return;   // つかんだ まま 外に 出ても 引きつづける
-                    if (grab.amount >= PULL_RELEASE) pullLever(); else MachineButton.pull(0);
+                    // タップでもOK (カスタマイズ) なら、つかんで 離すだけで 引いたことに する
+                    if (grab.amount >= PULL_RELEASE || (type === 'pointerup' && Customize.get('leverTap') === 'on')) pullLever(); else MachineButton.pull(0);
                     grab = null;
                     return;
                 }
@@ -466,6 +467,8 @@
             Lcd.show(`${CONFIG.show.rash.modes[m.rashMode].name}！`, CONFIG.show.rash.modes[m.rashMode].color, time, 1);
             return;
         }
+        // カスタマイズの「レバーの操作: タップでもOK」(2026-10-24): 「レバーを引け！」の あいだは ボタンでも 引ける
+        if (MachineButton.state().lever && Customize.get('leverTap') === 'on') { pullLever(); return; }
         // 筐体の レバーが 出ているときの「レバーを引け！」は ボタンでは 進まない (レバーが 出ていない 画面では ボタンで よい)
         Lcd.push(time, $('cabinet-push').hidden ? 'any' : 'button');
     }
