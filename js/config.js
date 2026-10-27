@@ -512,22 +512,23 @@ const CONFIG = {
         pushTime: 2,                 // バトルの最後の「PUSH!」でボタンを待つ時間 (秒)。押さなければそのまま進む
         // レバー (2026-10-23 ユーザー指定。2026-10-24 に「レバーを押せ！」から「レバーを引け！」に): バトルの最後の PUSH の かわりに
         //   「レバーを引け！」が 出ることが ある。ボタンでは なく 筐体の レバーを 手前に 引く (下へ ドラッグ・↓ キー)。
-        //   reliability: 出たら 当たる 割合 (ユーザー指定: 85% くらい)。hit: 当たりの バトルで 出る 割合 (Claude が 決めた)
+        //   hit: 当たりの バトルで 出る 割合 (Claude が 決めた)。出たら 当たる 割合は 下の colors の reliability
         //   change: はじめは「PUSH！」で、PUSH を 押すと (押さなくても changeAt 秒で)「レバーを引け！」に 変わる 割合 (ユーザー指定: 変化する 場合が ある。割合は Claude が 決めた)
         //   time: レバーの ときに 待つ 秒 (引く ぶん PUSH より 長く)
         //   rashHit (ユーザー指定: RASH 中に 引け！が 出たら 当たり確定): こおりRASH の 当たりの バトルで 出る 割合 (外れでは 出ない。割合は Claude が 決めた)
-        //   colors (2026-10-24 ユーザー指定: 色の段階): 引け！の 色。hit / miss は 当たり・外れの ときの 重み (Claude が 決めた)。
-        //     出たら 当たる 割合は おおよそ 青 67%・赤 85%・金 95%・虹 100% (全体で reliability)。RASH 中は hit の 重み
+        //   colors (2026-10-24 ユーザー指定: 色の段階): 引け！の 色。hit は 当たりの ときの 重み (Claude が 決めた)。
         //   revival (2026-10-24 ユーザー指定: 引いても 負けたあとの 復活): 通常時の 当たりの バトルの うち、引け！で 一度 負けて 見せ、
         //     暗転 →「もう一回 引け！」→ 撃破 に なる 割合 (Claude が 決めた)。変動が 長く なるので 台の 乱数 (rng) で 決める
         //   hold (2026-10-24 ユーザー指定: 保留を レバーで 変える): 保留変化の うち、変わる ときに「引け！」が 出て、引くと (待っても) 色が 変わる 割合
         //   holdTime / againTime: 保留の 引け！・もう一回 引け！で 待つ 秒
-        lever: { hit: 0.2, reliability: 0.85, change: 0.4, changeAt: 0.7, time: 3, rashHit: 0.15,
+        //   (2026-10-27 ユーザー指定: 通常時の SP リーチで レバーなら 当たり 90%) colors の reliability が 色ごとの 出たら 当たる 割合。
+        //     外れで 出る 割合は そこから 計算する (全体で おおよそ 91%)。RASH 中は hit の 重みだけ 使う
+        lever: { hit: 0.2, change: 0.4, changeAt: 0.7, time: 3, rashHit: 0.15,
             colors: {
-                blue: { name: '青', color: '#4aa8ff', hit: 20, miss: 55 },
-                red: { name: '赤', color: '#ff3a4a', hit: 35, miss: 35 },
-                gold: { name: '金', color: '#ffd23a', hit: 35, miss: 10 },
-                rainbow: { name: '虹', color: 'rainbow', hit: 10, miss: 0 }
+                blue: { name: '青', color: '#4aa8ff', hit: 20, reliability: 0.9 },
+                red: { name: '赤', color: '#ff3a4a', hit: 35, reliability: 0.92 },
+                gold: { name: '金', color: '#ffd23a', hit: 35, reliability: 0.96 },
+                rainbow: { name: '虹', color: 'rainbow', hit: 10, reliability: 1 }
             },
             revival: 0.04, againTime: 3, timing: { dark: 1.0, flash: 1.8, kill: 2.4 },
             hold: 0.35, holdTime: 3 },
@@ -535,16 +536,20 @@ const CONFIG = {
         //   modes: tap 1 回 / long 長押し (ためて フルチャージで 一撃) / mash 連打 (mashCount 回で 連撃の とどめ)。hit / miss は 当たり・外れの 重み
         //   colors: 白 < 青 < 赤 < 金 < 虹 (虹は 確定)。time: 長押し・連打の ときに 待つ 秒 / longTime: フルチャージまでの 秒
         //   レバーを引け！の ときは 使わない。通常時の バトルと こおりRASH の バトルの 最後の PUSH
+        //   reliability (2026-10-27 ユーザー指定: 通常時の SP リーチで 赤以上なら 当たり 80% 以上): 通常時に 出たら 当たる 割合。
+        //     外れで 出る 割合は そこから 計算し、残りを 白・青に miss の 重みで 分ける。RASH 中は hit / miss の 重み
         pushStyle: {
             modes: { tap: { name: 'PUSH', hit: 50, miss: 70 }, long: { name: '長押し', hit: 25, miss: 15 }, mash: { name: '連打', hit: 25, miss: 15 } },
             colors: {
                 white: { name: '白', color: '#ffffff', hit: 25, miss: 60 },
                 blue: { name: '青', color: '#4aa8ff', hit: 25, miss: 28 },
-                red: { name: '赤', color: '#ff3a4a', hit: 25, miss: 10 },
-                gold: { name: '金', color: '#ffd23a', hit: 17, miss: 2 },
-                rainbow: { name: '虹', color: 'rainbow', hit: 8, miss: 0 }
+                red: { name: '赤', color: '#ff3a4a', hit: 25, miss: 10, reliability: 0.8 },
+                gold: { name: '金', color: '#ffd23a', hit: 17, miss: 2, reliability: 0.9 },
+                rainbow: { name: '虹', color: 'rainbow', hit: 8, miss: 0, reliability: 1 }
             },
-            time: 3.5, longTime: 1.2, mashCount: 10
+            // clashTime (2026-10-27 ユーザー指定): 長押しで フルチャージ したあと 相手に 突撃して 押し合う 秒。打ち勝てば 当たり、押し負けたら 負け。
+            //   PUSH を 待つ 時間の 最後の clashTime 秒に なっても ためきって いなければ、自動で フルチャージ する
+            time: 3.5, longTime: 1.2, mashCount: 10, clashTime: 1.5
         },
         // 保留の「?」と 段階の 変化 (2026-10-24 ユーザー指定): 保留変化の ときに 白 → 青 → … と 1 段ずつ 上がって いく (stepTime 秒ごと)。
         //   question: 保留変化する 保留の うち、変わるまで「?」で 出す 割合 (Claude が 決めた)。見た目だけ

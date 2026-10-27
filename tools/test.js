@@ -437,7 +437,7 @@ test('復活: こおりRASH の当たりの約20%、1/99 は 900個 確定、確
     }
 });
 
-test('レバー・レバブル (2026-10-24): レバーを引け！が出たら 85% くらいで当たり (RASH 中は確定)、レバブルは出たら当たる割合が config に近い', () => {
+test('レバー・レバブル (2026-10-24): レバーを引け！が出たら 90% 以上で当たり (2026-10-27) (RASH 中は確定)、レバブルは出たら当たる割合が config に近い', () => {
     const show = CONFIG.show;
     for (const { specId, log } of runs) {
         const lever = [0, 0], spin = [0, 0], hold = [0, 0], rash = [0, 0], change = [0, 0];
@@ -454,8 +454,8 @@ test('レバー・レバブル (2026-10-24): レバーを引け！が出たら 8
         }
         assert(lever[0] > 30, `${specId} でレバーが少ない (${lever[0]})`);
         // 許容幅は ±7% か、標準誤差の 3.5 倍の 大きいほう (見た目の 演出は fxRandom なので 毎回 少し 変わる。1/159 は 数が 少ない)
-        const lr = show.lever.reliability, ltol = Math.max(0.07, 3.5 * Math.sqrt(lr * (1 - lr) / lever[0]));
-        assertBetween(lever[1] / lever[0], lr - ltol, lr + ltol, `${specId} のレバーを引け！が出たら当たる割合`);
+        const lr = 0.9, ltol = Math.max(0.05, 3.5 * Math.sqrt(lr * (1 - lr) / lever[0]));
+        assertBetween(lever[1] / lever[0], lr - ltol, 1, `${specId} のレバーを引け！が出たら当たる割合`);
         assert(rash[0] > 0 && rash[1] === rash[0], `${specId} の RASH 中のレバーを引け！ (${rash[1]} / ${rash[0]}。出たら確定・復活では出ないはず)`);
         assertBetween(change[1] / change[0], show.lever.change - 0.12, show.lever.change + 0.12, `${specId} の PUSH！ からレバーを引け！に変わる割合`);
         assert(spin[0] > 30 && hold[0] > 30, `${specId} でレバブルが少ない (変動中 ${spin[0]} / 保留 ${hold[0]})`);
@@ -487,8 +487,11 @@ test('レバーを引け！の色・保留・復活・ハンドルブル (2026-1
         }
         const rate = id => colors[id] ? colors[id][1] / colors[id][0] : null;
         assert(Object.keys(colors).every(id => id in show.lever.colors), `${specId} の引け！の色 (${Object.keys(colors)})`);
-        // 色ごとの 数が 少ない (1/159 は 数十回) ので、差の 大きい 青 < 金 だけ 見る (色ごとの 割合は node tools/trust.js で はかる)
-        assert(rate('blue') < rate('gold'), `${specId} の引け！の色の順 (青 ${rate('blue')} / 赤 ${rate('red')} / 金 ${rate('gold')})`);
+        // 色ごとの 数が 少なく (1/159 は 数十回)、2026-10-27 から どの 色も 90% 以上で 差が 小さいので、順は 設定の reliability で 見る
+        //   (色ごとの 割合は node tools/trust.js で はかる)
+        const rel = ['blue', 'red', 'gold', 'rainbow'].map(id => show.lever.colors[id].reliability);
+        for (let i = 1; i < rel.length; i++) assert(rel[i] > rel[i - 1], `引け！の色の順 (設定 ${rel.join(' < ')})`);
+        assert(rel[0] >= 0.9, `引け！の青も 90% 以上のはず (${rel[0]})`);
         assert(!colors.rainbow || rate('rainbow') === 1, `${specId} の虹の引け！は確定のはず (${rate('rainbow')})`);
         assert(revivals > 0 && revivalLoss === 0, `${specId} の引け！の復活 (${revivals} 回。おかしいもの ${revivalLoss})`);
         assert(leverHolds > 10 && leverHoldNoChange === 0, `${specId} の保留に引け！ (${leverHolds} 回。保留変化でないもの ${leverHoldNoChange})`);
@@ -517,6 +520,11 @@ test('PUSH の押し方と色・保留の「?」(2026-10-24): 色は 白 < 青 <
         const order = ['white', 'blue', 'red', 'gold'].map(id => rate(color, id));
         for (let i = 1; i < order.length; i++) assert(order[i] > order[i - 1], `${specId} の PUSH の色の順 (${order.map(pct).join(' < ')})`);
         assert(!color.rainbow || rate(color, 'rainbow') === 1, `${specId} の虹の PUSH は確定のはず`);
+        // 赤以上は 出たら 80% 以上で 当たり (2026-10-27 ユーザー指定)
+        const hot = ['red', 'gold', 'rainbow'].reduce((a, id) => color[id] ? [a[0] + color[id][0], a[1] + color[id][1]] : a, [0, 0]);
+        const htol = Math.max(0.05, 3.5 * Math.sqrt(0.8 * 0.2 / hot[0]));
+        assert(hot[0] > 30, `${specId} で赤以上の PUSH が少ない (${hot[0]})`);
+        assertBetween(hot[1] / hot[0], 0.8 - htol, 1, `${specId} の赤以上の PUSH が出たら当たる割合`);
         assert(rate(mode, 'long') > rate(mode, 'tap') && rate(mode, 'mash') > rate(mode, 'tap'), `${specId} の押し方 (1 回 ${pct(rate(mode, 'tap'))}・長押し ${pct(rate(mode, 'long'))}・連打 ${pct(rate(mode, 'mash'))})`);
         assert(questions > 10 && badQuestion === 0, `${specId} の「?」の保留 (${questions} 回。保留変化でないもの ${badQuestion})`);
     }

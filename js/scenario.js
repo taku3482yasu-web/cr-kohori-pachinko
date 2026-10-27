@@ -372,19 +372,22 @@ const Scenario = (() => {
                 if (p.cutin) p.phases.splice(battleAt(), 0, { name: 'cutin', t: show.cutin.time });
                 const gm = show.gimmick;
                 p.gimmick = Boolean(result.forceGimmick || rng() < (hit ? gm.hit : revealRate(gm.hit, gm.reliability, hReach)));
-                // レバーを引け！ (2026-10-24 ユーザー指定): PUSH の かわりに レバーを 引く。出たら 当たる 割合が lever.reliability (85%)
+                // レバーを引け！ (2026-10-24 ユーザー指定): PUSH の かわりに レバーを 引く。出たら 当たる 割合は 色ごとの reliability (90% 以上)
                 const lvr = show.lever;
                 // 引いても 負けたあとの 復活 (当たりだけ)。変動が 長く なるので 台の 乱数 (rng) で 決め、復活なら 必ず 引け！ (虹)
                 const leverRevival = Boolean(lvr && hit && (result.forceLeverRevival || rng() < lvr.revival));
                 //   (レバー・レバブルは 見た目だけの 演出なので fxRandom。台の 抽選の 乱数の 並びを かえない)
                 //   当たりで 出る 割合は 復活の ぶんを 引いて、全体で lever.hit に する
                 const leverHit = lvr ? (lvr.hit - lvr.revival) / (1 - lvr.revival) : 0;
-                p.lever = leverRevival || Boolean(result.forceLever || (lvr && fxRandom() < (hit ? leverHit : revealRate(lvr.hit, lvr.reliability, hReach))));
+                //   外れは 色ごとに 出たら 当たる 割合から 出る 割合を 決める (2026-10-27 ユーザー指定: レバーなら 90%)
+                const leverKinds = lvr ? leverReveal(lvr) : {};
+                const leverMiss = hit ? null : pickReveal(leverKinds, hReach, false, fxRandom);
+                p.lever = leverRevival || Boolean(result.forceLever || (lvr && (hit ? fxRandom() < leverHit : leverMiss)));
                 if (p.lever) {
                     p.leverChange = result.forceLeverChange ?? fxRandom() < lvr.change;   // はじめは PUSH！ で、とちゅうから レバーを引け！ に 変わる
-                    p.leverColor = result.forceLeverColor || weighted(leverWeights(lvr, hit), fxRandom);   // 色の 段階 (青 < 赤 < 金 < 虹)
+                    p.leverColor = result.forceLeverColor || leverMiss || weighted(leverWeights(lvr), fxRandom);   // 色の 段階 (青 < 赤 < 金 < 虹)
                 }
-                if (!p.lever) Object.assign(p, pushStyle(show, hit, result));   // PUSH の 押し方と 色 (2026-10-24)
+                if (!p.lever) Object.assign(p, pushStyle(show, hit, result, { base: hReach, lever: leverKinds }));   // PUSH の 押し方と 色 (2026-10-24)
                 if (leverRevival) {
                     // 決着で 一度 負けて 見せ → 暗転 →「もう一回 引け！」(rvagain) → 虹色の フラッシュ → 撃破
                     const rt = lvr.timing;
@@ -433,15 +436,43 @@ const Scenario = (() => {
     }
 
     // PUSH の 押し方 (tap / long ため / mash 連撃) と 色 (白 < 青 < 赤 < 金 < 虹)。見た目だけなので fxRandom
-    function pushStyle(show, hit, result) {
+    //   reveal (通常時の バトル): { base: リーチの うち 当たりの 割合, lever: leverReveal }。あれば 外れの 色は reliability から 決める
+    function pushStyle(show, hit, result, reveal) {
         const ps = show.pushStyle;
         if (!ps) return {};
         const w = obj => Object.fromEntries(Object.entries(obj).map(([id, x]) => [id, hit ? x.hit : x.miss]));
-        return { pushMode: result.forcePushMode || weighted(w(ps.modes), fxRandom), pushColor: result.forcePushColor || weighted(w(ps.colors), fxRandom) };
+        const colors = reveal && !hit ? pushMissWeights(ps, reveal) : w(ps.colors);
+        return { pushMode: result.forcePushMode || weighted(w(ps.modes), fxRandom), pushColor: result.forcePushColor || weighted(colors, fxRandom) };
     }
 
-    // レバーを引け！の 色の 重み (当たり / 外れ)
-    const leverWeights = (lvr, hit) => Object.fromEntries(Object.entries(lvr.colors).map(([id, c]) => [id, hit ? c.hit : c.miss]));
+    // 通常時の 外れの PUSH の 色の 重み (2026-10-27 ユーザー指定: SP リーチで 赤以上なら 当たり 80% 以上)。
+    //   reliability の ある 色 (赤・金・虹) は 出たら 当たる 割合どおりに なる 量、残りを 白・青に miss の 重みで 分ける
+    function pushMissWeights(ps, { base, lever }) {
+        const sum = o => Object.values(o).reduce((a, x) => a + x, 0);
+        const hitW = sum(Object.fromEntries(Object.entries(ps.colors).map(([id, c]) => [id, c.hit])));
+        const leverHitShare = sum(Object.fromEntries(Object.entries(lever).map(([id, k]) => [id, k.hit])));
+        const pushHit = 1 - leverHitShare;   // 当たりの リーチで PUSH に なる 割合
+        const pushMiss = 1 - sum(Object.fromEntries(Object.entries(lever).map(([id, k]) => [id, revealRate(k.hit, k.reliability, base)])));
+        const out = {};
+        let fixed = 0;
+        for (const [id, c] of Object.entries(ps.colors)) {
+            if (c.reliability == null) continue;
+            out[id] = revealRate(pushHit * c.hit / hitW, c.reliability, base) / pushMiss;
+            fixed += out[id];
+        }
+        const rest = Object.entries(ps.colors).filter(([, c]) => c.reliability == null);
+        const restW = rest.reduce((a, [, c]) => a + c.miss, 0);
+        for (const [id, c] of rest) out[id] = Math.max(0, 1 - fixed) * c.miss / restW;
+        return out;
+    }
+
+    // レバーを引け！の 色の 重み (当たりの ときの hit)
+    const leverWeights = lvr => Object.fromEntries(Object.entries(lvr.colors).map(([id, c]) => [id, c.hit]));
+    // 通常時の バトルの レバーの 色ごとの { hit: 当たりの リーチで その 色が 出る 割合, reliability }
+    function leverReveal(lvr) {
+        const total = Object.values(lvr.colors).reduce((a, c) => a + c.hit, 0);
+        return Object.fromEntries(Object.entries(lvr.colors).map(([id, c]) => [id, { hit: lvr.hit * c.hit / total, reliability: c.reliability }]));
+    }
 
     // 出たら当たる割合 (reliability) が決まっている演出の、外れの変動で出る割合。
     //   hitShare: 当たりの変動で出る割合 / base: 出るかもしれない変動のうち当たりの割合
@@ -725,7 +756,7 @@ const Scenario = (() => {
                 if (win && !p.revival && lvr && (result.forceLever || fxRandom() < lvr.rashHit)) {
                     p.lever = true;
                     p.leverChange = result.forceLeverChange ?? fxRandom() < lvr.change;
-                    p.leverColor = result.forceLeverColor || weighted(leverWeights(lvr, true), fxRandom);
+                    p.leverColor = result.forceLeverColor || weighted(leverWeights(lvr), fxRandom);
                 } else Object.assign(p, pushStyle(show, win, result));   // PUSH の 押し方と 色 (2026-10-24)
                 // お仲間の応援 (0〜3人): 人数が多いほど勝ちやすい
                 p.cheer = Number(weighted(show.cheer[win ? 'win' : 'miss'], rng));

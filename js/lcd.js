@@ -1356,6 +1356,32 @@ const Lcd = (() => {
         }
         ctx.restore();
     }
+    // 長押しの 押し合い (2026-10-27 ユーザー指定)。since: フルチャージ してからの 秒 / win: 打ち勝つか
+    //   はじめ 0.3 秒で 両方が 突撃して ぶつかり、前後に 押し合って、後半は 勝つほうへ 押し込む。kx: こおりくん (左はし) / ex: 相手 (まん中)
+    function clashAt(since, win) {
+        const T = CONFIG.show.pushStyle.clashTime;
+        const dash = Math.min(1, since / 0.3);
+        const s = Math.max(0, Math.min(since, T) - 0.3);
+        const lean = Math.max(0, (Math.min(since, T) - T * 0.6) / (T * 0.4));   // 後半 0〜1
+        const shove = dash < 1 ? 0 : Math.sin(s * 9) * 5 * (1 - lean) + (win ? 1 : -1) * lean * lean * 16;
+        return { kx: 50 + dash * 48 + shove, ex: 196 - dash * 24 + shove, contact: dash >= 1 };
+    }
+    // この 変動の バトルで 押し合いを したか (長押しの PUSH)
+    const clashed = plan => Boolean(plan && !plan.lever && plan.pushMode === 'long');
+    // ぶつかって いる ところの 火花
+    function drawClashSparks(now, x, y, colorId) {
+        const c = pushText(colorId);
+        ctx.save();
+        for (let i = 0; i < 10; i++) {
+            const a = i / 10 * Math.PI * 2 + now * 7;
+            const r = ((now * 5 + i * 0.37) % 1) * 22;
+            ctx.fillStyle = i % 2 ? '#ffffff' : c === 'rainbow' ? `hsl(${(now * 300 + i * 36) % 360}, 95%, 65%)` : c === '#ffffff' ? '#ffe066' : c;
+            ctx.fillRect(Math.round(x + Math.cos(a) * r), Math.round(y + Math.sin(a) * r * 0.7), 3, 3);
+        }
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + 0.4 * Math.sin(now * 40)})`;
+        ctx.fillRect(Math.round(x) - 2, Math.round(y) - 8, 4, 16);
+        ctx.restore();
+    }
     const hexA = (hex, a) => `rgba(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}, ${a})`;
 
     // もう一回 引け！ (引いても 負けたあとの 復活。2026-10-24): 暗い 中に「まだだ…！」と 虹の「もう一回 レバーを引け！」。引いたら 白く 光る
@@ -1426,6 +1452,24 @@ const Lcd = (() => {
                 else { ex -= lunge; kooriHurt = inTurn > 0.35 && inTurn < 0.6; }
                 if (inTurn < 0.05 && lastTurn !== turn) { Sound.play(turn % 2 === 0 ? 'attack' : 'hurt'); lastTurn = turn; }
             }
+        } else if (phase.name === 'result' && clashed(plan)) {
+            // 押し合いの 決着 (2026-10-27): 打ち勝つと 相手を はね飛ばし、押し負けると こおりくんが はね飛ばされる
+            const k = Math.min(1, phase.local / 0.6);
+            const end = clashAt(CONFIG.show.pushStyle.clashTime, plan.win);
+            if (plan.win) {
+                kx = end.kx + Math.sin(Math.min(1, k * 1.5) * Math.PI / 2) * 30;
+                ex = end.ex + k * 120;
+                enemyHurt = Math.floor(now * 12) % 2 === 0 && k < 1;
+                enemyAlpha = 1 - k;
+                enemyHp = (plan.summon ? 0 : plan.pursuit ? PURSUIT_HP : 0.4) * (1 - k);
+            } else {
+                kx = end.kx - Math.sin(Math.min(1, k * 1.5) * Math.PI / 2) * 70;
+                ex = end.ex - k * 10;
+                kooriHurt = k < 1;
+                kooriDown = k >= 0.5;
+                kooriHp = 0.6 * (1 - k);
+                enemyHp = plan.pursuit ? PURSUIT_HP : 0.4;
+            }
         } else if (phase.name === 'result') {
             const k = Math.min(1, phase.local / 0.6);
             if (plan.win) {
@@ -1465,9 +1509,21 @@ const Lcd = (() => {
         // 長押しの ため / 連打の 連撃 (2026-10-24 ユーザー指定)
         const pmode = phase.name === 'battle' && phase.pushing && spinView ? pushModeOf(plan, phase) : null;
         let charge = 0;
+        let clash = null;
         if (pmode === 'long') {
             charge = spinView.pushedAt !== null ? 1 : chargeOf(now);
             kx += Math.sin(now * 70) * charge * 1.5;   // ためて ふるえる
+            if (spinView.pushedAt !== null) {
+                // フルチャージの あと 相手に 突撃して 押し合う (2026-10-27 ユーザー指定)。最後は 勝つほうへ 押し込んで いく
+                clash = clashAt(now - spinView.pushedAt, plan.win && !plan.revival);
+                kx = clash.kx + Math.sin(now * 70) * 1.5;
+                ex = clash.ex;
+                if (clash.contact) {
+                    once('clash', 'attack');
+                    once(`clash${Math.floor((now - spinView.pushedAt) / 0.3)}`, 'hurt');
+                    enemyHurt = Math.floor(now * 16) % 4 === 0;   // こおりくんは ×目に しない (負けに 見えるので)
+                }
+            }
         }
         if (pmode === 'mash' && spinView.mash) {
             const since = now - (spinView.mashAt || -9);
@@ -1475,6 +1531,7 @@ const Lcd = (() => {
             enemyHp = Math.max(0.1, enemyHp - spinView.mash * 0.025);
         }
         if (charge > 0) drawCharge(now, kx + 16, ground - 16, charge, pushColorOf(plan));
+        if (clash && clash.contact) drawClashSparks(now, (kx + 32 + ex - 30) / 2, ground - 20, pushColorOf(plan));
 
         const speaking = battleSpeaker(plan, phase);   // しゃべっている 人は 少し 跳ねる
         if (enemyAlpha > 0 && b.team) drawTeam(b.team, ex, ground, frame, enemyHurt, enemyAlpha, plan.kai, speaking ? speaking.idx : -1);   // ライバルチーム (P3。怪は 確定)
@@ -1536,7 +1593,8 @@ const Lcd = (() => {
                 ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, 0.8 - since * 2)})`;
                 ctx.fillRect(0, 0, W, H);
                 // とどめの 文字: フルチャージ！ / 〇連撃！
-                if (mode === 'long' && since < 0.9) text('フルチャージ！！', W / 2, 79, 22, pushText(pushColorOf(plan)), 'center', now);
+                if (mode === 'long' && since < 0.6) text('フルチャージ！！', W / 2, 79, 22, pushText(pushColorOf(plan)), 'center', now);
+                else if (mode === 'long') text('押し合い！！', W / 2, 79, 22, Math.floor(now * 8) % 2 ? pushText(pushColorOf(plan)) : '#ffffff', 'center', now);
                 if (mode === 'mash' && since < 0.9) text(`${spinView.mash}連撃！！`, W / 2, 79, 24, pushText(pushColorOf(plan)), 'center', now);
             }
         }
@@ -1560,7 +1618,8 @@ const Lcd = (() => {
         }
         if (phase.name === 'result' && phase.local >= 0.3 && phase.local < 0.9) {
             band(66, 26, 0.55);
-            text(plan.win ? '撃破！！' : '敗北…', W / 2, 79, 22, plan.win ? '#ffe066' : '#8aa4c0');
+            const words = clashed(plan) ? ['打ち勝った！！', '押し負けた…'] : ['撃破！！', '敗北…'];
+            text(plan.win ? words[0] : words[1], W / 2, 79, 22, plan.win ? '#ffe066' : '#8aa4c0');
         }
     }
     let lastTurn = -1;
@@ -2178,10 +2237,12 @@ const Lcd = (() => {
             spinView.pushPhase = phase.index;
             if (phase.name === 'rvagain') spinView.pullAt = now;
         }
-        // 長押しの ため が いっぱいに なったら 一撃 (2026-10-24)
-        if (phase && phase.pushing && spinView && spinView.pushedAt === null && pushModeOf(plan, phase) === 'long' && chargeOf(now) >= 1) {
+        // 長押しの ため が いっぱいに なったら 突撃 (2026-10-24・27)。押し合う 時間が 残るように、最後の clashTime 秒は 自動で フルチャージ
+        if (phase && phase.pushing && spinView && spinView.pushedAt === null && pushModeOf(plan, phase) === 'long'
+            && (chargeOf(now) >= 1 || phase.local >= phase.t - CONFIG.show.pushStyle.clashTime)) {
             spinView.pushedAt = now;
             spinView.holdStart = null;
+            spinView.chargeBase = 1;
             Sound.play('pull');
         }
         // レバーを引け！: はじめから 出るか、PUSH！ から changeAt 秒で 変わる (その前に ボタンを 押しても 変わる。push)
