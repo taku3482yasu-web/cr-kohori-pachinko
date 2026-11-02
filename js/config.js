@@ -449,6 +449,12 @@ const CONFIG = {
                 fullMoon: { name: '急に満月の夜になる', weight: 5, talk: '急に満月の夜になってたね！' },
                 shake: { name: '画面がゆれる', weight: 5, talk: '画面がゆれてたよ！' },
                 okagappaWalk: { name: 'おかがっぱが横切る', weight: 5, talk: 'おかがっぱが横切ってたよ！' },
+                // 2026-11-03 ユーザー指定で追加 (おにおにの夢はユーザーの案・ほかは Claude が決めた)
+                dream: { name: 'おにおにの夢 (BONUS のお宝をゲットしてよろこぶ)', weight: 6, talk: 'BONUS の夢を見てたね！' },
+                hanachouchin: { name: '鼻ちょうちんがふくらんでわれる', weight: 5, talk: '鼻ちょうちんがわれたね！' },
+                float: { name: '椅子ごとふわふわ浮く', weight: 5, talk: '椅子ごと浮いてたよ！？' },
+                sleepwalk: { name: '寝たまま歩きだす', weight: 5, talk: '寝たまま歩いてたよ…！' },
+                kinbou: { name: '金棒がひとりでに光る', weight: 4, talk: '金棒が光ってたよ！' },
                 // 2026-10-22 ユーザー指定で、プレミアボーナス (specs.*.premium) のときだけ出す (重みは使わない)
                 goldDogSit: { name: 'ゴールド金面犬がとなりに座っている', weight: 0, premium: true, talk: '金面犬がとなりに座ってたよ！' }
             }

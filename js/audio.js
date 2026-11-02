@@ -128,7 +128,42 @@ const Sound = (() => {
         osc.stop(t0 + length + 0.02);
     }
 
+    // ぶるぶる の 機械音 (2026-11-03 ユーザー指定: レバブル・ボタン・ハンドルが 震える とき「ヴヴヴヴヴ…」)
+    //   低い のこぎり波の うなりを、速い 波 (約 26 回 / 秒) で 大きく したり 小さく したりして モーターの ふるえに する
+    function buzz(length = 1.3) {
+        const t0 = ctx.currentTime;
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(0.0001, t0);
+        out.gain.exponentialRampToValueAtTime(0.16, t0 + 0.04);
+        out.gain.setValueAtTime(0.16, t0 + length - 0.15);
+        out.gain.exponentialRampToValueAtTime(0.0001, t0 + length);
+        const trem = ctx.createGain();
+        trem.gain.value = 0.5;
+        const lfo = ctx.createOscillator(), depth = ctx.createGain();
+        lfo.type = 'square';
+        lfo.frequency.value = 26;
+        depth.gain.value = 0.5;
+        lfo.connect(depth).connect(trem.gain);
+        const filt = ctx.createBiquadFilter();
+        filt.type = 'lowpass';
+        filt.frequency.value = 900;
+        for (const [freq, type, vol] of [[68, 'sawtooth', 1], [136, 'square', 0.35], [71, 'sawtooth', 0.6]]) {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = type;
+            o.frequency.setValueAtTime(freq, t0);
+            o.frequency.linearRampToValueAtTime(freq * 0.94, t0 + length);   // 少し ずつ 低く (モーターが へたる)
+            g.gain.value = vol;
+            o.connect(g).connect(filt);
+            o.start(t0);
+            o.stop(t0 + length + 0.05);
+        }
+        filt.connect(trem).connect(out).connect(seOut);
+        lfo.start(t0);
+        lfo.stop(t0 + length + 0.05);
+    }
+
     const SOUNDS = {
+        buzz: () => buzz(1.3),
         stop: () => tone(660, 0, 0.06, { volume: 0.05 }),
         hold: () => tone(1046, 0, 0.05, { volume: 0.04, type: 'triangle' }),
         // 台のボタンの高い音 (先読み)

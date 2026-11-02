@@ -48,6 +48,7 @@ const MachineButton = (() => {
         // 先バレ: 筐体の 右の 丸い ランプも 赤・紫・虹に 光る (2026-10-23 ユーザー指定。js/cabinet.js)
         if (typeof Cabinet !== 'undefined') Cabinet.lamp(kind, now);
         if (kind === 'beep') Sound.play('button');
+        if (kind === 'shake') Sound.play('buzz');   // ぶるぶる の 機械音 (2026-11-03)
         if (kind === 'shake' && navigator.vibrate && Customize.get('vibrate') === 'on') {
             try { navigator.vibrate([90, 40, 90, 40, 160]); } catch (e) { /* 振動できない環境 */ }
         }
@@ -78,6 +79,7 @@ const MachineButton = (() => {
             h.classList.add('fx-buru');
         }
         handleUntil = now + CONFIG.show.handleBuru.time;
+        Sound.play('buzz');   // ぶるぶる の 機械音 (2026-11-03)
         if (navigator.vibrate && Customize.get('vibrate') === 'on') {
             try { navigator.vibrate([40, 20, 40, 20, 40, 20, 40, 20, 120]); } catch (e) { /* 振動できない環境 */ }
         }
@@ -90,6 +92,7 @@ const MachineButton = (() => {
         void el.offsetWidth;
         el.classList.add('fx-buru');
         buruUntil = now + CONFIG.show.leverBuru.time;
+        Sound.play('buzz');   // ぶるぶる の 機械音 (2026-11-03)
         if (navigator.vibrate && Customize.get('vibrate') === 'on') {
             try { navigator.vibrate([60, 30, 60, 30, 60, 30, 120]); } catch (e) { /* 振動できない環境 */ }
         }

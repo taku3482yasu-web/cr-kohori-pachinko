@@ -598,6 +598,11 @@ const Lcd = (() => {
             const done = ((n === 'pipo' || n === 'pface') && local >= PIPO_ALIGN) || n === 'palign';
             return { stop: [done, done, done], big: done };
         }
+        if (plan.kind === 'onioni' && !plan.pattern) {
+            // おにおにRASH の 外れ (2026-11-03 ユーザー指定): 当たりと 同じく 図柄は 左上に 小さく。いつも おにおにが 見える (図柄の 大きさで 当たりが わからない)
+            const r = local / phase.t;
+            return { stop: [r >= 0.45, r >= 0.999, r >= 0.7], big: false };
+        }
         if (plan.kind === 'challenge' || (plan.kind === 'onioni' && plan.pattern)) {
             // 突破チャレンジ・おにおにRASH の当たり: 図柄は左上に小さく、最後に止まる
             const done = last && local >= phase.t - 0.5;
@@ -659,6 +664,7 @@ const Lcd = (() => {
         ctx.restore();
     }
 
+    let onioniIdle = false;   // おにおにRASH で 止まっている あいだも 図柄は 小さく (2026-11-03)
     function drawReels(now, plan, phase) {
         // おにおにRASH の違和感: 図柄の中に 8 (ナイナイ)・9 (アルアル) が止まる
         if (plan && plan.oddFigure && phase && phase.name === 'anomaly' && phase.local >= 0.4) {
@@ -670,7 +676,7 @@ const Lcd = (() => {
         // 後告知の当たり: 図柄はいったん外れの目で止まり、告知のあと (postnotice の 0.8秒) にそろう
         const fake = plan && phase && ((plan.type === 'post' && (phase.name === 'roll' || phase.local < 0.8)) || (plan.crack && phase.name !== 'xalign'));
         const digits = plan ? (fake ? plan.fakeDigits : plan.digits) : shown;
-        const state = plan ? reelState(plan, phase) : { stop: [true, true, true], big: true };
+        const state = plan ? reelState(plan, phase) : { stop: [true, true, true], big: !onioniIdle };
         if (state.hidden) return { reach: false, aligned: false, big: false };
         if (state.zenkaiten) return drawZenkaitenReels(now, digits[0], phase);
         const layout = state.big ? BIG : SMALL;
@@ -2316,6 +2322,7 @@ const Lcd = (() => {
             const iw = plan && plan.iwakan && m.spin ? { kind: plan.iwakan, t: m.spin.elapsed, start: now - m.spin.elapsed } : null;
             const iwOn = iw && iw.t < CONFIG.show.iwakan.time;
             rollClock = iwOn && iw.kind === 'reverse' ? n => 2 * iw.start - n + 50 : iwOn && iw.kind === 'stop' && iw.t > 0.2 ? () => iw.start + 0.2 : null;
+            onioniIdle = m.rush.active && !m.rush.challenge && rashMode === 'onioni';
             const state = drawReels(now, plan, phase);
             rollClock = null;
             iwakanNow = iwOn ? iw : null;   // ノイズなどは いちばん 上に 描く (drawHeaven の まえ)

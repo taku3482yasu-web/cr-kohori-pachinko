@@ -4,7 +4,9 @@
 // 突破チャレンジ (plan.kind 'challenge'): おにおにとのバトル。保留1つが1ラウンドで、ラウンドごとにこおりくんの武器が変わる
 //   (素手 → ハルキソード → ハルキハンマー → おにおに絶対殺す剣)。cintro → cround (受け止められる) / cfinal → cresult
 // おにおにRASH (plan.kind 'onioni'): 真ん中でおにおにが椅子に座って眠っている。当たりのときだけ違和感
-//   (そのまま開眼 / 虹色 / 画面が反転 / 白黒 / 顔のドアップ) が起きて開眼する
+//   (そのまま開眼 / 虹色 / 画面が反転 / 白黒 / 顔のドアップ) が起きて開眼する。
+//   2026-11-03 ユーザー指定: 外れでも図柄は小さく、いつもおにおにが見える (違和感を楽しむ)。違和感に おにおにの夢 (BONUS のお宝)・
+//   鼻ちょうちん・椅子ごと浮く・寝たまま歩く・金棒が光る を足した
 // ブラックアウト (plan.kind 'blackout'。RASH 中の突発当たり): dark → bokoori (虹色のこおりくん) → atari (「当たり」) → itadaki
 // Lcd から kit ({ ctx, W, H, text, band, rainbow }) を受け取って描く。こおりRASH のバトルは Lcd の drawBattle を使う。
 // =====================================================================
@@ -283,6 +285,61 @@ const RashView = (() => {
         ctx.fillRect(cx - 6, ground - 100, 12, 8);
     }
 
+    // 鼻ちょうちん: ふくらんで しぼんで、さいごに パチン
+    function drawHanachouchin(box, local, total, now) {
+        const { ctx, text } = kit;
+        const nx = box.left + 21 * box.scale, ny = box.top + 15 * box.scale;
+        const popAt = total - 0.6;
+        if (local >= popAt) {
+            if (local < popAt + 0.35) text('パチン！', nx + 22, ny - 6, 12, '#ffffff');
+            return;
+        }
+        const grow = Math.min(1, local / popAt);
+        const r = 3 + grow * 16 + Math.sin(now * 4) * 2 * grow;
+        ctx.fillStyle = 'rgba(200, 240, 255, 0.45)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(nx + r * 0.8, ny + r * 0.2, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.fillRect(nx + r * 0.5, ny - r * 0.4, 2, 2);
+    }
+    // おにおにの夢 (2026-11-03 ユーザー指定): 吹き出しの 中で「BONUS」と 書かれた お宝を ゲットして よろこぶ おにおに
+    function drawDream(cx, local, now) {
+        const { ctx, text } = kit;
+        const k = Math.min(1, (local - 0.2) / 0.3);
+        const bx = cx + 64, by = 40, bw = 104 * k, bh = 58 * k;
+        // 頭から のびる 小さな 丸と 雲の 吹き出し
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * k})`;
+        [[cx + 22, 52, 3], [cx + 32, 46, 5]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r * k, 0, Math.PI * 2); ctx.fill(); });
+        for (let i = 0; i < 7; i++) {
+            const a = (i / 7) * Math.PI * 2;
+            ctx.beginPath(); ctx.ellipse(bx + Math.cos(a) * bw * 0.42, by + Math.sin(a) * bh * 0.38, bw * 0.22, bh * 0.26, 0, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.beginPath(); ctx.ellipse(bx, by, bw * 0.46, bh * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+        if (k < 1) return;
+        // 夢の 中: 宝箱 (BONUS) と おにおに
+        const got = local > 1.2;                 // お宝を ゲット
+        const jump = got ? Math.abs(Math.sin(now * 8)) * 6 : 0;
+        const chestX = got ? bx + 4 : bx + 20, chestY = by + 14 - (got ? 10 + jump : 0);
+        ctx.fillStyle = '#8a5a1a'; ctx.fillRect(chestX - 12, chestY - 10, 24, 14);
+        ctx.fillStyle = '#ffd040'; ctx.fillRect(chestX - 12, chestY - 10, 24, 3); ctx.fillRect(chestX - 2, chestY - 6, 4, 5);
+        if (got) {
+            // ふたが あいて 光る
+            ctx.fillStyle = `rgba(255, 240, 120, ${0.5 + 0.4 * Math.sin(now * 12)})`;
+            ctx.beginPath(); ctx.moveTo(chestX - 10, chestY - 10); ctx.lineTo(chestX - 20, chestY - 28); ctx.lineTo(chestX + 20, chestY - 28); ctx.lineTo(chestX + 10, chestY - 10); ctx.fill();
+        }
+        text('BONUS', chestX, chestY + 11, 8, got ? 'rainbow' : '#c0102a', 'center', now);
+        const box = drawOnioni(bx - 26, by + 22 - jump, 0.62, { eyesOpen: true, now });
+        if (got) {
+            // うれしそう: 目を 細めて にっこり・音符
+            const { ctx: c } = kit;
+            c.fillStyle = '#1a0a0a';
+            EYES.forEach(([ex, ey]) => c.fillRect(box.left + ex * box.scale, box.top + (ey + 1) * box.scale, 3 * box.scale, Math.max(1, box.scale)));
+            text('♪', bx - 8, by - 12 - jump, 10, '#ff6a8a');
+            if (local > 1.6) text('うひょー！', bx + 4, by - 22, 9, '#c0102a');
+        }
+    }
+
     function drawOnioniRash(now, plan, phase) {
         const { ctx, W, H, text, band } = kit;
         const cx = W / 2, ground = 124;
@@ -291,7 +348,9 @@ const RashView = (() => {
         const pattern = plan.pattern;
         const open = n === 'open';
         const shown = n === 'anomaly' || open;   // 違和感が見えているあいだ
-        drawThrone(cx, ground, pattern === 'goldThrone' && shown);
+        // 椅子ごと ふわふわ 浮く (anomaly の あいだ。開眼で 着地)
+        const lift = pattern === 'float' && n === 'anomaly' ? Math.min(1, local / 0.6) * (18 + Math.sin(now * 3) * 4) : 0;
+        drawThrone(cx, ground - lift, pattern === 'goldThrone' && shown);
 
         if (pattern === 'zoom' && (n === 'anomaly' || open)) {
             // 顔のドアップ: 顔のまわりだけを大きく
@@ -307,10 +366,26 @@ const RashView = (() => {
             const kai = pattern === 'kai' && shown && !(n === 'anomaly' && local < 0.5);
             const scale = pattern === 'tiny' && shown ? 0.9 : 1.8;
             const oneEye = pattern === 'oneEye' && n === 'anomaly';
-            const box = drawOnioni(cx, ground - 4, scale, { eyesOpen: open || oneEye, glow: open, rainbow: pattern === 'rainbow' && shown, now, kai });
+            // 寝たまま 歩く: 椅子から おりて 左右に ふらふら (開眼で 椅子に もどる)
+            const walkX = pattern === 'sleepwalk' && n === 'anomaly' ? Math.sin(Math.min(1, local / 0.5) * local * 1.6) * 62 : 0;
+            const walkBob = walkX ? Math.abs(Math.sin(now * 6)) * 2 : 0;
+            const box = drawOnioni(cx + walkX, ground - 4 - lift - walkBob, scale, { eyesOpen: open || oneEye, glow: open, rainbow: pattern === 'rainbow' && shown, now, kai });
             if (oneEye) closeOneEye(box);
             if (kai && n === 'anomaly') text('おにおに・怪', cx, 40, 14, '#c070ff');
+            if (pattern === 'hanachouchin' && n === 'anomaly') drawHanachouchin(box, local, phase.t, now);
+            if (pattern === 'kinbou' && n === 'anomaly' && local > 0.3) {
+                // 金棒が ひとりでに 光る (金色の 光が 脈打つ)
+                const k = 0.35 + 0.3 * Math.sin(now * 9);
+                ctx.fillStyle = `rgba(255, 220, 80, ${k})`;
+                ctx.fillRect(box.left + 33 * box.scale, box.top + 2 * box.scale, 10 * box.scale, 32 * box.scale);
+                ctx.fillStyle = '#fff6c0';
+                for (let i = 0; i < 4; i++) {
+                    const sy = box.top + (6 + ((now * 20 + i * 7) % 26)) * box.scale;
+                    ctx.fillRect(box.left + (34 + (i % 2) * 6) * box.scale, sy, 2, 2);
+                }
+            }
         }
+        if (pattern === 'dream' && n === 'anomaly' && local > 0.2) drawDream(cx, local, now);
         if (pattern === 'sleepTalk' && n === 'anomaly' && local > 0.4) {
             // 寝言
             band(30, 18, 0.5);

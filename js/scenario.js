@@ -684,7 +684,7 @@ const Scenario = (() => {
                     p.reveal = { phase: 'pipo', at: 0.4 };
                 }
             } else p.phases = [{ name: 'roll', t: plain }];
-        } else if (spin.rush && !spin.inChallenge && win && !kaiHold && !premium && result.force !== 'revival' && (result.force === 'blackout' || rng() < bo.rate)) {
+        } else if (spin.rush && !spin.inChallenge && win && !kaiHold && !premium && result.force !== 'revival' && !result.forcePattern && (result.force === 'blackout' || rng() < bo.rate)) {
             // ブラックアウト (突発当たり): こおりRASH・おにおにRASH (プレミアボーナスは それぞれの知らせ方にする)
             blackout();
         } else if (spin.challenge) {
