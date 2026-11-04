@@ -17,6 +17,12 @@ const Sound = (() => {
         if (seOut) seOut.gain.setTargetAtTime(level, ctx.currentTime, 0.02);
     }
 
+    // タブを 切りかえて 画面が かくれたら 音を 止め、もどったら 再開する (2026-11-04 ユーザー指定)
+    document.addEventListener('visibilitychange', () => {
+        if (!ctx) return;
+        if (document.hidden) ctx.suspend(); else ctx.resume();
+    });
+
     function unlock() {
         if (ctx) {
             if (ctx.state === 'suspended') ctx.resume();
@@ -217,6 +223,7 @@ const Sound = (() => {
     }
 
     function play(name) {
+        if (document.hidden) return;
         if (muted || hushed() || !ctx || ctx.state !== 'running' || !SOUNDS[name]) return;
         SOUNDS[name]();
     }
