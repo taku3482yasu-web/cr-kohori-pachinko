@@ -144,8 +144,16 @@ const SPRITES = {
 };
 
 // 文字列のドット絵を ctx に描く。scale 倍、flip で左右反転
+// 2026-11-14 (ユーザー指定: シリーズの ドット絵を 緻密に): js/pixel-hd.js で 4 倍の 細かさに 作り直した 絵を のせる
+const SPRITE_HD = new WeakMap();
 function drawSprite(ctx, sprite, frameName, x, y, scale = 1, flip = false) {
     const rows = sprite.frames[frameName];
+    if (typeof PixelHD !== 'undefined' && typeof document !== 'undefined') {
+        let baked = SPRITE_HD.get(rows);
+        if (!baked) { baked = PixelHD.bake(PixelHD.fromRows(rows, sprite.palette)); SPRITE_HD.set(rows, baked); }
+        PixelHD.draw(ctx, baked, x, y, scale, flip);
+        return;
+    }
     const width = rows[0].length;
     rows.forEach((row, ry) => {
         for (let rx = 0; rx < row.length; rx++) {

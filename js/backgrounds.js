@@ -68,6 +68,8 @@ const Backgrounds = (() => {
         canvas.width = W;
         canvas.height = H;
         draw(painter(canvas.getContext('2d')));
+        // 2026-11-14 (ユーザー指定: シリーズの ドット絵を 緻密に): 4 倍の 細かさに 作り直す (js/pixel-hd.js)
+        if (typeof PixelHD !== 'undefined') return { canvas: PixelHD.bake(PixelHD.fromCanvas(canvas), { soft: true }).canvas, speed };
         return { canvas, speed };
     }
 
@@ -717,8 +719,8 @@ const Backgrounds = (() => {
     function draw(ctx, mapId, scroll) {
         get(mapId).layers.forEach(({ canvas, speed }) => {
             const offset = Math.floor((scroll * speed) % W);
-            ctx.drawImage(canvas, -offset, 0);
-            if (offset > 0) ctx.drawImage(canvas, W - offset, 0);
+            ctx.drawImage(canvas, -offset, 0, W, H);
+            if (offset > 0) ctx.drawImage(canvas, W - offset, 0, W, H);
         });
     }
 

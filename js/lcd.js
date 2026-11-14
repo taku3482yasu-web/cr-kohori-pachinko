@@ -21,7 +21,7 @@ const Lcd = (() => {
     const W = 256;
     const H = 144;
     // 2026-10-23 アップグレード P1: 中を 2 倍の 細かさ (512x288) で 描く。座標は 256x144 の まま (文字・丸・光が なめらかに)
-    const RES = 2;
+    const RES = 3;   // 2026-11-14 (ユーザー指定: 鮮明に): 2 → 3 倍の 画素
     const FONT = '"DotGothic16", "MS Gothic", "Osaka-Mono", monospace';
     const BIG = { w: 56, h: 64, y: 66, xs: [52, 128, 204] };
     const SMALL = { w: 22, h: 26, y: 17, xs: [14, 38, 62] };

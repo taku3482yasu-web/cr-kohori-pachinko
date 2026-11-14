@@ -453,12 +453,24 @@ const Characters = (() => {
     };
 
     // 仲間を描く。(x, groundY) は足元の中央。silhouette で黒い影、alpha で透明度
+    // 2026-11-14 (ユーザー指定: シリーズの ドット絵を 緻密に): js/pixel-hd.js で 4 倍の 細かさに 作り直した 絵を のせる
+    const HD = typeof PixelHD !== 'undefined' && typeof document !== 'undefined';
+    function bakedOf(kind, id, c, frame, variant) {
+        const opts = variant === 'hurt' ? { tint: '#ffffff' } : variant === 'silhouette' ? { tint: '#101018' } : variant === 'gold' ? { map: goldTint } : {};
+        return PixelHD.cached(`${kind}:${id}:${frame}:${variant}`, () => PixelHD.bake(PixelHD.fromRects(c.w, c.h, r => c.draw(r, frame)), opts));
+    }
+
     function drawCompanion(ctx, id, x, groundY, { scale = 2, frame = 0, silhouette = false, alpha = 1 } = {}) {
         const c = COMPANIONS[id];
         if (!c) return;
         const left = Math.round(x - (c.w * scale) / 2);
         const top = Math.round(groundY - c.h * scale);
         ctx.globalAlpha = alpha;
+        if (HD) {
+            PixelHD.draw(ctx, bakedOf('c', id, c, frame, silhouette ? 'silhouette' : ''), left, top, scale);
+            ctx.globalAlpha = 1;
+            return;
+        }
         c.draw((rx, ry, rw, rh, color) => {
             const x0 = Math.round(left + rx * scale), x1 = Math.round(left + (rx + rw) * scale);
             const y0 = Math.round(top + ry * scale), y1 = Math.round(top + (ry + rh) * scale);
@@ -487,6 +499,12 @@ const Characters = (() => {
         const left = Math.round(x - (enemy.w * scale) / 2);
         const top = Math.round(groundY - enemy.h * scale);
         ctx.globalAlpha = alpha;
+        if (HD) {
+            PixelHD.draw(ctx, bakedOf('e', id, enemy, frame, silhouette ? 'silhouette' : hurt ? 'hurt' : gold ? 'gold' : ''), left, top, scale, flip);
+            if (kai && KAI_EYES[id] && !silhouette) drawKai(ctx, KAI_EYES[id], enemy, left, top, scale, flip, alpha, hurt);
+            ctx.globalAlpha = 1;
+            return;
+        }
         enemy.draw((rx, ry, rw, rh, color) => {
             const fx = flip ? enemy.w - rx - rw : rx;
             const x0 = Math.round(left + fx * scale), x1 = Math.round(left + (fx + rw) * scale);
