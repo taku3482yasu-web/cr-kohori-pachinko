@@ -7,7 +7,38 @@
 // おにおにRASH (威圧感)・怪 (おどろおどろしい)・大当たり中。
 // 「音: OFF」とカスタマイズの「BGM: OFF」で消える。窓を開いているあいだは止める。
 // 曲のうち normal・seCastle・challenge・bonus はスロット版の曲 (field・castle・battle・super)。fullMoon・kooriRash・onioniRash・kai は新しく作った (2026-10-20 ユーザー指定)
+// 2026-11-14 (ユーザー指定: Suno で 作った 曲に): 音声ファイルの 曲 (sounds/bgm/*.mp3) も 流せる。Bgm.songFor が 台の 状態から 曲を 選び、
+//   ファイルが ない・読めない ときは 今までの チップチューン (trackFor の 曲)。オープニング・エンディングは チップチューンの まま (ユーザー指定)。
+//   通常時は ステージごと、RASH は 種類ごとの 曲 + どの RASH でも 合う 曲から RASH に 入る たびに ランダム。<audio> で 鳴らすので file:// でも 鳴る
 // =====================================================================
+
+// 音声ファイルの 曲 (sounds/bgm/<名前>.mp3)。gain は 音量の 倍率 (曲の 大きさを 測って そろえた)
+const BGM_FILES = {
+    'stage-tsugakuro': 0.64, 'stage-ongagawa': 0.64, 'p-stage-kokura': 0.75, 'p-stage-gamecenter': 0.75, 'p-stage-ishinokawa': 0.75,
+    castle: 0.67, 'p-fullmoon': 0.75,
+    battle: 0.79, battle2: 0.72, super: 0.8, super2: 0.78,
+    'p-rash-koori': 0.75, 'p-rash-koori2': 0.75, 'p-rash-onioni': 0.75, 'p-rash-onioni2': 0.67,
+    okapipo: 0.75, 'p-rash-okapipo2': 0.78, 'p-rash-common': 0.76, 'rash-koori-the-fire': 0.71,
+    'p-kai': 0.75
+};
+// 通常時の ステージ → 曲 (通学路・遠賀川・SE城前・突破チャレンジ・大当たり中・おかピポ は スロットの 曲を 使い回す。2026-11-14)
+const BGM_STAGE_SONGS = {
+    tsugakuro: 'stage-tsugakuro', kokuraStation: 'p-stage-kokura', ongagawa: 'stage-ongagawa',
+    gameCenter: 'p-stage-gamecenter', ishinokawa: 'p-stage-ishinokawa'
+};
+// 場面 (trackFor の 曲) → 曲の 候補。候補の うち 置いて ある 曲から ランダム (RASH は RASH の あいだ 同じ 曲)
+const BGM_COMMON_RASH = ['p-rash-common', 'rash-koori-the-fire'];   // どの RASH でも 合う 曲
+const BGM_POOLS = {
+    seCastle: ['castle'],
+    fullMoon: ['p-fullmoon'],
+    challenge: ['battle', 'battle2'],
+    bonus: ['super', 'super2'],
+    kooriRash: ['p-rash-koori', 'p-rash-koori2', ...BGM_COMMON_RASH],
+    onioniRash: ['p-rash-onioni', 'p-rash-onioni2', ...BGM_COMMON_RASH],
+    okapipoRash: ['okapipo', 'p-rash-okapipo2', ...BGM_COMMON_RASH],
+    kai: ['p-kai']
+};
+const BGM_RASH_POOLS = ['kooriRash', 'onioniRash', 'okapipoRash'];
 
 const BGM_TRACKS = {
     // 通常時: 明るい行進 (スロット版の field)
@@ -168,6 +199,66 @@ const Bgm = (() => {
     let timer = null;
     let volume = 0.5;   // カスタマイズ「BGM の音量」で 変わる (2026-10-24。setVolume)
     let paused = true;
+    const files = {};          // 音声ファイルの 曲 { audio, failed, starting }
+    let fileName = null;       // いま 鳴らして いる 音声ファイルの 曲
+    let lastScene = null;      // songFor が 前に 見た 場面
+    const picks = {};          // 場面ごとに 選んだ 曲
+
+    function fileOf(name) {
+        if (!(name in BGM_FILES)) return null;
+        if (!files[name]) {
+            const audio = new Audio();
+            audio.loop = true;
+            audio.preload = 'auto';
+            const f = { audio, failed: false, starting: false };
+            audio.addEventListener('error', () => { f.failed = true; });
+            audio.src = `sounds/bgm/${name}.mp3`;
+            files[name] = f;
+        }
+        return files[name];
+    }
+    // 曲の ファイルが 使えるか: false = ない・読めない / true = 読める / null = まだ わからない
+    function fileState(name) {
+        const f = files[name];
+        if (!f) return null;
+        if (f.failed) return false;
+        return f.audio.readyState > 0 ? true : null;
+    }
+    // 置いて ある 曲から ランダム (ない と わかった 曲は 選ばない。スマホでは まだ わからない 曲も 選ぶ)
+    function pickSong(names) {
+        const ok = names.filter(n => fileState(n) !== false);
+        return ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
+    }
+
+    // 台の 状態から 音声ファイルの 曲を 選ぶ (null = チップチューン)。毎フレーム 呼んで よい
+    function songFor(m, story) {
+        if (story) return null;   // オープニング・エンディングは チップチューンの まま
+        const scene = trackFor(m, null);
+        if (!m.rush.active && !m.yutime) BGM_RASH_POOLS.forEach(k => { picks[k] = null; });   // RASH が 終わったら 次の RASH で 選び直す
+        if (scene !== lastScene && (scene === 'challenge' || scene === 'bonus')) picks[scene] = null;   // 入る たびに 選び直す
+        lastScene = scene;
+        if (scene === 'normal') return BGM_STAGE_SONGS[m.stage.id] || null;
+        const pool = BGM_POOLS[scene];
+        if (!pool) return null;
+        if (!picks[scene]) picks[scene] = pickSong(pool);
+        return picks[scene];
+    }
+
+    // 音声ファイルの 曲を 鳴らす・止める (音量・一時停止も ここで 合わせる)
+    function syncFiles() {
+        for (const [name, f] of Object.entries(files)) {
+            const audible = name === fileName && !f.failed && ctx && !paused;
+            if (audible) {
+                f.audio.volume = Math.max(0, Math.min(1, volume * 2 * BGM_FILES[name]));
+                if (f.audio.paused && !f.starting) {
+                    f.starting = true;
+                    f.audio.play().catch(() => { /* まだ 操作の 前 */ }).finally(() => { f.starting = false; });
+                }
+            } else if (!f.audio.paused) {
+                f.audio.pause();
+            }
+        }
+    }
 
     // 台の状態とオープニング・エンディングから曲を決める (画面・音には触らない)
     //   m: 台 (Machine) / story: 流れている物語の名前 ('opening' / 'ending' / null)
@@ -202,6 +293,7 @@ const Bgm = (() => {
 
     function applyVolume() {
         if (master) master.gain.setTargetAtTime(paused ? 0 : volume * 0.12, ctx.currentTime, 0.02);
+        syncFiles();
     }
 
     // 音声の準備 (ユーザー操作のあとで呼ぶ。効果音と同じ AudioContext を使う)
@@ -213,6 +305,7 @@ const Bgm = (() => {
         master.connect(ctx.destination);
         applyVolume();
         timer = setInterval(schedule, 25);
+        Object.keys(BGM_FILES).forEach(n => { const f = fileOf(n); if (f) f.audio.load(); });   // 置いて ある 曲を 先に 調べる
     }
 
     function note(freq, type, time, duration, level) {
@@ -229,6 +322,7 @@ const Bgm = (() => {
     }
 
     function schedule() {
+        if (fileName && files[fileName] && !files[fileName].failed) return syncFiles();   // 音声ファイルの 曲
         if (!ctx || !trackName || paused || ctx.state !== 'running') return;
         const track = BGM_TRACKS[trackName];
         const stepDur = 60 / track.bpm / 2;
@@ -243,8 +337,21 @@ const Bgm = (() => {
         }
     }
 
-    // 曲を切り替える (同じ曲なら何もしない)
-    function play(name) {
+    // 曲を切り替える (同じ曲なら何もしない)。song: 音声ファイルの 曲 (songFor。ない・読めない ときは name の チップチューン)
+    function play(name, song = null) {
+        const f = song ? fileOf(song) : null;
+        const useFile = f && !f.failed ? song : null;
+        if (useFile !== fileName) {
+            const prev = files[fileName];
+            if (prev) {
+                prev.audio.pause();
+                try { prev.audio.currentTime = 0; } catch (e) { /* まだ 読み込み中 */ }
+            }
+            fileName = useFile;
+            if (!useFile) trackName = null;   // チップチューンに 戻る ときは 頭から
+            syncFiles();
+        }
+        if (useFile) return;
         if (trackName === name) return;
         trackName = name;
         step = 0;
@@ -265,5 +372,5 @@ const Bgm = (() => {
         applyVolume();
     }
 
-    return { init, play, setPaused, setVolume, trackFor, get track() { return trackName; } };
+    return { init, play, setPaused, setVolume, trackFor, songFor, fileState, get track() { return fileName || trackName; } };
 })();

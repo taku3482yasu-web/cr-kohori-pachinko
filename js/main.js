@@ -346,7 +346,7 @@
             if (r) Object.assign(push.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
         }
         // BGM: 台の状態で曲を変える。消音・BGM OFF・窓を開いているあいだは止める
-        Bgm.play(Bgm.trackFor(game.machine, Lcd.storyPlaying()));
+        Bgm.play(Bgm.trackFor(game.machine, Lcd.storyPlaying()), Bgm.songFor(game.machine, Lcd.storyPlaying()));   // 曲の ファイルが あれば その 曲 (2026-11-14)
         Bgm.setPaused(Sound.muted || Sound.hushed || Customize.get('bgm') === 'off' || game.paused);   // hushed: 違和感の 無音 (P4)
         saveTimer += 1;
         if (saveTimer >= 180 && !game.paused) { saveTimer = 0; saveNow(); }   // 約3秒ごと

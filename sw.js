@@ -10,7 +10,7 @@
 // このファイルの処理を変えたときは CACHE の番号を上げる
 // =====================================================================
 
-const CACHE = 'koori-pachinko-v1';
+const CACHE = 'koori-pachinko-v2';
 const PAGES = ['index.html', 'howto.html'];
 const STATIC = ['manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 const ASSET_PATTERN = /\b(?:src|href)="((?:js|css)\/[^"]+)"/g;
@@ -86,6 +86,8 @@ self.addEventListener('fetch', (event) => {
     const { request } = event;
     if (request.method !== 'GET') return;
     const url = new URL(request.url);
+    // 曲 (sounds/bgm/) は 少しずつ 読む (Range) ので 保存しない。つながって いない ときは js/bgm.js が チップチューンに する
+    if (url.origin === self.location.origin && url.pathname.includes('/sounds/bgm/')) return;
     if (request.mode === 'navigate' && url.origin === self.location.origin) {
         event.respondWith(fromNetworkOrCache(event));
     } else if (url.origin === self.location.origin || FONT_HOSTS.includes(url.hostname)) {
