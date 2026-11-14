@@ -702,6 +702,9 @@
     if (force === 'small') Machine.debugHold(game.machine, 2, 'small', null);
     if (force === 'jitan') Machine.debugJitan(game.machine);
     if (force === 'challenge') Machine.debugChallenge(game.machine, 0);   // 突破チャレンジから (保留は玉を打ってためる)
+    // 復活の 確認 (2026-11-14): RUSH に 入れて、こおりRASH の 当たりの バトルを 復活に する。rvstyle=dodge で「かわして 一発」に
+    if (force === 'revival') { Machine.debugJitan(game.machine); Machine.debugHold(game.machine, 2, 'hit', null, { revival: true, enemy: forceEnemy }); }
+    if (params.get('rvstyle') && CONFIG.show.revival.dodge) CONFIG.show.revival.dodge.share = params.get('rvstyle') === 'dodge' ? 1 : 0;
     if (params.get('mode')) Machine.setRashMode(game.machine, params.get('mode'));
     if (params.get('story')) Lcd.playStory(params.get('story'), time);
     updateHandle();

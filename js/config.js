@@ -396,7 +396,10 @@ const CONFIG = {
         revival: {
             share: 0.2,
             labels: { s99: 900 },
-            timing: { dark: 1.2, naitei: 1.8, cant: 2.2, still: 2.4, soredemo: 2.4, flash: 1.8, kill: 2.4 }
+            timing: { dark: 1.2, naitei: 1.8, cant: 2.2, still: 2.4, soredemo: 2.4, flash: 1.8, kill: 2.4 },
+            // 2026-11-14 (ユーザー指定): もう 1 つの 復活「相手の 攻撃を かわし、一発 入れて 撃破」。share: 復活の うち この 型に なる 割合 (演出だけ)
+            //   timing: dodge (起きあがって 相手の 攻撃を かわす) / counter (一発 入れる) の 秒。そのあと rvkill で 撃破
+            dodge: { share: 0.5, timing: { dodge: 1.6, counter: 1.3 } }
         },
         // お仲間召喚 (こおりRASH のバトル。ユーザー指定 2026-10-20): バトルの途中で画面が光り、やすさん・たむさん・だけさん のだれかが現れて相手を撃破 (撃破確定)。
         //   rate: 当たりのバトルで起きる割合 (外れでは起きない。Claude が決めた)。確定の相手 (ゴールド金面犬・アルアル) と復活では起きない

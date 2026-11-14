@@ -746,10 +746,18 @@ const Scenario = (() => {
                 if (canRevive && (result.force === 'revival' || rng() < revivalRate(config, spec, spin.specId, streak))) {
                     const rt = rv.timing;
                     p.revival = true;
-                    p.phases.push({ name: 'rvdark', t: rt.dark }, { name: 'rvnaitei', t: rt.naitei }, { name: 'rvcant', t: rt.cant },
-                        { name: 'rvstill', t: rt.still }, { name: 'rvsoredemo', t: rt.soredemo }, { name: 'rvflash', t: rt.flash },
-                        { name: 'rvkill', t: rt.kill });
-                    p.reveal = { phase: 'rvflash', at: 0.3 };
+                    if (rv.dodge && fxRandom() < rv.dodge.share) {
+                        // 相手の 攻撃を かわし、一発 入れて 撃破 (2026-11-14 ユーザー指定。演出の 乱数で 選ぶので 当たり・出玉は 変わらない)
+                        const dt = rv.dodge.timing;
+                        p.revivalStyle = 'dodge';
+                        p.phases.push({ name: 'rvdodge', t: dt.dodge }, { name: 'rvcounter', t: dt.counter }, { name: 'rvkill', t: rt.kill });
+                        p.reveal = { phase: 'rvcounter', at: 0.45 };
+                    } else {
+                        p.phases.push({ name: 'rvdark', t: rt.dark }, { name: 'rvnaitei', t: rt.naitei }, { name: 'rvcant', t: rt.cant },
+                            { name: 'rvstill', t: rt.still }, { name: 'rvsoredemo', t: rt.soredemo }, { name: 'rvflash', t: rt.flash },
+                            { name: 'rvkill', t: rt.kill });
+                        p.reveal = { phase: 'rvflash', at: 0.3 };
+                    }
                 }
                 // レバーを引け！ (2026-10-24 ユーザー指定: RASH 中に 出たら 当たり確定): 当たりの バトルだけ (復活は 負けに 見せるので 出さない)
                 const lvr = show.lever;

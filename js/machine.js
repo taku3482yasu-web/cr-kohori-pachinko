@@ -487,6 +487,7 @@ const Machine = (() => {
         if (options.button) result.button = options.button;
         if (options.pattern) result.forcePattern = options.pattern;
         if (options.challenge) result.forceChallenge = options.challenge;
+        if (options.revival) result.force = 'revival';   // 復活に する (確認用。2026-11-14)
         m.holds[fig].unshift(result);
         if (m.holds[fig].length > m.config.machine.holdMax) m.holds[fig].pop();
         emit(m, 'hold', { fig, result, count: m.holds[fig].length });

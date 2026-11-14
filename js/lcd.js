@@ -1414,6 +1414,8 @@ const Lcd = (() => {
             } else if (phase.name === 'rvagain') {
                 drawLeverAgain(now, plan, phase);
                 return;
+            } else if (phase.name === 'rvdodge' || phase.name === 'rvcounter') {
+                // 相手の 攻撃を かわして 一発 (2026-11-14): バトルの 場面の まま 下で 描く
             } else if (phase.name.startsWith('rv')) {
                 RashView.drawRevival(now, plan, phase);
                 return;
@@ -1431,6 +1433,7 @@ const Lcd = (() => {
         const scale = b.team ? 0 : enemyScale(plan.enemy, 70);
         let ex = 196, kx = 50, enemyHurt = false, kooriHurt = false, enemyAlpha = 1, kooriDown = false;
         let enemyHp = 1, kooriHp = 1;
+        let kooriLift = 0, ghost = null, rvText = null;   // 復活 (かわして 一発): こおりくんの 跳ぶ 高さ・残像・文字
 
         if (phase.name === 'roll') {
             ex = 196 + Math.max(0, 1 - phase.local / 0.8) * 90;           // こおりRASH: 右から入ってくる
@@ -1489,6 +1492,47 @@ const Lcd = (() => {
                 kooriDown = k >= 0.5;
                 kooriHp = 0.6 * (1 - k);
                 enemyHp = plan.pursuit ? PURSUIT_HP : 0.4;
+            }
+        } else if (phase.name === 'rvdodge') {
+            // 復活 (2026-11-14 ユーザー指定): 倒れた こおりくんが 起きあがる → 相手が とどめに 飛びかかる → 跳んで かわす (MISS)
+            const l = phase.local;
+            enemyHp = 0.4;
+            kooriHp = 0.2;
+            if (l < 0.35) {
+                kooriDown = l < 0.2;
+                if (l >= 0.2) rvText = { str: 'まだだ…！', color: '#ffffff', size: 14 };
+                once('rvup', 'reach');
+            } else {
+                const k = Math.min(1, (l - 0.35) / 0.55);
+                ex = 196 - Math.sin(Math.min(1, k) * Math.PI) * 120;   // 飛びかかって もどる
+                if (k > 0.25 && k < 0.85) {
+                    kooriLift = -Math.sin((k - 0.25) / 0.6 * Math.PI) * 44;   // 跳んで かわす
+                    ghost = { x: kx, a: 0.55 * (1 - (k - 0.25) / 0.6) };
+                }
+                if (k > 0.3) rvText = { str: 'MISS', color: '#9fe6ff', size: 16, y: 54 - (k - 0.3) * 20 };
+                once('rvlunge', 'hurt');
+            }
+        } else if (phase.name === 'rvcounter') {
+            // 一発 入れる: ためて → 突進して 一撃 (白く 光って「一撃!!」)。体力が 0 に
+            const l = phase.local;
+            kooriHp = 0.2;
+            if (l < 0.25) {
+                kx += Math.sin(now * 70) * 2;   // ためて ふるえる
+                enemyHp = 0.4;
+            } else if (l < 0.45) {
+                kx = 50 + (l - 0.25) / 0.2 * 100;
+                enemyHp = 0.4;
+            } else {
+                kx = 150;
+                ex = 196 + Math.min(1, (l - 0.45) / 0.3) * 12;
+                enemyHurt = Math.floor(now * 14) % 2 === 0;
+                enemyHp = 0;
+                rvText = { str: '一撃!!', color: 'rainbow', size: 22 };
+                once('rvhit', 'smash');
+                if (l < 0.6) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${(0.6 - l) * 5})`;
+                    ctx.fillRect(0, 0, W, H);
+                }
             }
         } else if (phase.name === 'pursuit') {
             // 追撃チャンス: 「追撃チャンス！」のあと、こおりくんが2回攻撃して相手の体力を 0.4 → PURSUIT_HP に削る
@@ -1551,8 +1595,15 @@ const Lcd = (() => {
             drawSprite(ctx, SPRITES.koori, 'down', -16, -16, 2);
             ctx.restore();
         } else {
-            drawSprite(ctx, SPRITES.koori, kooriHurt ? 'down' : frame ? 'walk1' : 'walk2', kx, ground - 32 + (kooriHurt ? 2 : 0), 2);
+            if (ghost) {   // かわした あとの 残像
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, ghost.a);
+                drawSprite(ctx, SPRITES.koori, 'walk1', ghost.x, ground - 32, 2);
+                ctx.restore();
+            }
+            drawSprite(ctx, SPRITES.koori, kooriHurt ? 'down' : frame ? 'walk1' : 'walk2', kx, ground - 32 + (kooriHurt ? 2 : 0) + kooriLift, 2);
         }
+        if (rvText) text(rvText.str, rvText.color === 'rainbow' ? W / 2 : kx + 16, rvText.y ?? (rvText.color === 'rainbow' ? 50 : ground - 52), rvText.size, rvText.color, 'center', now);
 
         // 名前と体力
         band(30, 20, 0.5);
