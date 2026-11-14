@@ -145,7 +145,8 @@ const RashView = (() => {
             g.globalCompositeOperation = 'source-over';
             kit.ctx.drawImage(tintCanvas, Math.round(cx - w / 2), Math.round(ground - h + 1));
         } else {
-            Characters.drawEnemy(kit.ctx, 'onioni', cx, ground, { scale, hurt, alpha, kai });
+            // 2026-11-14 (ユーザー指定: ドット絵を 動かす): 金棒の 腕を ふり上げ・足を 踏みしめる (characters.js の RIGS)
+            Characters.drawEnemy(kit.ctx, 'onioni', cx, ground, { scale, hurt, alpha, kai, frame: Math.floor(performance.now() / 450) % 2 });
         }
         if (kai) return box;   // 怪: 目のまわりの靄と赤く光る目 (閉じた目は描かない)
         if (!eyesOpen) closeEyes(box);
@@ -398,7 +399,7 @@ const RashView = (() => {
         }
         if (pattern === 'goldDogSit' && shown) {
             // となりにゴールド金面犬がおすわり
-            Characters.drawEnemy(ctx, 'goldDog', cx + 76, ground, { scale: 1.1, frame: 0 });
+            Characters.drawEnemy(ctx, 'goldDog', cx + 76, ground, { scale: 1.1, frame: Math.floor(now * 4) % 2 });   // トコトコ (2026-11-14)
         }
 
         const anomaly = n === 'anomaly';
@@ -425,7 +426,7 @@ const RashView = (() => {
                 drawSprite(ctx, SPRITES.tomoishi, Math.floor(now * 4) % 2 ? 'shout' : 'idle', ox + 14, 40, 3.4);
                 text('内定とりなさい！', ox + 162, 64, 17, '#ffe066');
             } else {
-                Characters.drawEnemy(ctx, 'naitei', ox + 46, 106, { scale: 1.45 });
+                Characters.drawEnemy(ctx, 'naitei', ox + 46, 106, { scale: 1.45, frame: Math.floor(now * 2) % 2 });   // どっしり 足ぶみ (2026-11-14)
                 text('内定は…！', ox + 168, 64, 20, '#ffffff');
             }
             ctx.restore();

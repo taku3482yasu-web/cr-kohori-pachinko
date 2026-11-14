@@ -452,12 +452,83 @@ const Characters = (() => {
         }
     };
 
+    // ----- 腕と 足を 動かす (koori (初代スロット) から 写した。2026-11-14 ユーザー指定: パチンコも 同じように。もとの 指定: ずっと 立った まま 腕も 足も 動かないので、ドット絵 そのものを 動かして 動きを つける) -----
+    // 絵を 足すのでは なく、もとの 絵の 腕・足の ドットを 動かす。frame 0 と 1 で 左右が 入れかわる (歩く・踊る ように 交互に)
+    //   legY : この 行より 下で はじまる 四角は 足。左右 (または legGroup) に 分けて、片方の 足を 持ち上げる
+    //   armL : x + w が この 値 以下の 四角は 左腕 / armR : x が この 値 以上の 四角は 右腕 (どちらも legY より 上で 終わる もの)
+    //   arm  : 腕を 上げ下げする ドット数 / leg : 足を 持ち上げる ドット数 / keepFrame : もとの 絵の frame の 動き (揺れる マントなど) も 残す
+    //   腕を 下げる ときは 肩の 四角 (shoulderL/R の 行。ふつうは 腕の いちばん 上) を のばして、肩から 離れない ように する
+    //   2026-11-14 (ユーザー指摘: 全員 同じ 動きで 違和感 → キャラに 合わせた 動きに):
+    //   arms: 'alt' 左右 交互 / 'both' 両腕 いっしょに 上げる / 'R'・'L' 片腕だけ / 'none' 動かさない
+    //   legs: 'alt' 交互に 足ぶみ / 'hop' 両足で はねる / 'none' 動かさない
+    //   armY: この 行より 上で はじまる 四角は 腕に しない (だけさんの ハチマキの しっぽ など)
+    //   swing・lift: なめらかに 動かす とき (js/lcd/smooth-pose.js の motion) の 腕の 角度 (度)・足の 高さ (ドット)、beats: 1 往復の 拍
+    const RIGS = {
+        // Mr.KOTANI (チームの 頭脳): クリップボードを 少し 持ち上げる だけ。落ち着いて 足は 動かさない
+        kotani: { legY: 32, armL: 8, armR: 24, arm: 1, leg: 1, arms: 'L', legs: 'none', swing: 35, lift: 0, beats: 4 },
+        // KING.ASAHARA: 王笏の 右腕だけ ゆったり。王様らしく 足は 動かさない
+        asahara: { legY: 34, armL: 11, armR: 25, arm: 2, leg: 1, shoulderR: 22, arms: 'R', legs: 'none', swing: 30, lift: 0, beats: 4 },   // 右手の 王笏は 腕と いっしょに 動く
+        // おかがっぱ: 両腕を いっしょに パタパタ・両足で ぴょんぴょん
+        okagappa: { legY: 32, armL: 8, armR: 24, arm: 2, leg: 1, arms: 'both', legs: 'hop', swing: 70, lift: 2, beats: 1 },
+        // ひびきまくり: 広げた 両腕を いっしょに 上下 (はばたく)
+        hibikimakuri: { legY: 38, armL: 14, armR: 26, arm: 2, leg: 1, arms: 'both', legs: 'alt', swing: 25, lift: 1, beats: 2 },
+        // シバター: 腕と 足を 交互に (ガニ股で 歩く)
+        shibata: { legY: 32, armL: 7, armR: 25, arm: 2, leg: 1, arms: 'alt', legs: 'alt', swing: 45, lift: 2, beats: 2 },
+        // Mr.SASAKI: 突き上げた 右腕で 指さしを くり返す。左腕は 動かさない
+        sasaki: { legY: 32, armL: 8, armR: 24, arm: 2, leg: 1, shoulderR: -1, arms: 'R', legs: 'alt', swing: 40, lift: 1, beats: 1 },   // 突き上げた 右腕は 指ごと 上下
+        // おにおに: 金棒の 右腕を 大きく ふり上げ、足は ドスドス 踏みしめる (ゆっくり)
+        onioni: { legY: 39, armL: 10, armR: 30, arm: 2, leg: 1, shoulderR: 22, arms: 'R', legs: 'alt', swing: 60, lift: 2, beats: 4 },   // 金棒は 腕と いっしょに 動く
+        // 4 本足: 右前と 左後ろ・左前と 右後ろを 交互に (トコトコ 歩く)
+        goldDog: { legY: 30, leg: 1, keepFrame: true, legGroup: rc => (rc.x < 20 || (rc.x >= 31 && rc.x < 36) ? 0 : 1), legs: 'alt', lift: 1, beats: 1 },
+        // 腕組みなので 足だけ (マントの 揺れは もとの まま)。どっしり ゆっくり
+        naitei: { legY: 41, leg: 1, keepFrame: true, legs: 'alt', lift: 1, beats: 4 },
+        aruaru: { legY: 48, leg: 1, keepFrame: true, legs: 'alt', lift: 1, beats: 4 },
+        // やすさん: 控えめに 交互 / たむさん: 両手を 上げて 応援 / だけさん: 両腕で 力こぶ (ゆっくり)
+        yasu: { legY: 18, armL: 3, armR: 13, arm: 1, leg: 1, arms: 'alt', legs: 'alt', swing: 30, lift: 1, beats: 2 },
+        tamu: { legY: 18, armL: 3, armR: 13, arm: 1, leg: 1, arms: 'both', legs: 'hop', swing: 120, lift: 1, beats: 1 },
+        dake: { legY: 18, armL: 3, armR: 13, armY: 11, arm: 1, leg: 1, arms: 'both', legs: 'none', swing: 90, lift: 0, beats: 2 }
+    };
+    // c.draw の 四角を いったん 集めて、腕・足を 動かして から r に 描く
+    function posedDraw(id, c, r, frame) {
+        const rig = RIGS[id];
+        if (!rig) return c.draw(r, frame);
+        const rects = [];
+        c.draw((x, y, w, h, color) => rects.push({ x, y, w, h, color }), rig.keepFrame ? frame : 0);
+        const s = frame ? 1 : -1;   // alt: frame 0 は 左腕が 上・右足が 上 / frame 1 は その 反対。both・hop・片腕は frame 1 で 上
+        const legs = rig.legs || 'alt', arms = rig.arms || 'alt';
+        const groups = { L: [], R: [] };
+        rects.forEach(rc => {
+            if (rc.y >= rig.legY) {
+                const left = rig.legGroup ? rig.legGroup(rc) === 0 : rc.x + rc.w / 2 < c.w / 2;
+                const up = legs === 'alt' ? (left ? -1 : 1) === s : legs === 'hop' ? s === 1 : false;
+                if (up) rc.y -= rig.leg;   // 持ち上げる 足
+            } else if (rc.y + rc.h <= rig.legY + 1 && rc.y >= (rig.armY || 0)) {
+                if (rig.armL != null && rc.x + rc.w <= rig.armL) groups.L.push(rc);
+                else if (rig.armR != null && rc.x >= rig.armR) groups.R.push(rc);
+            }
+        });
+        const dirs = arms === 'alt' ? { L: -s, R: s } : arms === 'both' ? { L: -s, R: -s }
+            : arms === 'L' ? { L: -s, R: 0 } : arms === 'R' ? { L: 0, R: -s } : { L: 0, R: 0 };
+        [['L', dirs.L], ['R', dirs.R]].forEach(([k, dir]) => {
+            if (!dir) return;
+            const arm = groups[k];
+            if (!arm.length) return;
+            const d = dir * rig.arm;   // マイナスで 上へ
+            const top = rig['shoulder' + k] ?? Math.min(...arm.map(rc => rc.y));
+            arm.forEach(rc => {
+                if (d > 0 && rc.y === top) rc.h += d;   // 下げる: 肩は つないだ まま のばす
+                else rc.y += d;
+            });
+        });
+        rects.forEach(rc => r(rc.x, rc.y, rc.w, rc.h, rc.color));
+    }
+
     // 仲間を描く。(x, groundY) は足元の中央。silhouette で黒い影、alpha で透明度
     // 2026-11-14 (ユーザー指定: シリーズの ドット絵を 緻密に): js/pixel-hd.js で 4 倍の 細かさに 作り直した 絵を のせる
     const HD = typeof PixelHD !== 'undefined' && typeof document !== 'undefined';
     function bakedOf(kind, id, c, frame, variant) {
         const opts = variant === 'hurt' ? { tint: '#ffffff' } : variant === 'silhouette' ? { tint: '#101018' } : variant === 'gold' ? { map: goldTint } : {};
-        return PixelHD.cached(`${kind}:${id}:${frame}:${variant}`, () => PixelHD.bake(PixelHD.fromRects(c.w, c.h, r => c.draw(r, frame)), opts));
+        return PixelHD.cached(`${kind}:${id}:${frame}:${variant}`, () => PixelHD.bake(PixelHD.fromRects(c.w, c.h, r => posedDraw(id, c, r, frame)), opts));
     }
 
     function drawCompanion(ctx, id, x, groundY, { scale = 2, frame = 0, silhouette = false, alpha = 1 } = {}) {
@@ -471,7 +542,7 @@ const Characters = (() => {
             ctx.globalAlpha = 1;
             return;
         }
-        c.draw((rx, ry, rw, rh, color) => {
+        posedDraw(id, c, (rx, ry, rw, rh, color) => {
             const x0 = Math.round(left + rx * scale), x1 = Math.round(left + (rx + rw) * scale);
             const y0 = Math.round(top + ry * scale), y1 = Math.round(top + (ry + rh) * scale);
             ctx.fillStyle = silhouette ? '#101018' : color;
@@ -505,7 +576,7 @@ const Characters = (() => {
             ctx.globalAlpha = 1;
             return;
         }
-        enemy.draw((rx, ry, rw, rh, color) => {
+        posedDraw(id, enemy, (rx, ry, rw, rh, color) => {
             const fx = flip ? enemy.w - rx - rw : rx;
             const x0 = Math.round(left + fx * scale), x1 = Math.round(left + (fx + rw) * scale);
             const y0 = Math.round(top + ry * scale), y1 = Math.round(top + (ry + rh) * scale);
@@ -560,5 +631,13 @@ const Characters = (() => {
     }
 
     // add: ほかの ファイルの 絵を 敵として 足す (js/rivals.js。2026-10-23)
-    return { add: (id, art, kai) => { ENEMIES[id] = art; if (kai) KAI_EYES[id] = kai; }, drawEnemy, drawCompanion, size, has: id => Boolean(ENEMIES[id]), isCompanion: id => Boolean(COMPANIONS[id]), hasKai: id => Boolean(KAI_EYES[id]) };
+    // もとの 絵の 四角の 一覧 (腕・足は 動かさない)
+    function rects(id, frame = 0) {
+        const c = ENEMIES[id] || COMPANIONS[id];
+        const list = [];
+        if (c) c.draw((x, y, w, h, color) => list.push({ x, y, w, h, color }), frame);
+        return list;
+    }
+
+    return { rects, rig: id => RIGS[id] || null, add: (id, art, kai) => { ENEMIES[id] = art; if (kai) KAI_EYES[id] = kai; }, drawEnemy, drawCompanion, size, has: id => Boolean(ENEMIES[id]), isCompanion: id => Boolean(COMPANIONS[id]), hasKai: id => Boolean(KAI_EYES[id]) };
 })();

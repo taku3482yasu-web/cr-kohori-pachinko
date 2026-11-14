@@ -49,6 +49,7 @@ const SPRITES = {
 
     // ともいし (16x18): こおりくんのお母さん。パーマ頭の石に黄色いエプロン。idle と shout (口を開けて叫ぶ) の2コマ
     tomoishi: {
+        step: { rows: 2 },   // 足ぶみ (下の 2 行が 足。2026-11-14。drawSprite が 左右の 足を 交互に 持ち上げる)
         palette: {
             o: '#2a2a30',  // 輪郭
             h: '#7a4ab0',  // パーマの髪
@@ -95,6 +96,7 @@ const SPRITES = {
 
     // ふるカワ (16x20): リボンのボブヘアの女の子。idle と talk (口が開く) の2コマ
     furukawa: {
+        step: { rows: 3 },   // 足ぶみ (下の 3 行が 足。2026-11-14)
         palette: {
             o: '#2a1a1a',  // 輪郭
             h: '#7a4a2a',  // 髪
@@ -146,8 +148,33 @@ const SPRITES = {
 // 文字列のドット絵を ctx に描く。scale 倍、flip で左右反転
 // 2026-11-14 (ユーザー指定: シリーズの ドット絵を 緻密に): js/pixel-hd.js で 4 倍の 細かさに 作り直した 絵を のせる
 const SPRITE_HD = new WeakMap();
+// 足ぶみ (koori から 写した。2026-11-14 ユーザー指定: ずっと 立った まま 動かない → ドット絵 そのものを 動かす):
+// sprite.step が ある キャラは、足の 行の 左半分 か 右半分を 1 ドット 持ち上げた コマを 作り、時間で 交互に 出す
+// (止まる → 左足 → 止まる → 右足)。絵は 足さず、もとの 足の ドットを 動かす
+function steppedRows(sprite, frameName, side) {
+    const cache = sprite._steps || (sprite._steps = {});
+    const key = frameName + ':' + side;
+    if (cache[key]) return cache[key];
+    const rows = sprite.frames[frameName].map(row => row.split(''));
+    const n = sprite.step.rows, width = rows[0].length, half = width / 2;
+    for (let i = rows.length - n; i < rows.length; i++) {
+        for (let c = side === 'L' ? 0 : half; c < (side === 'L' ? half : width); c++) {
+            const px = rows[i][c];
+            if (px !== '.') rows[i - 1][c] = px;
+            else if (i - 1 >= rows.length - n) rows[i - 1][c] = '.';
+            rows[i][c] = '.';
+        }
+    }
+    return (cache[key] = rows.map(row => row.join('')));
+}
+
 function drawSprite(ctx, sprite, frameName, x, y, scale = 1, flip = false) {
-    const rows = sprite.frames[frameName];
+    let rows = sprite.frames[frameName];
+    if (sprite.step && typeof performance !== 'undefined') {
+        const phase = Math.floor(performance.now() / 240) % 4;
+        if (phase === 1) rows = steppedRows(sprite, frameName, 'L');
+        else if (phase === 3) rows = steppedRows(sprite, frameName, 'R');
+    }
     if (typeof PixelHD !== 'undefined' && typeof document !== 'undefined') {
         let baked = SPRITE_HD.get(rows);
         if (!baked) { baked = PixelHD.bake(PixelHD.fromRows(rows, sprite.palette)); SPRITE_HD.set(rows, baked); }
