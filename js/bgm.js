@@ -39,6 +39,15 @@ const BGM_POOLS = {
     kai: ['p-kai']
 };
 const BGM_RASH_POOLS = ['kooriRash', 'onioniRash', 'okapipoRash'];
+// 曲送り (2026-11-17 やることリスト B: スロットに ある 曲送りを パチンコにも)。ボタンで 今の 場面の 別の 曲へ。選んだ 曲は 場面ごとに 覚える。
+//   怪 (プレミア確定の しるし)・満月・SE城前 (チャンスステージ) の 曲は 合図なので 送らない・選べない
+const BGM_SKIP_SCENES = {
+    normal: () => Object.values(BGM_STAGE_SONGS),
+    rash: () => [...new Set(BGM_RASH_POOLS.flatMap(k => BGM_POOLS[k]))],
+    bonus: () => [...BGM_POOLS.bonus, ...new Set(BGM_RASH_POOLS.flatMap(k => BGM_POOLS[k]))],
+    challenge: () => BGM_POOLS.challenge
+};
+const BGM_PREF_KEY = 'koori-pachinko-song-pref';
 
 const BGM_TRACKS = {
     // 通常時: 明るい行進 (スロット版の field)
@@ -203,6 +212,9 @@ const Bgm = (() => {
     let fileName = null;       // いま 鳴らして いる 音声ファイルの 曲
     let lastScene = null;      // songFor が 前に 見た 場面
     const picks = {};          // 場面ごとに 選んだ 曲
+    let prefs = {};            // 曲送りで 選んだ 曲 (場面ごと。localStorage に 覚える)
+    try { prefs = JSON.parse(localStorage.getItem(BGM_PREF_KEY)) || {}; } catch (e) { prefs = {}; }
+    const skipKey = scene => (BGM_RASH_POOLS.includes(scene) ? 'rash' : scene in BGM_SKIP_SCENES ? scene : null);
 
     function fileOf(name) {
         if (!(name in BGM_FILES)) return null;
@@ -237,11 +249,28 @@ const Bgm = (() => {
         if (!m.rush.active && !m.yutime) BGM_RASH_POOLS.forEach(k => { picks[k] = null; });   // RASH が 終わったら 次の RASH で 選び直す
         if (scene !== lastScene && (scene === 'challenge' || scene === 'bonus')) picks[scene] = null;   // 入る たびに 選び直す
         lastScene = scene;
+        const key = skipKey(scene);
+        if (key && prefs[key] && fileState(prefs[key]) !== false) return prefs[key];   // 曲送りで 選んだ 曲
         if (scene === 'normal') return BGM_STAGE_SONGS[m.stage.id] || null;
         const pool = BGM_POOLS[scene];
         if (!pool) return null;
         if (!picks[scene]) picks[scene] = pickSong(pool);
         return picks[scene];
+    }
+
+    // 曲送り: 今の 場面の 次の 曲を 選んで 覚える。送れない 場面 (怪・満月・SE城前・物語) なら false
+    function nextSong(m, story) {
+        if (story) return false;
+        const key = skipKey(trackFor(m, null));
+        if (!key) return false;
+        const pool = BGM_SKIP_SCENES[key]().filter(n => fileState(n) !== false);
+        if (!pool.length) return false;
+        const now = fileName;
+        let next = pool[(pool.indexOf(now) + 1) % pool.length];
+        if (next === now && pool.length > 1) next = pool[(pool.indexOf(next) + 1) % pool.length];
+        prefs[key] = next;
+        try { localStorage.setItem(BGM_PREF_KEY, JSON.stringify(prefs)); } catch (e) { /* 保存 できない */ }
+        return true;
     }
 
     // 音声ファイルの 曲を 鳴らす・止める (音量・一時停止も ここで 合わせる)
@@ -372,5 +401,5 @@ const Bgm = (() => {
         applyVolume();
     }
 
-    return { init, play, setPaused, setVolume, trackFor, songFor, fileState, get track() { return fileName || trackName; } };
+    return { init, play, setPaused, setVolume, trackFor, songFor, nextSong, fileState, get track() { return fileName || trackName; } };
 })();

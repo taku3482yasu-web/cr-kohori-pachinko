@@ -399,6 +399,15 @@
     // スマホで長押ししてもメニューが出ないように
     [canvas, $('handle'), $('koori-button'), $('fire-button')].forEach(el => el.addEventListener('contextmenu', e => e.preventDefault()));
 
+    // 曲送り (2026-11-17 やることリスト B)。送れない 場面 (怪・満月・SE城前・物語) では ボタンが 少し ゆれるだけ
+    $('song-button').addEventListener('click', () => {
+        const btn = $('song-button');
+        const ok = Bgm.nextSong(game.machine, Lcd.storyPlaying());
+        btn.textContent = ok ? '♪ 曲送り ▶' : '♪ ここは 送れない';
+        clearTimeout(btn.resetTimer);
+        btn.resetTimer = setTimeout(() => { btn.textContent = '♪ 曲送り'; }, 1200);
+    });
+
     // 音は画面をさわる・キーを押すまで出せない
     ['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => {
         Sound.unlock();
